@@ -10,7 +10,7 @@ R和python的组图很割裂，R的ggplot2系统和python的matplotlib不互通�
 - svg真正实现R/python互通：它可能更有潜力，因为理论上是svg就能组图，不只是局限于R/python。
 - svg是位图：那很清晰了。
 - svg_grid也可以处理混合场景：例如png+svg混合组图。
-- **与agent接轨**：仓库附带一整套出图+组图skill，开箱即用。
+- **与agent接轨**：仓库附带一整套出图+组图skill，开箱即用。并且作者正在尝试优化svg_grid让agent使用它更加节省token更加丝滑，不过作者推荐使用有视觉功能的agent。
 - 低占用并且开源：你可能说我用ppt，ps，ai组图，但是这很重，svg_grid是rust，那很轻了。
 - 仿照cowplot：作者偏好cowplot的组图逻辑，因此本svg_grid的组图逻辑跟它很接近，本库开发的目的也是尝试弄一个cowplot通用版，因为cowplot只能在R使用（R的grob和ggplot2对象与python不互通）。
 
