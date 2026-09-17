@@ -1,1 +1,5 @@
 target/
+__pycache__/
+
+tests/s22_repro/out/
+tests/fig2_mixed/out
