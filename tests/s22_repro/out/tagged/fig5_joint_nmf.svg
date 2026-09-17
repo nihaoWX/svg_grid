@@ -1,0 +1,322 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns:xlink="http://www.w3.org/1999/xlink" width="1548.709677pt" height="1161.532258pt" viewBox="0 0 1548.709677 1161.532258" xmlns="http://www.w3.org/2000/svg" version="1.1"><rect data-panel-box="main" x="0" y="0" width="1548.709677" height="1161.532258" visibility="hidden" pointer-events="none"/><g data-scale="xy">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-16T20:11:38.354516</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs><style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style></defs>
+ <g id="figure_1">
+  <g id="patch_1">
+   <polygon style="fill: #ffffff" points="0,1161.532 1548.710,1161.532 1548.710,0 0,0 0,1161.532"/>
+  </g>
+  <g id="axes_1">
+   <g id="patch_2">
+    <polygon style="fill: #ffffff" points="182.477,1020.661 1365.848,1020.661 1365.848,87.423 182.477,87.423 182.477,1020.661"/>
+   </g>
+   <g id="matplotlib.axis_1">
+    <g id="xtick_1">
+     <g id="line2d_1">
+      
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="236.267,1020.661 236.267,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_1">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="236.266671" y="1069.722568" transform="rotate(-0 236.266671 1069.722568)">5</text></g>
+     </g>
+    </g>
+    <g id="xtick_2">
+     <g id="line2d_2">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="451.425,1020.661 451.425,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_2">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="451.424953" y="1069.722568" transform="rotate(-0 451.424953 1069.722568)">6</text></g>
+     </g>
+    </g>
+    <g id="xtick_3">
+     <g id="line2d_3">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="666.583,1020.661 666.583,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_3">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="666.583236" y="1069.722568" transform="rotate(-0 666.583236 1069.722568)">7</text></g>
+     </g>
+    </g>
+    <g id="xtick_4">
+     <g id="line2d_4">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="881.742,1020.661 881.742,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_4">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="881.741519" y="1069.722568" transform="rotate(-0 881.741519 1069.722568)">8</text></g>
+     </g>
+    </g>
+    <g id="xtick_5">
+     <g id="line2d_5">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1096.900,1020.661 1096.900,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_5">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1096.899802" y="1069.722568" transform="rotate(-0 1096.899802 1069.722568)">9</text></g>
+     </g>
+    </g>
+    <g id="xtick_6">
+     <g id="line2d_6">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1312.058,1020.661 1312.058,1032.424"/></g>
+      </g>
+     </g>
+     <g id="text_6">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1312.058084" y="1069.722568" transform="rotate(-0 1312.058084 1069.722568)">10</text></g>
+     </g>
+    </g>
+    <g id="text_7">
+     <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="774.162378" y="1116.778005" transform="rotate(-0 774.162378 1116.778005)">k</text></g>
+    </g>
+   </g>
+   <g id="matplotlib.axis_2">
+    <g id="ytick_1">
+     <g id="line2d_7">
+      
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,988.119 170.714,988.119"/></g>
+      </g>
+     </g>
+     <g id="text_8">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="1000.886965" transform="rotate(-0 158.950694 1000.886965)">0.82</text></g>
+     </g>
+    </g>
+    <g id="ytick_2">
+     <g id="line2d_8">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,875.806 170.714,875.806"/></g>
+      </g>
+     </g>
+     <g id="text_9">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="888.574024" transform="rotate(-0 158.950694 888.574024)">0.84</text></g>
+     </g>
+    </g>
+    <g id="ytick_3">
+     <g id="line2d_9">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,763.494 170.714,763.494"/></g>
+      </g>
+     </g>
+     <g id="text_10">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="776.261082" transform="rotate(-0 158.950694 776.261082)">0.86</text></g>
+     </g>
+    </g>
+    <g id="ytick_4">
+     <g id="line2d_10">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,651.181 170.714,651.181"/></g>
+      </g>
+     </g>
+     <g id="text_11">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="663.948141" transform="rotate(-0 158.950694 663.948141)">0.88</text></g>
+     </g>
+    </g>
+    <g id="ytick_5">
+     <g id="line2d_11">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,538.868 170.714,538.868"/></g>
+      </g>
+     </g>
+     <g id="text_12">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="551.6352" transform="rotate(-0 158.950694 551.6352)">0.90</text></g>
+     </g>
+    </g>
+    <g id="ytick_6">
+     <g id="line2d_12">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,426.555 170.714,426.555"/></g>
+      </g>
+     </g>
+     <g id="text_13">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="439.322259" transform="rotate(-0 158.950694 439.322259)">0.92</text></g>
+     </g>
+    </g>
+    <g id="ytick_7">
+     <g id="line2d_13">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,314.242 170.714,314.242"/></g>
+      </g>
+     </g>
+     <g id="text_14">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="327.009317" transform="rotate(-0 158.950694 327.009317)">0.94</text></g>
+     </g>
+    </g>
+    <g id="ytick_8">
+     <g id="line2d_14">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,201.929 170.714,201.929"/></g>
+      </g>
+     </g>
+     <g id="text_15">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="214.696376" transform="rotate(-0 158.950694 214.696376)">0.96</text></g>
+     </g>
+    </g>
+    <g id="ytick_9">
+     <g id="line2d_15">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="182.477,89.616 170.714,89.616"/></g>
+      </g>
+     </g>
+     <g id="text_16">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end; fill: #1f77b4" x="158.950694" y="102.383435" transform="rotate(-0 158.950694 102.383435)">0.98</text></g>
+     </g>
+    </g>
+    <g id="text_17">
+     <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle; fill: #1f77b4" x="62.600085" y="554.042229" transform="rotate(-90 62.600085 554.042229)">R2</text></g>
+    </g>
+   </g>
+   <g id="line2d_16">
+    <polyline clip-path="url(#pece0c6a91a)" stroke-width="5.041373" style="fill: none; stroke: #1f77b4; stroke-linecap: square" points="236.267,978.241 451.425,742.520 666.583,543.236 881.742,374.004 1096.900,265.927 1312.058,129.843"/>
+    
+    <g clip-path="url(#pece0c6a91a)">
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="236.267,988.324 237.264,988.274 238.243,988.128 239.199,987.888 240.125,987.556 241.015,987.136 241.861,986.630 242.657,986.040 243.397,985.371 244.066,984.631 244.656,983.835 245.162,982.989 245.582,982.099 245.914,981.173 246.154,980.217 246.300,979.238 246.350,978.241 246.300,977.245 246.154,976.265 245.914,975.309 245.582,974.383 245.162,973.493 244.656,972.647 244.066,971.851 243.397,971.111 242.657,970.442 241.861,969.852 241.015,969.346 240.125,968.926 239.199,968.594 238.243,968.354 237.264,968.208 236.267,968.158 235.270,968.208 234.291,968.354 233.335,968.594 232.409,968.926 231.519,969.346 230.673,969.852 229.877,970.442 229.137,971.111 228.468,971.851 227.878,972.647 227.372,973.493 226.952,974.383 226.620,975.309 226.380,976.265 226.234,977.245 226.184,978.241 226.234,979.238 226.380,980.217 226.620,981.173 226.952,982.099 227.372,982.989 227.878,983.835 228.468,984.631 229.137,985.371 229.877,986.040 230.673,986.630 231.519,987.136 232.409,987.556 233.335,987.888 234.291,988.128 235.270,988.274 236.267,988.324"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="451.425,752.603 452.422,752.553 453.401,752.407 454.357,752.167 455.283,751.835 456.173,751.415 457.019,750.909 457.815,750.319 458.555,749.650 459.224,748.910 459.814,748.114 460.320,747.268 460.740,746.378 461.072,745.452 461.312,744.496 461.458,743.517 461.508,742.520 461.458,741.523 461.312,740.544 461.072,739.588 460.740,738.662 460.320,737.772 459.814,736.926 459.224,736.130 458.555,735.390 457.815,734.721 457.019,734.131 456.173,733.625 455.283,733.205 454.357,732.873 453.401,732.633 452.422,732.487 451.425,732.437 450.428,732.487 449.449,732.633 448.493,732.873 447.566,733.205 446.677,733.625 445.831,734.131 445.035,734.721 444.295,735.390 443.626,736.130 443.036,736.926 442.530,737.772 442.110,738.662 441.778,739.588 441.538,740.544 441.392,741.523 441.342,742.520 441.392,743.517 441.538,744.496 441.778,745.452 442.110,746.378 442.530,747.268 443.036,748.114 443.626,748.910 444.295,749.650 445.035,750.319 445.831,750.909 446.677,751.415 447.566,751.835 448.493,752.167 449.449,752.407 450.428,752.553 451.425,752.603"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="666.583,553.319 667.580,553.269 668.559,553.123 669.515,552.883 670.441,552.551 671.331,552.131 672.177,551.625 672.973,551.035 673.713,550.366 674.382,549.626 674.972,548.830 675.478,547.984 675.898,547.094 676.230,546.168 676.470,545.212 676.616,544.233 676.666,543.236 676.616,542.240 676.470,541.260 676.230,540.304 675.898,539.378 675.478,538.488 674.972,537.642 674.382,536.846 673.713,536.106 672.973,535.437 672.177,534.847 671.331,534.341 670.441,533.921 669.515,533.589 668.559,533.349 667.580,533.203 666.583,533.153 665.586,533.203 664.607,533.349 663.651,533.589 662.725,533.921 661.835,534.341 660.989,534.847 660.193,535.437 659.453,536.106 658.784,536.846 658.194,537.642 657.688,538.488 657.268,539.378 656.936,540.304 656.696,541.260 656.550,542.240 656.500,543.236 656.550,544.233 656.696,545.212 656.936,546.168 657.268,547.094 657.688,547.984 658.194,548.830 658.784,549.626 659.453,550.366 660.193,551.035 660.989,551.625 661.835,552.131 662.725,552.551 663.651,552.883 664.607,553.123 665.586,553.269 666.583,553.319"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="881.742,384.087 882.739,384.037 883.718,383.891 884.674,383.651 885.600,383.319 886.490,382.899 887.336,382.393 888.132,381.803 888.872,381.134 889.541,380.394 890.131,379.598 890.637,378.752 891.057,377.862 891.389,376.936 891.629,375.980 891.775,375.001 891.825,374.004 891.775,373.007 891.629,372.028 891.389,371.072 891.057,370.146 890.637,369.256 890.131,368.410 889.541,367.614 888.872,366.874 888.132,366.205 887.336,365.615 886.490,365.109 885.600,364.689 884.674,364.357 883.718,364.117 882.739,363.971 881.742,363.921 880.745,363.971 879.766,364.117 878.810,364.357 877.884,364.689 876.994,365.109 876.148,365.615 875.352,366.205 874.612,366.874 873.943,367.614 873.353,368.410 872.847,369.256 872.427,370.146 872.095,371.072 871.855,372.028 871.709,373.007 871.659,374.004 871.709,375.001 871.855,375.980 872.095,376.936 872.427,377.862 872.847,378.752 873.353,379.598 873.943,380.394 874.612,381.134 875.352,381.803 876.148,382.393 876.994,382.899 877.884,383.319 878.810,383.651 879.766,383.891 880.745,384.037 881.742,384.087"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="1096.900,276.010 1097.896,275.960 1098.876,275.814 1099.832,275.574 1100.759,275.242 1101.648,274.822 1102.494,274.316 1103.290,273.726 1104.030,273.057 1104.699,272.317 1105.289,271.521 1105.795,270.675 1106.215,269.785 1106.547,268.859 1106.787,267.903 1106.933,266.924 1106.983,265.927 1106.933,264.930 1106.787,263.951 1106.547,262.995 1106.215,262.069 1105.795,261.179 1105.289,260.333 1104.699,259.537 1104.030,258.797 1103.290,258.128 1102.494,257.538 1101.648,257.032 1100.759,256.612 1099.832,256.280 1098.876,256.040 1097.896,255.894 1096.900,255.844 1095.904,255.894 1094.924,256.040 1093.968,256.280 1093.042,256.612 1092.152,257.032 1091.306,257.538 1090.510,258.128 1089.770,258.797 1089.101,259.537 1088.511,260.333 1088.005,261.179 1087.585,262.069 1087.253,262.995 1087.013,263.951 1086.867,264.930 1086.817,265.927 1086.867,266.924 1087.013,267.903 1087.253,268.859 1087.585,269.785 1088.005,270.675 1088.511,271.521 1089.101,272.317 1089.770,273.057 1090.510,273.726 1091.306,274.316 1092.152,274.822 1093.042,275.242 1093.968,275.574 1094.924,275.814 1095.904,275.960 1096.900,276.010"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #1f77b4; fill: #1f77b4" points="1312.058,139.926 1313.054,139.876 1314.034,139.730 1314.990,139.490 1315.917,139.158 1316.806,138.738 1317.652,138.232 1318.448,137.642 1319.188,136.973 1319.857,136.233 1320.447,135.437 1320.953,134.591 1321.373,133.701 1321.705,132.775 1321.945,131.819 1322.091,130.840 1322.141,129.843 1322.091,128.846 1321.945,127.867 1321.705,126.911 1321.373,125.985 1320.953,125.095 1320.447,124.249 1319.857,123.453 1319.188,122.713 1318.448,122.044 1317.652,121.454 1316.806,120.948 1315.917,120.528 1314.990,120.196 1314.034,119.956 1313.054,119.810 1312.058,119.760 1311.062,119.810 1310.082,119.956 1309.126,120.196 1308.199,120.528 1307.310,120.948 1306.464,121.454 1305.668,122.044 1304.928,122.713 1304.259,123.453 1303.669,124.249 1303.163,125.095 1302.743,125.985 1302.411,126.911 1302.171,127.867 1302.025,128.846 1301.975,129.843 1302.025,130.840 1302.171,131.819 1302.411,132.775 1302.743,133.701 1303.163,134.591 1303.669,135.437 1304.259,136.233 1304.928,136.973 1305.668,137.642 1306.464,138.232 1307.310,138.738 1308.199,139.158 1309.126,139.490 1310.082,139.730 1311.062,139.876 1312.058,139.926"/></g>
+    </g>
+   </g>
+   <g id="patch_3">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,1020.661 182.477,87.423"/>
+   </g>
+   <g id="patch_4">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="1365.848,1020.661 1365.848,87.423"/>
+   </g>
+   <g id="patch_5">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,1020.661 1365.848,1020.661"/>
+   </g>
+   <g id="patch_6">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,87.423 1365.848,87.423"/>
+   </g>
+  </g>
+  <g id="axes_2">
+   <g id="matplotlib.axis_3">
+    <g id="ytick_10">
+     <g id="line2d_17">
+      
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,913.580 1377.611,913.580"/></g>
+      </g>
+     </g>
+     <g id="text_18">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="926.347135" transform="rotate(-0 1389.374061 926.347135)">0.82</text></g>
+     </g>
+    </g>
+    <g id="ytick_11">
+     <g id="line2d_18">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,784.412 1377.611,784.412"/></g>
+      </g>
+     </g>
+     <g id="text_19">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="797.179565" transform="rotate(-0 1389.374061 797.179565)">0.83</text></g>
+     </g>
+    </g>
+    <g id="ytick_12">
+     <g id="line2d_19">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,655.244 1377.611,655.244"/></g>
+      </g>
+     </g>
+     <g id="text_20">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="668.011995" transform="rotate(-0 1389.374061 668.011995)">0.84</text></g>
+     </g>
+    </g>
+    <g id="ytick_13">
+     <g id="line2d_20">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,526.077 1377.611,526.077"/></g>
+      </g>
+     </g>
+     <g id="text_21">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="538.844425" transform="rotate(-0 1389.374061 538.844425)">0.85</text></g>
+     </g>
+    </g>
+    <g id="ytick_14">
+     <g id="line2d_21">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,396.909 1377.611,396.909"/></g>
+      </g>
+     </g>
+     <g id="text_22">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="409.676855" transform="rotate(-0 1389.374061 409.676855)">0.86</text></g>
+     </g>
+    </g>
+    <g id="ytick_15">
+     <g id="line2d_22">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,267.742 1377.611,267.742"/></g>
+      </g>
+     </g>
+     <g id="text_23">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="280.509285" transform="rotate(-0 1389.374061 280.509285)">0.87</text></g>
+     </g>
+    </g>
+    <g id="ytick_16">
+     <g id="line2d_23">
+      <g>
+       <g><polyline stroke-width="2.688732" style="stroke: #000000" points="1365.848,138.574 1377.611,138.574"/></g>
+      </g>
+     </g>
+     <g id="text_24">
+      <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start; fill: #d62728" x="1389.374061" y="151.341716" transform="rotate(-0 1389.374061 151.341716)">0.88</text></g>
+     </g>
+    </g>
+    <g id="text_25">
+     <g data-scale="position"><text style="font-size: 33.609151px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle; fill: #d62728" x="1503.1883" y="554.042229" transform="rotate(-90 1503.1883 554.042229)">cophenetic corr</text></g>
+    </g>
+   </g>
+   <g id="line2d_24">
+    <polyline clip-path="url(#pece0c6a91a)" stroke-width="5.041373" style="fill: none; stroke: #d62728; stroke-linecap: square" points="236.267,129.843 451.425,653.122 666.583,569.615 881.742,978.241 1096.900,751.601 1312.058,604.336"/>
+    
+    <g clip-path="url(#pece0c6a91a)">
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="226.184,139.926 246.350,139.926 246.350,119.760 226.184,119.760 226.184,139.926"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="441.342,663.205 461.508,663.205 461.508,643.039 441.342,643.039 441.342,663.205"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="656.500,579.698 676.666,579.698 676.666,559.532 656.500,559.532 656.500,579.698"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="871.659,988.324 891.825,988.324 891.825,968.158 871.659,968.158 871.659,988.324"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="1086.817,761.684 1106.983,761.684 1106.983,741.518 1086.817,741.518 1086.817,761.684"/></g>
+     <g><polygon stroke-width="3.360915" style="stroke: #d62728; stroke-linejoin: miter; fill: #d62728" points="1301.975,614.419 1322.141,614.419 1322.141,594.253 1301.975,594.253 1301.975,614.419"/></g>
+    </g>
+   </g>
+   <g id="patch_7">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,1020.661 182.477,87.423"/>
+   </g>
+   <g id="patch_8">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="1365.848,1020.661 1365.848,87.423"/>
+   </g>
+   <g id="patch_9">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,1020.661 1365.848,1020.661"/>
+   </g>
+   <g id="patch_10">
+    <polyline stroke-width="2.688732" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="182.477,87.423 1365.848,87.423"/>
+   </g>
+   <g id="text_26">
+    <g data-scale="position"><text style="font-size: 40.330981px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="774.162378" y="67.257883" transform="rotate(-0 774.162378 67.257883)">Joint NMF: R2 &amp; cophenetic</text></g>
+   </g>
+  </g>
+ </g>
+ <defs><clipPath id="pece0c6a91a">
+   <rect x="182.4771" y="87.423374" width="1183.370555" height="933.237711"/>
+  </clipPath></defs>
+</g></svg>

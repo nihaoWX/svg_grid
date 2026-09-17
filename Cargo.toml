@@ -1,0 +1,13 @@
+[package]
+name = "svg_grid"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+flate2 = "1.1"
+quick-xml = "0.39"
+ravif = { version = "0.13.0", default-features = false }
+resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "raster-images"] }
+
+[dev-dependencies]
+png = "0.18"

@@ -1,0 +1,356 @@
+<svg width="2456.500" height="1754.643" viewBox="0 0 2456.500 1754.643" xmlns="http://www.w3.org/2000/svg"><rect data-panel-box="main" x="0" y="0" width="2456.500" height="1754.643" visibility="hidden" pointer-events="none"/><rect x="0" y="0" width="2456.500" height="1754.643" fill="#FFFFFF" stroke="none"/><g xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" data-svg-grid-cell="0"><rect data-panel-box="main" x="0" y="0" width="2456.500" height="1754.643" visibility="hidden" pointer-events="none"/><g data-scale="xy">
+ <metadata>
+  <rdf:RDF xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:cc="http://creativecommons.org/ns#" xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+   <cc:Work>
+    <dc:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dc:date>2026-09-16T23:47:08.392388</dc:date>
+    <dc:format>image/svg+xml</dc:format>
+    <dc:creator>
+     <cc:Agent>
+      <dc:title>Matplotlib v3.11.1, https://matplotlib.org/</dc:title>
+     </cc:Agent>
+    </dc:creator>
+   </cc:Work>
+  </rdf:RDF>
+ </metadata>
+ <defs><style type="text/css">*{stroke-linejoin: round; stroke-linecap: butt}</style></defs>
+ <g id="svg-grid-cell0-figure_1">
+  <g id="svg-grid-cell0-patch_1">
+   <polygon style="fill: #ffffff" points="0,1754.643 2456.500,1754.643 2456.500,0 0,0 0,1754.643"/>
+  </g>
+  <g id="svg-grid-cell0-axes_1">
+   <g id="svg-grid-cell0-patch_2">
+    <polygon style="fill: #ffffff" points="265.351,1549.340 2403.861,1549.340 2403.861,127.504 265.351,127.504 265.351,1549.340"/>
+   </g>
+   <g id="svg-grid-cell0-matplotlib.axis_1">
+    <g id="svg-grid-cell0-xtick_1">
+     <g id="svg-grid-cell0-line2d_1">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="362.558,1549.340 362.558,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_2">
+      
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="362.558,1549.340 362.558,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_1">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="362.557" y="1620.487" transform="rotate(-0, 362.557, 1620.487)">5.0</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_2">
+     <g id="svg-grid-cell0-line2d_3">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="605.571,1549.340 605.571,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_4">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="605.571,1549.340 605.571,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_2">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="605.570" y="1620.487" transform="rotate(-0, 605.570, 1620.487)">5.5</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_3">
+     <g id="svg-grid-cell0-line2d_5">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="848.584,1549.340 848.584,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_6">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="848.584,1549.340 848.584,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_3">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="848.582" y="1620.487" transform="rotate(-0, 848.582, 1620.487)">6.0</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_4">
+     <g id="svg-grid-cell0-line2d_7">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="1091.593,1549.340 1091.593,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_8">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="1091.593,1549.340 1091.593,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_4">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1091.594" y="1620.487" transform="rotate(-0, 1091.594, 1620.487)">6.5</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_5">
+     <g id="svg-grid-cell0-line2d_9">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="1334.606,1549.340 1334.606,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_10">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="1334.606,1549.340 1334.606,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_5">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1334.606" y="1620.487" transform="rotate(-0, 1334.606, 1620.487)">7.0</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_6">
+     <g id="svg-grid-cell0-line2d_11">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="1577.619,1549.340 1577.619,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_12">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="1577.619,1549.340 1577.619,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_6">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1577.619" y="1620.487" transform="rotate(-0, 1577.619, 1620.487)">7.5</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_7">
+     <g id="svg-grid-cell0-line2d_13">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="1820.632,1549.340 1820.632,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_14">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="1820.632,1549.340 1820.632,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_7">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1820.631" y="1620.487" transform="rotate(-0, 1820.631, 1620.487)">8.0</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_8">
+     <g id="svg-grid-cell0-line2d_15">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="2063.645,1549.340 2063.645,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_16">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="2063.645,1549.340 2063.645,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_8">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="2063.643" y="1620.487" transform="rotate(-0, 2063.643, 1620.487)">8.5</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-xtick_9">
+     <g id="svg-grid-cell0-line2d_17">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="2306.654,1549.340 2306.654,127.504"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_18">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="2306.654,1549.340 2306.654,1566.399"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_9">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="2306.656" y="1620.487" transform="rotate(-0, 2306.656, 1620.487)">9.0</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-text_10">
+     <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1334.606" y="1688.727" transform="rotate(-0, 1334.606, 1688.727)">k</text></g>
+    </g>
+   </g>
+   <g id="svg-grid-cell0-matplotlib.axis_2">
+    <g id="svg-grid-cell0-ytick_1">
+     <g id="svg-grid-cell0-line2d_19">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,1484.711 2403.861,1484.711"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_20">
+      
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,1484.711 248.292,1484.711"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_11">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="1503.225" transform="rotate(-0, 231.234, 1503.225)">0.00</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_2">
+     <g id="svg-grid-cell0-line2d_21">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,1323.137 2403.861,1323.137"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_22">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,1323.137 248.292,1323.137"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_12">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="1341.653" transform="rotate(-0, 231.234, 1341.653)">0.25</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_3">
+     <g id="svg-grid-cell0-line2d_23">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,1161.564 2403.861,1161.564"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_24">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,1161.564 248.292,1161.564"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_13">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="1180.081" transform="rotate(-0, 231.234, 1180.081)">0.50</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_4">
+     <g id="svg-grid-cell0-line2d_25">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,999.995 2403.861,999.995"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_26">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,999.995 248.292,999.995"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_14">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="1018.509" transform="rotate(-0, 231.234, 1018.509)">0.75</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_5">
+     <g id="svg-grid-cell0-line2d_27">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,838.422 2403.861,838.422"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_28">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,838.422 248.292,838.422"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_15">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="856.937" transform="rotate(-0, 231.234, 856.937)">1.00</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_6">
+     <g id="svg-grid-cell0-line2d_29">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,676.849 2403.861,676.849"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_30">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,676.849 248.292,676.849"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_16">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="695.365" transform="rotate(-0, 231.234, 695.365)">1.25</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_7">
+     <g id="svg-grid-cell0-line2d_31">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,515.275 2403.861,515.275"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_32">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,515.275 248.292,515.275"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_17">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="533.792" transform="rotate(-0, 231.234, 533.792)">1.50</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_8">
+     <g id="svg-grid-cell0-line2d_33">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,353.707 2403.861,353.707"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_34">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,353.707 248.292,353.707"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_18">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="372.220" transform="rotate(-0, 231.234, 372.220)">1.75</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-ytick_9">
+     <g id="svg-grid-cell0-line2d_35">
+      <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="3.899" style="fill: none; stroke: #b0b0b0; stroke-opacity: 0.3; stroke-linecap: square" points="265.351,192.133 2403.861,192.133"/>
+     </g>
+     <g id="svg-grid-cell0-line2d_36">
+      <g>
+       <g><polyline stroke-width="3.899" style="stroke: #000000" points="265.351,192.133 248.292,192.133"/></g>
+      </g>
+     </g>
+     <g id="svg-grid-cell0-text_19">
+      <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: end" x="231.234" y="210.648" transform="rotate(-0, 231.234, 210.648)">2.00</text></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-text_20">
+     <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="91.506" y="838.421" transform="rotate(-90, 91.506, 838.421)"># shared ecotypes (&gt;=11/21 samples)</text></g>
+    </g>
+   </g>
+   <g id="svg-grid-cell0-line2d_37">
+    <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="7.311" style="fill: none; stroke: #1f77b4; stroke-linecap: square" points="362.558,1484.711 848.584,1484.711 1334.606,838.422 1820.632,838.422 2306.654,192.133"/>
+    
+    <g clip-path="url(#svg-grid-cell0-p6f2e14822a)">
+     <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="362.558,1499.333 365.424,1499.050 368.153,1498.221 370.668,1496.876 372.896,1495.048 374.723,1492.821 376.069,1490.306 376.897,1487.576 377.180,1484.711 376.897,1481.845 376.069,1479.115 374.723,1476.600 372.896,1474.373 370.668,1472.545 368.153,1471.200 365.424,1470.371 362.558,1470.089 359.692,1470.371 356.963,1471.200 354.448,1472.545 352.220,1474.373 350.392,1476.600 349.047,1479.115 348.219,1481.845 347.936,1484.711 348.219,1487.576 349.047,1490.306 350.392,1492.821 352.220,1495.048 354.448,1496.876 356.963,1498.221 359.692,1499.050 362.558,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="848.584,1499.333 851.450,1499.050 854.180,1498.221 856.695,1496.876 858.922,1495.048 860.750,1492.821 862.095,1490.306 862.924,1487.576 863.206,1484.711 862.924,1481.845 862.095,1479.115 860.750,1476.600 858.922,1474.373 856.695,1472.545 854.180,1471.200 851.450,1470.371 848.584,1470.089 845.718,1470.371 842.989,1471.200 840.474,1472.545 838.246,1474.373 836.419,1476.600 835.073,1479.115 834.245,1481.845 833.962,1484.711 834.245,1487.576 835.073,1490.306 836.419,1492.821 838.246,1495.048 840.474,1496.876 842.989,1498.221 845.718,1499.050 848.584,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="1334.606,853.044 1337.472,852.761 1340.201,851.933 1342.716,850.587 1344.943,848.760 1346.771,846.532 1348.116,844.017 1348.945,841.288 1349.228,838.422 1348.945,835.556 1348.116,832.827 1346.771,830.312 1344.943,828.084 1342.716,826.256 1340.201,824.911 1337.472,824.083 1334.606,823.800 1331.740,824.083 1329.010,824.911 1326.495,826.256 1324.268,828.084 1322.440,830.312 1321.095,832.827 1320.266,835.556 1319.984,838.422 1320.266,841.288 1321.095,844.017 1322.440,846.532 1324.268,848.760 1326.495,850.587 1329.010,851.933 1331.740,852.761 1334.606,853.044" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="1820.632,853.044 1823.498,852.761 1826.227,851.933 1828.742,850.587 1830.970,848.760 1832.797,846.532 1834.143,844.017 1834.971,841.288 1835.254,838.422 1834.971,835.556 1834.143,832.827 1832.797,830.312 1830.970,828.084 1828.742,826.256 1826.227,824.911 1823.498,824.083 1820.632,823.800 1817.766,824.083 1815.036,824.911 1812.522,826.256 1810.294,828.084 1808.466,830.312 1807.121,832.827 1806.293,835.556 1806.010,838.422 1806.293,841.288 1807.121,844.017 1808.466,846.532 1810.294,848.760 1812.522,850.587 1815.036,851.933 1817.766,852.761 1820.632,853.044" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="2306.654,206.755 2309.519,206.473 2312.249,205.644 2314.764,204.299 2316.991,202.471 2318.819,200.244 2320.164,197.729 2320.993,194.999 2321.275,192.133 2320.993,189.267 2320.164,186.538 2318.819,184.023 2316.991,181.796 2314.764,179.968 2312.249,178.623 2309.519,177.794 2306.654,177.511 2303.787,177.794 2301.058,178.623 2298.543,179.968 2296.316,181.796 2294.488,184.023 2293.143,186.538 2292.314,189.267 2292.031,192.133 2292.314,194.999 2293.143,197.729 2294.488,200.244 2296.316,202.471 2298.543,204.299 2301.058,205.644 2303.787,206.473 2306.654,206.755" stroke-width="4.874"/></g>
+    </g>
+   </g>
+   <g id="svg-grid-cell0-line2d_38">
+    <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="7.311" style="fill: none; stroke: #ff7f0e; stroke-linecap: square" points="362.558,1484.711 848.584,1484.711 1334.606,1484.711 1820.632,1484.711 2306.654,1484.711"/>
+    
+    <g clip-path="url(#svg-grid-cell0-p6f2e14822a)">
+     <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="362.558,1499.333 365.424,1499.050 368.153,1498.221 370.668,1496.876 372.896,1495.048 374.723,1492.821 376.069,1490.306 376.897,1487.576 377.180,1484.711 376.897,1481.845 376.069,1479.115 374.723,1476.600 372.896,1474.373 370.668,1472.545 368.153,1471.200 365.424,1470.371 362.558,1470.089 359.692,1470.371 356.963,1471.200 354.448,1472.545 352.220,1474.373 350.392,1476.600 349.047,1479.115 348.219,1481.845 347.936,1484.711 348.219,1487.576 349.047,1490.306 350.392,1492.821 352.220,1495.048 354.448,1496.876 356.963,1498.221 359.692,1499.050 362.558,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="848.584,1499.333 851.450,1499.050 854.180,1498.221 856.695,1496.876 858.922,1495.048 860.750,1492.821 862.095,1490.306 862.924,1487.576 863.206,1484.711 862.924,1481.845 862.095,1479.115 860.750,1476.600 858.922,1474.373 856.695,1472.545 854.180,1471.200 851.450,1470.371 848.584,1470.089 845.718,1470.371 842.989,1471.200 840.474,1472.545 838.246,1474.373 836.419,1476.600 835.073,1479.115 834.245,1481.845 833.962,1484.711 834.245,1487.576 835.073,1490.306 836.419,1492.821 838.246,1495.048 840.474,1496.876 842.989,1498.221 845.718,1499.050 848.584,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="1334.606,1499.333 1337.472,1499.050 1340.201,1498.221 1342.716,1496.876 1344.943,1495.048 1346.771,1492.821 1348.116,1490.306 1348.945,1487.576 1349.228,1484.711 1348.945,1481.845 1348.116,1479.115 1346.771,1476.600 1344.943,1474.373 1342.716,1472.545 1340.201,1471.200 1337.472,1470.371 1334.606,1470.089 1331.740,1470.371 1329.010,1471.200 1326.495,1472.545 1324.268,1474.373 1322.440,1476.600 1321.095,1479.115 1320.266,1481.845 1319.984,1484.711 1320.266,1487.576 1321.095,1490.306 1322.440,1492.821 1324.268,1495.048 1326.495,1496.876 1329.010,1498.221 1331.740,1499.050 1334.606,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="1820.632,1499.333 1823.498,1499.050 1826.227,1498.221 1828.742,1496.876 1830.970,1495.048 1832.797,1492.821 1834.143,1490.306 1834.971,1487.576 1835.254,1484.711 1834.971,1481.845 1834.143,1479.115 1832.797,1476.600 1830.970,1474.373 1828.742,1472.545 1826.227,1471.200 1823.498,1470.371 1820.632,1470.089 1817.766,1470.371 1815.036,1471.200 1812.522,1472.545 1810.294,1474.373 1808.466,1476.600 1807.121,1479.115 1806.293,1481.845 1806.010,1484.711 1806.293,1487.576 1807.121,1490.306 1808.466,1492.821 1810.294,1495.048 1812.522,1496.876 1815.036,1498.221 1817.766,1499.050 1820.632,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="2306.654,1499.333 2309.519,1499.050 2312.249,1498.221 2314.764,1496.876 2316.991,1495.048 2318.819,1492.821 2320.164,1490.306 2320.993,1487.576 2321.275,1484.711 2320.993,1481.845 2320.164,1479.115 2318.819,1476.600 2316.991,1474.373 2314.764,1472.545 2312.249,1471.200 2309.519,1470.371 2306.654,1470.089 2303.787,1470.371 2301.058,1471.200 2298.543,1472.545 2296.316,1474.373 2294.488,1476.600 2293.143,1479.115 2292.314,1481.845 2292.031,1484.711 2292.314,1487.576 2293.143,1490.306 2294.488,1492.821 2296.316,1495.048 2298.543,1496.876 2301.058,1498.221 2303.787,1499.050 2306.654,1499.333" stroke-width="4.874"/></g>
+    </g>
+   </g>
+   <g id="svg-grid-cell0-line2d_39">
+    <polyline clip-path="url(#svg-grid-cell0-p6f2e14822a)" stroke-width="7.311" style="fill: none; stroke: #2ca02c; stroke-linecap: square" points="362.558,1484.711 848.584,1484.711 1334.606,1484.711 1820.632,1484.711 2306.654,1484.711"/>
+    
+    <g clip-path="url(#svg-grid-cell0-p6f2e14822a)">
+     <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="362.558,1499.333 365.424,1499.050 368.153,1498.221 370.668,1496.876 372.896,1495.048 374.723,1492.821 376.069,1490.306 376.897,1487.576 377.180,1484.711 376.897,1481.845 376.069,1479.115 374.723,1476.600 372.896,1474.373 370.668,1472.545 368.153,1471.200 365.424,1470.371 362.558,1470.089 359.692,1470.371 356.963,1471.200 354.448,1472.545 352.220,1474.373 350.392,1476.600 349.047,1479.115 348.219,1481.845 347.936,1484.711 348.219,1487.576 349.047,1490.306 350.392,1492.821 352.220,1495.048 354.448,1496.876 356.963,1498.221 359.692,1499.050 362.558,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="848.584,1499.333 851.450,1499.050 854.180,1498.221 856.695,1496.876 858.922,1495.048 860.750,1492.821 862.095,1490.306 862.924,1487.576 863.206,1484.711 862.924,1481.845 862.095,1479.115 860.750,1476.600 858.922,1474.373 856.695,1472.545 854.180,1471.200 851.450,1470.371 848.584,1470.089 845.718,1470.371 842.989,1471.200 840.474,1472.545 838.246,1474.373 836.419,1476.600 835.073,1479.115 834.245,1481.845 833.962,1484.711 834.245,1487.576 835.073,1490.306 836.419,1492.821 838.246,1495.048 840.474,1496.876 842.989,1498.221 845.718,1499.050 848.584,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="1334.606,1499.333 1337.472,1499.050 1340.201,1498.221 1342.716,1496.876 1344.943,1495.048 1346.771,1492.821 1348.116,1490.306 1348.945,1487.576 1349.228,1484.711 1348.945,1481.845 1348.116,1479.115 1346.771,1476.600 1344.943,1474.373 1342.716,1472.545 1340.201,1471.200 1337.472,1470.371 1334.606,1470.089 1331.740,1470.371 1329.010,1471.200 1326.495,1472.545 1324.268,1474.373 1322.440,1476.600 1321.095,1479.115 1320.266,1481.845 1319.984,1484.711 1320.266,1487.576 1321.095,1490.306 1322.440,1492.821 1324.268,1495.048 1326.495,1496.876 1329.010,1498.221 1331.740,1499.050 1334.606,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="1820.632,1499.333 1823.498,1499.050 1826.227,1498.221 1828.742,1496.876 1830.970,1495.048 1832.797,1492.821 1834.143,1490.306 1834.971,1487.576 1835.254,1484.711 1834.971,1481.845 1834.143,1479.115 1832.797,1476.600 1830.970,1474.373 1828.742,1472.545 1826.227,1471.200 1823.498,1470.371 1820.632,1470.089 1817.766,1470.371 1815.036,1471.200 1812.522,1472.545 1810.294,1474.373 1808.466,1476.600 1807.121,1479.115 1806.293,1481.845 1806.010,1484.711 1806.293,1487.576 1807.121,1490.306 1808.466,1492.821 1810.294,1495.048 1812.522,1496.876 1815.036,1498.221 1817.766,1499.050 1820.632,1499.333" stroke-width="4.874"/></g>
+     <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="2306.654,1499.333 2309.519,1499.050 2312.249,1498.221 2314.764,1496.876 2316.991,1495.048 2318.819,1492.821 2320.164,1490.306 2320.993,1487.576 2321.275,1484.711 2320.993,1481.845 2320.164,1479.115 2318.819,1476.600 2316.991,1474.373 2314.764,1472.545 2312.249,1471.200 2309.519,1470.371 2306.654,1470.089 2303.787,1470.371 2301.058,1471.200 2298.543,1472.545 2296.316,1474.373 2294.488,1476.600 2293.143,1479.115 2292.314,1481.845 2292.031,1484.711 2292.314,1487.576 2293.143,1490.306 2294.488,1492.821 2296.316,1495.048 2298.543,1496.876 2301.058,1498.221 2303.787,1499.050 2306.654,1499.333" stroke-width="4.874"/></g>
+    </g>
+   </g>
+   <g id="svg-grid-cell0-patch_3">
+    <polyline stroke-width="3.899" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="265.351,1549.340 265.351,127.504"/>
+   </g>
+   <g id="svg-grid-cell0-patch_4">
+    <polyline stroke-width="3.899" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="2403.861,1549.340 2403.861,127.504"/>
+   </g>
+   <g id="svg-grid-cell0-patch_5">
+    <polyline stroke-width="3.899" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="265.351,1549.340 2403.861,1549.340"/>
+   </g>
+   <g id="svg-grid-cell0-patch_6">
+    <polyline stroke-width="3.899" style="fill: none; stroke: #000000; stroke-linejoin: miter; stroke-linecap: square" points="265.351,127.504 2403.861,127.504"/>
+   </g>
+   <g id="svg-grid-cell0-text_21">
+    <g data-scale="position"><text style="font-size: 58.488px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: middle" x="1334.606" y="98.260" transform="rotate(-0, 1334.606, 98.260)">Shared ecotypes by threshold (avg-linkage clustering)</text></g>
+   </g>
+   <g id="svg-grid-cell0-legend_1">
+    <g id="svg-grid-cell0-patch_7">
+     <polygon style="fill: #ffffff; opacity: 0.8; stroke: #cccccc; stroke-linejoin: miter" points="299.469,385.836 696.647,385.836 698.933,385.685 700.912,385.227 702.588,384.467 703.958,383.399 705.025,382.030 705.786,380.353 706.244,378.374 706.395,376.088 706.395,161.622 706.244,159.336 705.786,157.357 705.025,155.681 703.958,154.311 702.588,153.244 700.912,152.483 698.933,152.025 696.647,151.874 299.469,151.874 297.188,152.025 295.204,152.483 293.532,153.244 292.158,154.311 291.095,155.681 290.330,157.357 289.877,159.336 289.721,161.622 289.721,376.088 289.877,378.374 290.330,380.353 291.095,382.030 292.158,383.399 293.532,384.467 295.204,385.227 297.188,385.685 299.469,385.836" stroke-width="4.874"/>
+    </g>
+    <g id="svg-grid-cell0-line2d_40">
+     <polyline stroke-width="7.311" style="fill: none; stroke: #1f77b4; stroke-linecap: square" points="309.217,191.344 357.957,191.344 406.697,191.344"/>
+     <g>
+      <g><polygon style="stroke: #1f77b4; fill: #1f77b4" points="357.957,205.966 360.823,205.683 363.552,204.855 366.067,203.509 368.295,201.682 370.122,199.454 371.468,196.939 372.296,194.210 372.579,191.344 372.296,188.478 371.468,185.748 370.122,183.233 368.295,181.006 366.067,179.178 363.552,177.833 360.823,177.004 357.957,176.722 355.091,177.004 352.362,177.833 349.847,179.178 347.619,181.006 345.791,183.233 344.446,185.748 343.618,188.478 343.335,191.344 343.618,194.210 344.446,196.939 345.791,199.454 347.619,201.682 349.847,203.509 352.362,204.855 355.091,205.683 357.957,205.966" stroke-width="4.874"/></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-text_22">
+     <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start" x="445.691" y="208.405" transform="rotate(-0, 445.691, 208.405)">cos&gt;=0.6</text></g>
+    </g>
+    <g id="svg-grid-cell0-line2d_41">
+     <polyline stroke-width="7.311" style="fill: none; stroke: #ff7f0e; stroke-linecap: square" points="309.217,264.459 357.957,264.459 406.697,264.459"/>
+     <g>
+      <g><polygon style="stroke: #ff7f0e; fill: #ff7f0e" points="357.957,279.081 360.823,278.798 363.552,277.970 366.067,276.624 368.295,274.797 370.122,272.569 371.468,270.054 372.296,267.325 372.579,264.459 372.296,261.593 371.468,258.863 370.122,256.348 368.295,254.121 366.067,252.293 363.552,250.948 360.823,250.119 357.957,249.837 355.091,250.119 352.362,250.948 349.847,252.293 347.619,254.121 345.791,256.348 344.446,258.863 343.618,261.593 343.335,264.459 343.618,267.325 344.446,270.054 345.791,272.569 347.619,274.797 349.847,276.624 352.362,277.970 355.091,278.798 357.957,279.081" stroke-width="4.874"/></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-text_23">
+     <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start" x="445.691" y="281.519" transform="rotate(-0, 445.691, 281.519)">cos&gt;=0.7</text></g>
+    </g>
+    <g id="svg-grid-cell0-line2d_42">
+     <polyline stroke-width="7.311" style="fill: none; stroke: #2ca02c; stroke-linecap: square" points="309.217,337.574 357.957,337.574 406.697,337.574"/>
+     <g>
+      <g><polygon style="stroke: #2ca02c; fill: #2ca02c" points="357.957,352.196 360.823,351.913 363.552,351.085 366.067,349.739 368.295,347.912 370.122,345.684 371.468,343.169 372.296,340.440 372.579,337.574 372.296,334.708 371.468,331.978 370.122,329.463 368.295,327.236 366.067,325.408 363.552,324.063 360.823,323.234 357.957,322.952 355.091,323.234 352.362,324.063 349.847,325.408 347.619,327.236 345.791,329.463 344.446,331.978 343.618,334.708 343.335,337.574 343.618,340.440 344.446,343.169 345.791,345.684 347.619,347.912 349.847,349.739 352.362,351.085 355.091,351.913 357.957,352.196" stroke-width="4.874"/></g>
+     </g>
+    </g>
+    <g id="svg-grid-cell0-text_24">
+     <g data-scale="position"><text style="font-size: 48.740px; font-family: &apos;DejaVu Sans&apos;, &apos;Bitstream Vera Sans&apos;, &apos;Computer Modern Sans Serif&apos;, &apos;Lucida Grande&apos;, &apos;Verdana&apos;, &apos;Geneva&apos;, &apos;Lucid&apos;, &apos;Arial&apos;, &apos;Helvetica&apos;, &apos;Avant Garde&apos;, sans-serif; text-anchor: start" x="445.691" y="354.633" transform="rotate(-0, 445.691, 354.633)">cos&gt;=0.8</text></g>
+    </g>
+   </g>
+  </g>
+ </g>
+ <defs><clipPath id="svg-grid-cell0-p6f2e14822a">
+   <rect x="265.352" y="127.504" width="2138.508" height="1421.834"/>
+  </clipPath></defs>
+</g></g></svg>

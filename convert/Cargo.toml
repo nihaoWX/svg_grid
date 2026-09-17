@@ -1,0 +1,23 @@
+[package]
+name = "svg_grid_convert"
+version = "0.1.0"
+edition = "2021"
+description = "Convert R (svglite/ggplot2) SVGs into the svg_grid plot-grid tag protocol"
+publish = false
+
+[lib]
+name = "svg_grid_convert"
+path = "src/lib.rs"
+
+[[bin]]
+name = "svg_grid_convert"
+path = "src/main.rs"
+
+# Only the single dependency that is already present in the shared cargo
+# registry cache (the same one the main `svg_grid` crate uses), so that
+# `cargo build --offline` succeeds without network access.
+[dependencies]
+quick-xml = "0.39"
+# Already present in the shared registry cache (the main `svg_grid` crate uses it
+# as a dev-dependency), so `cargo build --offline` still works without network.
+png = "0.18"

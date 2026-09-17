@@ -1,0 +1,107 @@
+==============================================================================
+1. convert every panel into the tag protocol
+==============================================================================
+
+converted 14 panels -> out/tagged
+panel                  canvas path  use  sym g_tf img_tf  text image polyline polygon rect
+A_heatmap.svg        4661x809    0    0    0    0      0    56     1       68       7    2
+B_A.svg              1136x760    0    0    0    0      0     1     1        0       0    2
+B_B.svg              1136x760    0    0    0    0      0     1     1        0       0    2
+B_C.svg              1136x760    0    0    0    0      0     1     1        0       0    2
+B_D.svg              1136x760    0    0    0    0      0     1     1        0       0    2
+C_CYP1B1.svg        1541x1597    0    0    0    0      0     1     1        0       0    1
+C_GC.svg            1541x1597    0    0    0    0      0     1     1        0       0    1
+C_KIF11.svg         1541x1597    0    0    0    0      0     1     1        0       0    1
+C_MMP9.svg          1541x1597    0    0    0    0      0     1     1        0       0    1
+C_SERPINA1.svg      1541x1597    0    0    0    0      0     1     1        0       0    1
+C_HSD11B1.svg       1541x1597    0    0    0    0      0     1     1        0       0    1
+C_ALB.svg           1541x1597    0    0    0    0      0     1     1        0       0    1
+C_BACE1.svg         1541x1597    0    0    0    0      0     1     1        0       0    1
+C_GSTA1.svg         1541x1597    0    0    0    0      0     1     1        0       0    1
+
+==============================================================================
+2. compose the three bands (letters are added here)
+==============================================================================
+
+$ /home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid plot-grid --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/A_heatmap.svg --output /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/A.svg --width 4961 --height 1053 --ncol 1 --gap 0 --plot-margin 210,150,34,150 --labels A --label-size 134 --label-fontfamily DejaVu Serif --label-fontface regular --label-x 0 --label-y 1 --hjust 0 --vjust -0.164179
+  [stderr] (empty)
+
+$ /home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid plot-grid --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/B_A.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/B_B.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/B_C.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/B_D.svg --output /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/B.svg --width 4961 --height 924 --ncol 4 --gap 39 --plot-margin 130,150,34,150 --labels B,,, --label-size 134 --label-fontfamily DejaVu Serif --label-fontface regular --label-x 0 --label-y 1 --hjust 0 --vjust -0.164179
+  [stderr] (empty)
+
+$ /home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid plot-grid --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_CYP1B1.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_GC.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_KIF11.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_MMP9.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_SERPINA1.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_HSD11B1.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_ALB.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_BACE1.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/tagged/C_GSTA1.svg --output /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/C.svg --width 4961 --height 5039 --ncol 3 --gap 19 --plot-margin 130,150,80,150 --labels C,,,,,,,, --label-size 134 --label-fontfamily DejaVu Serif --label-fontface regular --label-x 0 --label-y 1 --hjust 0 --vjust -0.164179
+  [stderr] (empty)
+
+band A: 1 panel(s), ncol=1, margin=(210, 150, 34, 150), height=1053
+  panel                                  cell x,y,w,h    panel box x,y  cell asp canvas asp       sx       sy  sx_coord  sy_coord
+  A_heatmap.svg      150.00, 210.00, 4661.00,  809.00   150.00, 210.00     5.76143    5.76143  1.00000  1.00000   1.00000   1.00000
+
+band B: 4 panel(s), ncol=4, margin=(130, 150, 34, 150), height=924
+  panel                                  cell x,y,w,h    panel box x,y  cell asp canvas asp       sx       sy  sx_coord  sy_coord
+  B_A.svg            150.00, 130.00, 1136.00,  760.00   150.00, 130.00     1.49474    1.49474  1.00000  1.00000   1.00000   1.00000
+  B_B.svg           1325.00, 130.00, 1136.00,  760.00  1325.00, 130.00     1.49474    1.49474  1.00000  1.00000   1.00000   1.00000
+  B_C.svg           2500.00, 130.00, 1136.00,  760.00  2500.00, 130.00     1.49474    1.49474  1.00000  1.00000   1.00000   1.00000
+  B_D.svg           3675.00, 130.00, 1136.00,  760.00  3675.00, 130.00     1.49474    1.49474  1.00000  1.00000   1.00000   1.00000
+
+band C: 9 panel(s), ncol=3, margin=(130, 150, 80, 150), height=5039
+  panel                                  cell x,y,w,h    panel box x,y  cell asp canvas asp       sx       sy  sx_coord  sy_coord
+  C_CYP1B1.svg       150.00, 130.00, 1541.00, 1597.00   150.00, 130.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_GC.svg          1710.00, 130.00, 1541.00, 1597.00  1710.00, 130.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_KIF11.svg       3270.00, 130.00, 1541.00, 1597.00  3270.00, 130.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_MMP9.svg         150.00,1746.00, 1541.00, 1597.00   150.00,1746.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_SERPINA1.svg    1710.00,1746.00, 1541.00, 1597.00  1710.00,1746.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_HSD11B1.svg     3270.00,1746.00, 1541.00, 1597.00  3270.00,1746.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_ALB.svg          150.00,3362.00, 1541.00, 1597.00   150.00,3362.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_BACE1.svg       1710.00,3362.00, 1541.00, 1597.00  1710.00,3362.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+  C_GSTA1.svg       3270.00,3362.00, 1541.00, 1597.00  3270.00,3362.00     0.96493    0.96493  1.00000  1.00000 n/a   1.00000
+
+==============================================================================
+3. stack the bands -> Figure2.svg + Figure2.png
+==============================================================================
+
+$ /home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid plot-grid --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/A.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/B.svg --input /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/blocks/C.svg --output /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/Figure2.svg --output-png /home/nihao/bioagentforge/tools/svg_grid/tests/fig2_mixed/out/Figure2.png --png-dpi 600 --width 4961 --ncol 1 --plot-margin 0 --gap 0
+  [stderr] (empty)
+  Figure2.svg  11.92 MB  text=72  image=14  cells=17  labels=3
+  residue: path=0 use=0 symbol=0 g_tf=0 image_tf=0
+
+==============================================================================
+4. paper rules, on the rendered PNG
+==============================================================================
+  band offsets in the stacked canvas: {'A': 0, 'B': 1053, 'C': 1977}  sum=7016
+  Figure2.png  4961x7016 px @600 dpi  ink(non-white)=33.69 %
+  A4 check: 0.70710 (A4 = 0.70711), height/width = 1.41423
+  max all-white row band = 100 px, col band = 149 px (both must be < 200)
+  dead (all-white) 200 px row bands: []
+  fully-white rows=482 cols=210
+  letter A: ink 99x98 px at (149,90) = 2.00 % of canvas width (band 1.8-2.2)  fill=0.273 (serif regular 0.291 vs bold 0.376)
+  letter B: ink 82x98 px at (158,1063) = 1.65 % of canvas width (band 1.8-2.2)  fill=0.429 (serif regular 0.436 vs bold 0.592)
+  letter C: ink 86x101 px at (158,1986) = 1.73 % of canvas width (band 1.8-2.2)  fill=0.271 (serif regular 0.280 vs bold 0.390)
+
+==============================================================================
+5. embedded rasters really rendered
+==============================================================================
+  <image> box (4521.8, 250.3, 93.6, 658.8) unique colours=522
+  <image> box (176.0, 1199.0, 1084.0, 560.0) unique colours=594
+  <image> box (1351.0, 1199.0, 1084.0, 560.0) unique colours=256
+  <image> box (2526.0, 1199.0, 1084.0, 560.0) unique colours=256
+  <image> box (3701.0, 1199.0, 1084.0, 560.0) unique colours=256
+  <image> box (150.0, 2163.0, 1541.0, 1541.0) unique colours=33551
+  <image> box (1710.0, 2163.0, 1541.0, 1541.0) unique colours=52644
+  <image> box (3270.0, 2163.0, 1541.0, 1541.0) unique colours=63739
+  <image> box (150.0, 3779.0, 1541.0, 1541.0) unique colours=38734
+  <image> box (1710.0, 3779.0, 1541.0, 1541.0) unique colours=49727
+  <image> box (3270.0, 3779.0, 1541.0, 1541.0) unique colours=59365
+  <image> box (150.0, 5395.0, 1541.0, 1541.0) unique colours=21785
+  <image> box (1710.0, 5395.0, 1541.0, 1541.0) unique colours=45831
+  <image> box (3270.0, 5395.0, 1541.0, 1541.0) unique colours=37092
+
+==============================================================================
+6. comparison with the existing Figure 2
+==============================================================================
+  ours 4961x7016; stacked equal-width -> out/Figure2_comparison.png
+  band        RMS  >30 diff %  ours-only ink  original-only ink
+  A         15.78       1.726          0.426              0.131
+  B          6.90       0.124          0.045              0.049
+  C          8.98       0.169          0.080              0.064
+
+stack stderr bytes = 0

@@ -1,0 +1,2 @@
+svg_grid: warning: 1 input(s) are scaled by the layout (|sx-1| or |sy-1| > 0.5%): #0 sx=0.62208 sy=0.62208 (off by 37.79%). The tag protocol never rescales font-size, so a panel that is not drawn at its cell size keeps its text at the wrong size relative to its geometry. To keep the scale ≈1: draw the panel at its target cell size (--normalize-input-max-side <cell width>), give --plot-margin 0 on the outer assembly, or omit --rel-* so each cell takes its panel's canvas aspect.
+svg_grid: warning: 1 non-fatal warning(s) — the exit code and the output file are unchanged
