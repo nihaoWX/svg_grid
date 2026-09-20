@@ -55,8 +55,10 @@ fn own_property(element: &Element, name: &str) -> Option<String> {
     style_value(element.attr("style")?, name)
 }
 
-/// SVG's initial `stroke` is `none`; an explicit `none`/`transparent` is not a stroke.
-fn is_stroked(stroke: Option<&str>) -> bool {
+/// SVG's initial `stroke` is `none`; an explicit `none`/`transparent` is not a
+/// stroke. Shared with the `<path>` rewrite, which splits a filled *and* stroked
+/// path so no shape paints both.
+pub(crate) fn is_stroked(stroke: Option<&str>) -> bool {
     match stroke {
         Some(value) => {
             let value = value.trim();

@@ -92,6 +92,15 @@ impl Affine {
             && self.f.abs() < EPSILON
     }
 
+    /// True when the linear part is the identity (no scale/rotation/skew); the
+    /// translation `(e, f)` may be anything.
+    pub fn is_translation(&self) -> bool {
+        (self.a - 1.0).abs() < EPSILON
+            && self.b.abs() < EPSILON
+            && self.c.abs() < EPSILON
+            && (self.d - 1.0).abs() < EPSILON
+    }
+
     /// `(sx, sy, tx, ty)` when the linear part is diagonal (no rotation/skew).
     pub fn as_axis_scale_translate(&self) -> Option<(f32, f32, f32, f32)> {
         if self.b.abs() < EPSILON && self.c.abs() < EPSILON {

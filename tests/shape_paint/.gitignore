@@ -1,0 +1,6 @@
+# Shape-paint generated products (regenerate with `bash run.sh`)
+*.tagged.svg
+*.comp.svg
+*.comp.png
+*.src.png
+__pycache__/

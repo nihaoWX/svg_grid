@@ -45,31 +45,61 @@ box, then scans the whole tree:
 
 It **does** translate (bake into the protocol) the following:
 
-* `<g transform>` — baked into the leaf coordinates (incl. `<clipPath>` rects);
-* `<use>` / `<defs>` symbols — expanded at each use site, then removed;
-* `<path d>` — converted to `<polyline>`/`<polygon>` (curves flattened within a tolerance);
-* text `translate(x y) rotate(a)` — normalised to `x`/`y` + `rotate(a x y)`;
-* **`<image>`** — kept as a raster child: a pure-translation or axis-aligned uniform-flip
-  transform is baked into `x/y/width/height` (the raster is re-encoded), and
-  `preserveAspectRatio="none"` is written so the bitmap fills its box exactly like a `<rect>`
-  (the main library moves it by `x/y/width/height`). **An `<image>`-only wrapper SVG is the
-  supported way to bring a bitmap panel (e.g. a ChimeraX render) into a composed figure.**
+* `<g transform>` — a pure **translation** is baked into the leaf coordinates
+  (including `<text>`/`<tspan>` `x`/`y` and `<clipPath>` rects); a `<g>` carrying
+  scale or rotation is still rejected above a `<text>` (see below);
+* `<use>` referencing a defined element / defined `<defs>` content — expanded at
+  each use site, then removed;
+* `<path d>` — converted to `<polyline>`/`<polygon>` (curves flattened within a
+  tolerance). A **fill-only** path becomes **one** `<polygon>` covering all of its
+  subpaths, each explicitly closed, so the outer contour *and* the holes stay a
+  single fill region and the counters — `O`, `0`, `8`, `B` — keep their holes; the
+  source `fill-rule` is preserved verbatim (it is **never** rewritten to
+  `evenodd`). A **stroke-only** path keeps one `<polyline>` per subpath. A path
+  that is both filled **and** stroked is decided by its subpath count: a single
+  subpath keeps its shape as before (`<polygon>` when closed, else `<polyline>`),
+  while several subpaths are **split** into one fill-only `<polygon>` (all
+  subpaths concatenated and closed) plus one stroke-only shape per subpath — so
+  the stroke never paints the bridges of the concatenated fill region;
+* `<text>` transform — `rotate(angle, x, y)` is rewritten, svglite's
+  `translate(x y) rotate(a)` is normalised to `x`/`y` + `rotate(a x y)`, and a
+  bare `translate(tx[, ty])` is folded into the text's `x`/`y`;
+* **`<tspan>` with absolute `x`/`y`** — accepted: the composer rewrites the
+  `<text>`'s own `x`/`y` and carries each `<tspan>` coordinate along the same
+  axis (each axis independently; `dx`/`dy` are increments and are left as-is).
+  This is what makes matplotlib's **automatic mathtext** (`$\mathdefault{10^{n}}$`
+  from log axes / `LogNorm` colour bars) convert — it lands as
+  `<g transform="translate(X Y)"><text><tspan x= y=…>`;
+* **`<clipPath>` body `<path>`** (the pdftocairo shape) — every axis-aligned
+  rectangular subpath is rewritten to a `<rect>`, and every `<rect>` in a
+  referenced clip is baked with the same transform as the geometry it clips. A
+  non-axis-aligned clip subpath still fails closed;
+* **`<image>`** — kept as a raster child: any axis-aligned transform — a pure
+  translation, an axis-aligned uniform flip, or an **axis-aligned non-uniform
+  scale** (independent x/y, e.g. a `matrix(...)`) — is baked into
+  `x/y/width/height` (the raster is re-encoded), and `preserveAspectRatio="none"`
+  is written so the bitmap fills its box exactly like a `<rect>` (the main
+  library moves it by `x/y/width/height`). Rotation/shear still fails closed.
+  **An `<image>`-only wrapper SVG is the supported way to bring a bitmap panel
+  (e.g. a ChimeraX render) into a composed figure.**
 
 Then it aborts (exit code 1, no output file) when it finds any of:
 
-* `<path>` (geometry lives in `d`, which the composer never rewrites);
 * nested `<svg>` (its own viewport/coordinate system would be misplaced);
-* `<symbol>` or `<use>` (nested coordinate systems / id references the composer
-  does not rewrite; real svglite output contains none of these);
-* `<tspan>` with absolute `x`/`y` (or `dx`/`dy`) — a coordinate-less `<tspan>` is
-  allowed;
-* a renderable primitive (`circle`/`text`/`rect`/`line`/`polyline`/`polygon`)
-  inside `<defs>` — **except** a `<rect>` inside a `<clipPath>`, which must
-  follow the same scaling policy as the geometry it clips and is therefore
-  required to be allowed;
-* any `transform` other than `rotate(angle, x, y)` — svglite's rotated axis
-  labels use `translate(x,y) rotate(angle)` on a text, which is rewritten into
-  the equivalent `x`/`y` + `rotate(angle, x, y)` form (see below);
+* `<symbol>` (its own nested coordinate system), or a `<use>` whose `href` does
+  not resolve to a defined element — a resolvable `<use>` is expanded, not
+  rejected;
+* a `<circle>` under a rotation, skew or non-uniform scale (it would become an
+  ellipse), or a `<rect>` under a rotation or skew (it would no longer be
+  axis-aligned);
+* a `<text>` under a scale or rotation inherited from an ancestor `<g>` — only a
+  pure translation can be baked into text, so the label would be misplaced;
+* an `<image>` under a transform that is not axis-aligned (a rotation or shear);
+* a `<path>` inside a `<clipPath>` whose subpath is not an axis-aligned rectangle
+  (a clip can only be baked as a union of `<rect>`s);
+* an unparseable `transform`, or a `<text>` `transform` that is none of
+  `rotate(angle, x, y)`, svglite's `translate(x,y) rotate(angle)`, or a bare
+  `translate(tx[, ty])` (see below);
 * any geometry attribute the composer parses with `parse_f32` that is not a plain
   number.
 
@@ -127,7 +157,7 @@ cache, so no network is needed:
 ```bash
 cd tools/svg_grid/convert
 cargo build --offline --release     # produces target/release/svg_grid_convert
-cargo test --offline                # 24 unit + 11 CLI tests, hand-made fixtures only
+cargo test --offline                # 67 unit + 11 CLI tests, hand-made fixtures only
 cargo fmt --check && cargo clippy --offline --all-targets -- -D warnings
 ```
 

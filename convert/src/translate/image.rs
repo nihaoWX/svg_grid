@@ -1,8 +1,10 @@
 //! `<image>` baking.
 //!
-//! Pure translation and axis-aligned flips are baked by decoding the embedded
-//! PNG, flipping it and re-encoding; anything with rotation, skew or non-uniform
-//! scale is rejected (fail closed).
+//! A pure translation and any *axis-aligned* scale — uniform or not, optionally
+//! with a flip — are baked into the box `x`/`y`/`width`/`height` (a non-uniform
+//! scale simply stretches the bitmap box, which loses nothing). A negative scale
+//! additionally decodes the embedded PNG, flips it and re-encodes. Rotation and
+//! skew are rejected (fail closed).
 
 use crate::affine::Affine;
 use crate::base64;
@@ -15,17 +17,11 @@ use super::number;
 pub(super) fn bake_image(element: &mut Element, transform: Affine) -> Result<(), ConvertError> {
     let (sx, sy, _, _) = transform.as_axis_scale_translate().ok_or_else(|| {
         ConvertError::Translate(
-            "<image> transform contains rotation/skew; only translation and axis-aligned flips \
-             can be baked"
+            "<image> transform contains rotation/skew; only an axis-aligned scale (possibly with a \
+             flip) or a translation can be baked"
                 .to_string(),
         )
     })?;
-    if (sx.abs() - sy.abs()).abs() > 1e-4 || sx.abs() < 1e-9 {
-        return Err(ConvertError::Translate(format!(
-            "<image> transform has a non-uniform scale ({sx}, {sy}); only translation and \
-             axis-aligned flips can be baked"
-        )));
-    }
 
     let x = number(element, "x")?;
     let y = number(element, "y")?;

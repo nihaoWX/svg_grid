@@ -16,8 +16,8 @@
 //! 1. **fail closed, validation first** — the root element, the canvas box and
 //!    the whole tree are validated *before* anything else happens. If the
 //!    document cannot be safely rewritten (nested `<svg>`, `<symbol>`, a `<use>`
-//!    that does not resolve, `<tspan>` with absolute coordinates, a transform the
-//!    translator cannot bake, an `<image>` with rotation/skew/non-uniform scale,
+//!    that does not resolve, a transform the
+//!    translator cannot bake, an `<image>` with rotation/skew,
 //!    a `viewBox` that is not four whitespace-separated numbers, or a
 //!    non-positive / non-numeric canvas), the conversion aborts with a per-node
 //!    report and writes nothing. Validation is never short-circuited by the

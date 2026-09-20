@@ -1,0 +1,11 @@
+<svg width="1000" height="400" viewBox="0 0 1000 400" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <!-- V2 #3 (hand-written): poppler writes a bitmap placed with an axis-aligned
+       NON-UNIFORM matrix (a 1xN legend band) and referenced through <use>. The
+       converter must expand the <use>, bake the non-uniform scale into the
+       image box and re-encode the raster (not fail closed). -->
+  <defs>
+    <image id="source-5" x="0" y="0" width="8" height="4" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAGElEQVR4nGP8z4AdMOEQZ2BkYMCuB6cOAJMwAgVQdPoFAAAAAElFTkSuQmCC"/>
+  </defs>
+  <rect x="0" y="0" width="1000" height="400" fill="rgb(100%, 100%, 100%)"/>
+  <use xlink:href="#source-5" transform="matrix(17.28, 0, 0, 0.288, 493.77, 149.48)"/>
+</svg>

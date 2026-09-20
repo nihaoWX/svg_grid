@@ -67,25 +67,38 @@ tools/svg_grid/
 策略语义：`xy` 坐标双向重映射、尺寸按 `sqrt(sx*sy)` 缩放；`position` 坐标重映射、**尺寸一律不变**；
 `none` 整块平移、内部坐标不重算。**`font-size` 在任何策略下都不缩放。**
 
-**主库受支持的图元**：`circle` / `text` / `use` / `line` / `rect` / `image` / `polyline` / `polygon`，
+**主库受支持的图元**：`circle` / `text` / `tspan` / `use` / `line` / `rect` / `image` / `polyline` / `polygon`，
 外加 `stroke-width` 与 `rotate(angle, x, y)`。（`<image>` 与 `<rect>` 同款处理 `x/y/width/height`；
-渲染内嵌栅格需要 resvg 的 `raster-images` feature，已启用。）
+`<tspan>` 的 `x`/`y` 是**绝对坐标**，按轴独立重写，与 `<text>` 一起搬运——否则 mathtext 逐字 `<tspan>`
+会留在原坐标；渲染内嵌栅格需要 resvg 的 `raster-images` feature，已启用。）
 **主库不处理**（原样留在原坐标 → 版面错乱）：`<path>`、任何非 `rotate` 的 `<g transform>`。
 （另：几何写在 CSS `style` 里的值不会被重写，例如 svglite 的 `stroke-width`。）
 
 **`convert/` 的职责是把外源方言翻译成上述图元**，因此它接受的构造比"裸主库"宽：
-`<g transform>` 会被烘焙进坐标、`<use>`/`<defs>` 会按引用展开后删除、`<path d>` 会转成
-`<polyline>`/`<polygon>`、文字 `translate(x y) rotate(a)` 会归一化、`<image>` 的轴对齐翻转会烘焙进位图
-并补 `preserveAspectRatio="none"`。仍然 **fail-closed 拒绝**：无法烘焙的 `<image>` 变换、
-嵌套 `<svg>`、`<symbol>`、带绝对坐标的 `<tspan>`、逗号分隔的 `viewBox`、非 `svg` 根、非正画布尺寸。
-唯一允许出现在 `<defs>` 里的图元是 `<clipPath>` 下的 `<rect>`——它必须与几何同策略，裁剪框才跟着缩放。
+`<g transform>` 会被烘焙进坐标（**纯平移**还能精确烘进 `<text>`/`<tspan>` 的 x/y 与 `rotate` 中心）、
+`<use>`/`<defs>` 会按引用展开后删除、`<path d>` 会转成 `<polyline>`/`<polygon>`、
+文字 `translate(x y) rotate(a)` 与裸 `translate(tx,ty)` 会归一化为 x/y + `rotate(a,x,y)`、
+`<image>` 的轴对齐（含**非等比**）缩放与翻转会烘焙进 x/y/width/height 并补 `preserveAspectRatio="none"`、
+`clipPath` 体内的矩形 `<path>` 会矩形化为 `<rect>`。仍然 **fail-closed 拒绝**：非轴对齐的 `<image>` 变换、
+嵌套 `<svg>`、`<symbol>`、逗号分隔的 `viewBox`、非 `svg` 根、非正画布尺寸、非轴对齐矩形的 clip 子轮廓。
+`<defs>` 里允许出现的图元是 `<clipPath>` 下的 `<rect>`（须与几何同策略，裁剪框才跟着缩放）。
+
+**`<path>` 的出形态决策表**（`convert/src/translate/shapes.rs`，修复"字形孔被填实"的关键）：
+填充路径的**全部**子轮廓合进**一个** `<polygon>`（每条子轮廓显式闭合，使环形之间的连接边绕数贡献为 0；
+`fill-rule` 照抄、**不改成 evenodd**），纯描边路径仍是每子轮廓一个 `<polyline>`；
+**填充 + 描边 + 多子轮廓**时拆成"只填充 polygon（`stroke="none"`）+ 每子轮廓只描边元素（`fill="none"`）"，
+避免连接边被描边画出来；**填充 + 描边 + 单子轮廓**保持修复前形态（逐字节不变）。
+已知边界：描边是否"存在"只看该图元自身声明（属性或 `style`）；若描边只来自祖先 `<g stroke=…>`，
+多子轮廓填充路径仍会画出连接边——两个受支持方言都不这么写（matplotlib/svglite 把 paint 写在图元自身的
+`style` 里，poppler 的字形只有继承的 `fill`），实测 0 例。
 
 ## 输入来源兼容性（2026-09-16 实测）
 
 | 来源 | 图元构成 | 结论 |
 |---|---|---|
-| R `svglite`/`ggplot2` | 绝对坐标、`<path>` = 0；circle/rect/line/polyline/polygon/text + `<clipPath>` | **已可适配**：`convert/` 后可直接组图（真实 panel 端到端跑通） |
-| Python `matplotlib` | `<path>` 292、`<use>` 436、带 transform 的 `<g>` 42、`<image>` 6 | **已可适配**：由 `convert/` 的翻译层吸收（烘焙/展开/path 转换/位图翻转）；S22 端到端验证 |
+| R `svglite`/`ggplot2` | 绝对坐标、`<path>` = 0；circle/rect/line/polyline/polygon/text + `<clipPath>` | **已可适配**：`convert/` 后可直接组图（真实 panel 端到端跑通）；`textLength` 随归一化一起缩放 |
+| Python `matplotlib` | `<path>` 292、`<use>` 436、带 transform 的 `<g>` 42、`<image>` 6 | **已可适配**：由 `convert/` 的翻译层吸收（烘焙/展开/path 转换/位图翻转）；S22 端到端验证。**自动 mathtext**（对数轴/`LogNorm` 色标 → `<g translate><text><tspan x y>`）与**多行文本裸 `translate`** 也已支持（2026-09-20） |
+| 外源 PDF `pdftocairo -svg` | 字形轮廓 `<use>`→`<defs><g><path>`（无 `Z`/无自身 `fill`）、`<clipPath>` 内 `<path>`、非等比 `<image>` | **已可适配**（2026-09-20）：字形孔靠"单 polygon + 显式闭合"保留、clip `<path>` 矩形化、非等比 `<image>` 烘框。**仍须调用方处理**：`-x/-y/-W/-H` 对 `-svg` 静默失效（poppler 行为）→ 事后按 viewBox/`<g transform>` 裁 |
 | 栅格（PNG/JPEG、ChimeraX 渲染） | — | 主库现在支持 `<image>` 的坐标搬运，可随面板进入成品（矢量图内含一小块位图） |
 
 ## 已知几何约束

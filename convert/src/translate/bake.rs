@@ -77,13 +77,19 @@ fn bake_element(
             out.push(Node::Element(element.clone()));
         }
         "text" => {
-            // Only the *ancestor* transform must be trivial: the text's own leaf
-            // transform is normalized later by `normalize_transforms`.
-            if !acc.is_identity() {
+            // A *pure ancestor translation* can be baked exactly into the text's
+            // x/y (and the tspans / leaf rotate centre) — see
+            // `bake_text_translation`. Anything with scale or rotation must stay
+            // a transform, so it cannot be baked.
+            if !acc.is_translation() {
                 return Err(ConvertError::Translate(format!(
-                    "<text> under a non-identity ancestor transform ({acc:?}) cannot be baked; only \
-                     a leaf `rotate(a x y)` / `translate(x y) rotate(a)` text transform is supported"
+                    "<text> under an ancestor transform ({acc:?}) with rotation or scale cannot be \
+                     baked; only a pure translation can be baked into text, plus a leaf \
+                     `rotate(a x y)` / `translate(x y) rotate(a)` text transform"
                 )));
+            }
+            if !acc.is_identity() {
+                bake_text_translation(element, acc.e, acc.f)?;
             }
             out.push(Node::Element(element.clone()));
         }
@@ -95,6 +101,76 @@ fn bake_element(
         _ => out.push(Node::Element(element.clone())),
     }
     Ok(())
+}
+
+/// Exact bake of a pure ancestor translation `(e, f)` into a `<text>` subtree.
+///
+/// In SVG the `<text>`/`<tspan>` `x`/`y` attributes and the `rotate(a, cx, cy)`
+/// centre are all expressed in the coordinate system *after* the ancestor
+/// transforms. Removing an ancestor translation and adding it to those
+/// coordinates therefore renders identically, because
+/// `T(e,f) · R(a, cx, cy) == R(a, cx+e, cy+f) · T(e,f)`. `dx`/`dy` are
+/// *incremental* offsets (not positions) and must not be touched.
+fn bake_text_translation(element: &mut Element, e: f32, f: f32) -> Result<(), ConvertError> {
+    let x = number(element, "x")?;
+    let y = number(element, "y")?;
+    element.set_attr("x", fmt_num(x + e));
+    element.set_attr("y", fmt_num(y + f));
+
+    if let Some((angle, cx, cy)) = element.attr("transform").and_then(parse_rotate3) {
+        element.set_attr(
+            "transform",
+            format!(
+                "rotate({}, {}, {})",
+                fmt_num(angle),
+                fmt_num(cx + e),
+                fmt_num(cy + f)
+            ),
+        );
+    }
+
+    for child in &mut element.children {
+        if let Node::Element(child) = child {
+            bake_tspan_translation(child, e, f)?;
+        }
+    }
+    Ok(())
+}
+
+/// Move every descendant `<tspan>`'s absolute `x`/`y` with the text's ancestor
+/// translation. `dx`/`dy` are incremental and are deliberately left untouched.
+fn bake_tspan_translation(element: &mut Element, e: f32, f: f32) -> Result<(), ConvertError> {
+    if element.name == "tspan" {
+        if element.attr("x").is_some() {
+            let x = number(element, "x")?;
+            element.set_attr("x", fmt_num(x + e));
+        }
+        if element.attr("y").is_some() {
+            let y = number(element, "y")?;
+            element.set_attr("y", fmt_num(y + f));
+        }
+    }
+    for child in &mut element.children {
+        if let Node::Element(child) = child {
+            bake_tspan_translation(child, e, f)?;
+        }
+    }
+    Ok(())
+}
+
+/// Parse the composer's `rotate(angle, x, y)` text form (exactly three numbers).
+fn parse_rotate3(value: &str) -> Option<(f32, f32, f32)> {
+    let inner = value.trim().strip_prefix("rotate(")?.strip_suffix(')')?;
+    let parts: Vec<f32> = inner
+        .split(|c: char| c == ',' || c.is_whitespace())
+        .filter(|part| !part.is_empty())
+        .map(str::parse::<f32>)
+        .collect::<Result<Vec<_>, _>>()
+        .ok()?;
+    match parts.as_slice() {
+        [angle, cx, cy] => Some((*angle, *cx, *cy)),
+        _ => None,
+    }
 }
 
 fn bake_shape(element: &mut Element, transform: Affine) -> Result<(), ConvertError> {
@@ -213,17 +289,25 @@ pub(super) fn apply_clip_refs(
                 clip_path.name
             )));
         }
-        let Some(Node::Element(rect)) = clip_path
+        // Bake *every* `<rect>` of the clip path (a clip path may hold several
+        // rectangles; all of them must follow the referencing transform).
+        let rects: Vec<&mut Element> = clip_path
             .children
             .iter_mut()
-            .find(|node| matches!(node, Node::Element(child) if child.name == "rect"))
-        else {
+            .filter_map(|node| match node {
+                Node::Element(child) if child.name == "rect" => Some(child),
+                _ => None,
+            })
+            .collect();
+        if rects.is_empty() {
             return Err(ConvertError::Translate(format!(
                 "clip-path #{id} referenced from a transformed context must contain a <rect> so \
                  the clip box can be baked"
             )));
-        };
-        bake_shape(rect, transform)?;
+        }
+        for rect in rects {
+            bake_shape(rect, transform)?;
+        }
     }
     Ok(())
 }

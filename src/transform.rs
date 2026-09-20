@@ -60,6 +60,13 @@ fn rewrite_primitive(
             rewrite_scaled_length(element, "r", policy, source, target, LengthAxis::Uniform)?;
         }
         "text" => rewrite_pair(element, "x", "y", policy, source, target)?,
+        // A `<tspan>`'s `x`/`y` are *absolute* positions in the current user
+        // coordinate system (they override the parent `<text>`'s position), so
+        // they must move with the text or the run silently stays behind. Unlike
+        // `<text>` (whose `rewrite_pair` requires both axes), the two axes are
+        // rewritten independently: `<tspan x="10" dy="1.2em">` carries only one
+        // coordinate, and skipping it would misplace the run.
+        "tspan" => rewrite_axis_coordinates(element, policy, source, target)?,
         "use" => {
             rewrite_pair(element, "x", "y", policy, source, target)?;
             rewrite_scaled_length(element, "width", policy, source, target, LengthAxis::X)?;
@@ -183,6 +190,34 @@ fn rewrite_pair(
     let (x, y) = map_point(x, y, policy, source, target);
     element.set_attr(x_attr, crate::format_number(x));
     element.set_attr(y_attr, crate::format_number(y));
+
+    Ok(())
+}
+
+/// Rewrite the `x` and `y` of a `<tspan>` *independently*: each present axis is
+/// mapped on its own through the single-axis projection of [`map_point`], so a
+/// run that declares only one coordinate (`<tspan x="10" dy="1.2em">`, the usual
+/// multi-line form) is still moved. `dx`/`dy` are incremental offsets, not
+/// positions, and are deliberately left untouched; when neither `x` nor `y` is
+/// present the tspan simply follows the (already rewritten) `<text>` position.
+fn rewrite_axis_coordinates(
+    element: &mut Element,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+) -> Result<()> {
+    for (attr, is_y) in [("x", false), ("y", true)] {
+        let Some(value) = element.attr(attr) else {
+            continue;
+        };
+        let value = parse_f32(value, attr)?;
+        let mapped = if is_y {
+            map_point(0.0, value, policy, source, target).1
+        } else {
+            map_point(value, 0.0, policy, source, target).0
+        };
+        element.set_attr(attr, crate::format_number(mapped));
+    }
 
     Ok(())
 }

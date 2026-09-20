@@ -31,7 +31,7 @@
      <g id="line2d_2">
       
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="356.757,1527.949 356.757,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="356.757,1527.949 356.757,1544.758"/></g>
       </g>
      </g>
      <g id="text_1">
@@ -44,7 +44,7 @@
      </g>
      <g id="line2d_4">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="596.266,1527.949 596.266,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="596.266,1527.949 596.266,1544.758"/></g>
       </g>
      </g>
      <g id="text_2">
@@ -57,7 +57,7 @@
      </g>
      <g id="line2d_6">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="835.775,1527.949 835.775,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="835.775,1527.949 835.775,1544.758"/></g>
       </g>
      </g>
      <g id="text_3">
@@ -70,7 +70,7 @@
      </g>
      <g id="line2d_8">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="1075.284,1527.949 1075.284,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="1075.284,1527.949 1075.284,1544.758"/></g>
       </g>
      </g>
      <g id="text_4">
@@ -83,7 +83,7 @@
      </g>
      <g id="line2d_10">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="1314.793,1527.949 1314.793,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="1314.793,1527.949 1314.793,1544.758"/></g>
       </g>
      </g>
      <g id="text_5">
@@ -96,7 +96,7 @@
      </g>
      <g id="line2d_12">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="1554.302,1527.949 1554.302,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="1554.302,1527.949 1554.302,1544.758"/></g>
       </g>
      </g>
      <g id="text_6">
@@ -109,7 +109,7 @@
      </g>
      <g id="line2d_14">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="1793.811,1527.949 1793.811,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="1793.811,1527.949 1793.811,1544.758"/></g>
       </g>
      </g>
      <g id="text_7">
@@ -122,7 +122,7 @@
      </g>
      <g id="line2d_16">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="2033.320,1527.949 2033.320,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="2033.320,1527.949 2033.320,1544.758"/></g>
       </g>
      </g>
      <g id="text_8">
@@ -135,7 +135,7 @@
      </g>
      <g id="line2d_18">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="2272.829,1527.949 2272.829,1544.758"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="2272.829,1527.949 2272.829,1544.758"/></g>
       </g>
      </g>
      <g id="text_9">
@@ -154,7 +154,7 @@
      <g id="line2d_20">
       
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,1322.755 244.145,1322.755"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,1322.755 244.145,1322.755"/></g>
       </g>
      </g>
      <g id="text_11">
@@ -167,7 +167,7 @@
      </g>
      <g id="line2d_22">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,1093.618 244.145,1093.618"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,1093.618 244.145,1093.618"/></g>
       </g>
      </g>
      <g id="text_12">
@@ -180,7 +180,7 @@
      </g>
      <g id="line2d_24">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,864.482 244.145,864.482"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,864.482 244.145,864.482"/></g>
       </g>
      </g>
      <g id="text_13">
@@ -193,7 +193,7 @@
      </g>
      <g id="line2d_26">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,635.345 244.145,635.345"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,635.345 244.145,635.345"/></g>
       </g>
      </g>
      <g id="text_14">
@@ -206,7 +206,7 @@
      </g>
      <g id="line2d_28">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,406.209 244.145,406.209"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,406.209 244.145,406.209"/></g>
       </g>
      </g>
      <g id="text_15">
@@ -219,7 +219,7 @@
      </g>
      <g id="line2d_30">
       <g>
-       <g><polyline stroke-width="3.842063" style="stroke: #000000" points="260.954,177.072 244.145,177.072"/></g>
+       <g><polygon stroke-width="3.842063" style="stroke: #000000" points="260.954,177.072 244.145,177.072"/></g>
       </g>
      </g>
      <g id="text_16">

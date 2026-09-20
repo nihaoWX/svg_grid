@@ -1,0 +1,10 @@
+# V2 generated products (regenerate with `bash run_v2.sh`)
+*.tagged.svg
+*.convert.log
+*.pdf
+comp_*.svg
+comp_*.png
+stderr_*.txt
+e1.txt
+e2.txt
+__pycache__/

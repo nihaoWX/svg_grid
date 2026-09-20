@@ -4,23 +4,25 @@
 
 | 项 | 规则 |
 |---|---|
-| 输出格式 | **每张图同名成对输出 `.png` + `.svg`**（见下） |
+| 输出格式 | **成品：同名 `.svgz` + `.png`**；**散图 panel：同名 `.svg` + `.png`**（见下） |
 | 正图命名 | `Figure 1` / `Figure 2` / …（**注意空格**） |
 | 补充图命名 | `Figure S1` / `Figure S2` / … |
 | 存放 | **扁平存放**，不建子目录：`Figure/main/`（正图）、`Figure/supp/`（补充图） |
 
-### 1.1 为什么必须 png + svg 成对
+### 1.1 落盘格式：成品 `.svgz` + `.png`，散图 `.svg` + `.png`
 
-**所有图——单张 panel、组好的成品图（正图与补充图）——都要同时落两份同名文件。**
+**成品图（正图与补充图）**落 `.svgz` + `.png`；**散图 panel** 落 `.svg` + `.png`。都要**同名同目录**。
 
-| 格式 | 用途 |
-|---|---|
-| `.png` | 供 agent 与用户**快速预览**；供正文 markdown 嵌入（渲染器对 svg 支持不一致） |
-| `.svg` | 供**组图与再排版**——矢量可任意缩放，文字/线条/标记**不变形**；png 做不到（放大发糊、缩小后字不可读） |
+| 格式 | 用在哪 | 用途 |
+|---|---|---|
+| `.png` | 两者 | 供 agent 与用户**快速预览**；供正文 markdown 嵌入（渲染器对 svg 支持不一致） |
+| `.svgz` | **成品** | gzip 压缩的 SVG = 成品矢量原件：体积远小于未压缩 SVG，且 `svg_grid` 能直接读（按扩展名解压） |
+| `.svg` | **散图** | 供**组图与再排版**——矢量可任意缩放，文字/线条/标记**不变形**；`svg_grid_convert` 直接吃 `.svg` |
 
-- 组图时**按 svg 载入 panel**：默认用 **`svg_grid`**（`references/02a_svg_grid_assembly.md`），它直接吃 `.svg`；仅当回退到 cowplot 时才用 `magick::image_read_svg()` / `rsvg` 读成 ggplot/grob（要检查输出非空白，见 `references/02b_cowplot_assembly.md`）。导出组图后再同时落 png + svg。
-- 两份文件**同名同目录**：`Figure/main/Figure 3.png` 与 `Figure/main/Figure 3.svg`。
-- 单张 panel 也遵守（panel 存各 step 的 `figure_panels/`，同样 png+svg 成对）。
+- 组图时**按 svg 载入 panel**：默认用 **`svg_grid`**（`references/02a_svg_grid_assembly.md`）；仅当回退到 cowplot 时才用 `magick::image_read_svg()` / `rsvg` 读成 ggplot/grob（要检查输出非空白，见 `references/02b_cowplot_assembly.md`）。
+- **需要未压缩 `.svg`**（交投稿系统或外部工具）时，把组图命令里的 `--output-svgz` 换成 `--output` 重跑一次即可——组图确定性、可随时重建，`Figure/` 里不必同时堆两份矢量。
+- **无法矢量化的面板**（ChimeraX 3D 渲染、RDKit `MolDraw2DCairo`、`imshow` 热图）以内嵌 `<image>` 进成品，**保持 600 dpi 原分辨率、不降采样**。
+- 单张 panel 也遵守成对落盘（panel 存各 step 的 `figure_panels/`）。
 
 ## 2. 目录结构
 
@@ -29,8 +31,8 @@ steps/08_手稿/
 ├── 01_methods.md
 ├── 02_results.md
 ├── Figure/
-│   ├── main/            # 正图成品：Figure 1.png + Figure 1.svg / Figure 2.png + Figure 2.svg ...
-│   └── supp/            # 补充图成品：Figure S1.png + Figure S1.svg ...
+│   ├── main/            # 正图成品：Figure 1.png + Figure 1.svgz / Figure 2.png + Figure 2.svgz ...
+│   └── supp/            # 补充图成品：Figure S1.png + Figure S1.svgz ...
 │       └── supp_captions.md   # 所有补充图图注集中在此
 └── Supplemantary-Materials/
 ```

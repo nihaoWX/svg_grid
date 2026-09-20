@@ -57,18 +57,19 @@ ppp1 <- ggdraw(ppp1) +
   theme(plot.margin = margin(t = 35, r = 35, b = 35, l = 35, unit = "pt"),
         plot.background = element_rect(fill = "white", color = NA))
 
-# 4) 落盘
-png(file.path(plot_dir, "Figure 1.png"),
-    width = 4000, height = 4000 * (2^0.5), res = 300)   # A4 比例
-print(ppp1)
-dev.off()
+# 4) 落盘：成品 = .svgz + .png 成对（A4 竖版 4961×7016 @600dpi）
+svglite::svglite(file.path(plot_dir, "Figure 1.svg"), width = 8.27, height = 11.69)
+print(ppp1); dev.off()
+png(file.path(plot_dir, "Figure 1.png"), width = 4961, height = 4961 * (2^0.5), res = 600)
+print(ppp1); dev.off()
+# 再把 .svg gzip -9 成 Figure 1.svgz（Figure/ 里只留 .svgz 与 .png）
 ```
 
 要点：
 - `labels = "AUTO"` 自动按序生成 A/B/C…；需要跳过某个位置就传 `c("", "B")`。
 - `label_x` / `label_y` 控制字母相对 panel 的偏移；**负的 `label_x` 把字母推到 panel 左侧外侧**。
 - `rel_heights` / `rel_widths` 决定占比——把字数多的小图给更大比例。
-- 输出用 `png(...)` 显式设 `width/height/res`，**A4 比例**由 `height = width * sqrt(2)` 得到（竖版）。
+- 输出**同时**落矢量（`svglite::svglite`）与预览（`png`），尺寸按 **A4 竖版 4961×7016 @600 dpi**（`height = width * sqrt(2)`），与 02a 主路线口径一致；`.svg` 再 gzip 成 `.svgz`。
 
 ## 3. 读外部 PNG 面板
 
@@ -103,8 +104,11 @@ plot_grid2 <- function(input_dir, group, ppp_ncol, label_size,
                    labels = "AUTO",
                    label_fontfamily = "serif", label_size = label_size,
                    label_x = -0.04, label_y = 1)
+  svglite::svglite(file.path(output_dir, paste0(p_name, ".svg")),
+                   width = p_width / 600, height = p_height / 600)
+  print(ppp); dev.off()
   png(file.path(output_dir, paste0(p_name, ".png")),
-      width = p_width, height = p_height, res = 300)
+      width = p_width, height = p_height, res = 600)
   print(ppp); dev.off()
 }
 ```

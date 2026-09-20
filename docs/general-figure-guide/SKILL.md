@@ -5,7 +5,8 @@ description: >-
   size, panel letters, fonts, legends, colors, which panels to merge into one
   figure, and how to name/insert captions into the manuscript. Covers the
   "results-only", "fill" and "semantic" grouping principles, the A4 canvas
-  convention, the png+svg paired-output rule, the small non-bold serif panel
+  convention, the paired-output rule (products `.svgz`+`.png`, panels
+  `.svg`+`.png`), embedding non-vectorizable panels as 600-dpi `<image>`, the small non-bold serif panel
   letters, legends-outside-axes rule, and the manuscript integration format
   (Figure x / Figure Sx naming, md insertion, caption format). Triggers for
   "组图", "figure assembly", "panel layout", "figure caption",
@@ -32,13 +33,17 @@ metadata: {"version": "1.1", "skill-author": "BioAgentForge"}
 
 > 出图的判断标准：**有价值的信息，且直面数据不直观** → 出图。同时对照本领域惯例补齐常规必备图（见 `tools/molecular-docking/figure_guide/` 这类领域指南）。
 
-## 每张图都必须 png + svg 成对输出（硬规则）
+## 每张图都必须落盘成对文件（硬规则）
 
-**所有图——单张 panel、组好的成品图（正图与补充图）——都必须同时输出同名两份：`.png` 与 `.svg`。**
+**成品图（正图与补充图）**：同名两份 **`.svgz` + `.png`**。
+**散图 panel**：同名两份 **`.svg` + `.png`**。
 
-- **`.png`**：供 agent 与用户**快速预览**、供正文 markdown 嵌入。
-- **`.svg`**：供**组图与再排版**——矢量可任意缩放而文字/线条/标记不变形，png 做不到（放大会糊、缩了字会小到不可读）。
-- 两者**同名同目录**（如 `Figure 3.png` + `Figure 3.svg`），组图时按 svg 载入。
+- **`.png`**：供 agent 与用户**快速预览**、供正文 markdown 嵌入（渲染器对 svg 支持不一致）。
+- **`.svgz`（成品）**：gzip 压缩的 SVG——成品图的矢量原件。比未压缩 SVG 小得多，且 `svg_grid` 能直接把它当输入读（按扩展名 gzip 解压）。需要交一份**未压缩** `.svg` 给外部工具或投稿系统时，把组图命令里的 `--output-svgz` 换成 `--output` 重跑即可——组图是确定性的，原件随时可重建。
+- **`.svg`（散图）**：供**组图与再排版**——矢量可任意缩放而文字/线条/标记不变形，png 做不到（放大会糊、缩了字会小到不可读）；`svg_grid_convert` 直接吃 `.svg`。
+- 两者**同名同目录**：成品如 `Figure/main/Figure 3.svgz` + `Figure 3.png`；散图如 `<step>/figure_panels/xxx.svg` + `xxx.png`。
+
+**无法矢量化的面板**（ChimeraX 3D 渲染、RDKit `MolDraw2DCairo` 结构图、`imshow` 热图等）以**内嵌 `<image>`** 的形式进成品 svgz，**保持 600 dpi 原分辨率、不降采样**：重采样只会让图更糊，而 gzip 也压不动 base64 位图，得不偿失。
 
 ## 组图路线：先 `svg_grid`，走不通才回退 cowplot
 
@@ -56,8 +61,8 @@ metadata: {"version": "1.1", "skill-author": "BioAgentForge"}
 
 | 项 | 规则 | 详见 |
 |---|---|---|
-| 输出格式 | **每张图同名成对输出 `.png` + `.svg`**（png 预览/嵌入，svg 组图）；扁平存放 | `references/04_manuscript_integration.md` |
-| 画布 | **正图 A4 比例**（如 4961×7016 px @600dpi）；**补充图可松懈**，不必强拉 A4 | `references/01_canvas_layout.md` |
+| 输出格式 | **成品 `.svgz` + `.png`**（svgz = 压缩 SVG 原件）；**散图 `.svg` + `.png`**；同名同目录 | `references/04_manuscript_integration.md` |
+| 画布 | **正图 A4 比例**（4961×7016 px @600dpi）；**补充图可松懈**；重排版面时宽高比保持在 **1:1 ↔ A4** 之间，不要极端 | `references/01_canvas_layout.md` |
 | 面板字母 | A/B/C/D 置于**组图左上角外侧**（不画进 panel 内）；**serif 常规体、不加粗**；占画布宽 ~1.8–2.2 % | `references/01_canvas_layout.md` |
 | 字号 | 整体偏小（以已发表图为参照，而非"填满画布"） | `references/01_canvas_layout.md` |
 | 图例 | 放**坐标轴右侧外侧**，不放图内（图内易与数据/标签重叠） | `references/01_canvas_layout.md` |
@@ -86,7 +91,8 @@ metadata: {"version": "1.1", "skill-author": "BioAgentForge"}
 
 ## 反面清单（常见 AI 失误）
 
-- ❌ **只出 png 不出 svg（或反之）** → 每张图必须同名成对输出两份，svg 是组图的唯一可用素材
+- ❌ **只出 png 不出矢量原件**（成品缺 `.svgz`、散图缺 `.svg`，或反之缺 png）→ 成对落盘，矢量是组图与投稿的基础
+- ❌ 内嵌位图面板时降采样、降 dpi → 位图按 **600 dpi 原分辨率**内嵌
 - ❌ **一上手就走 cowplot**（或一次转换失败就整体放弃 `svg_grid`）→ 默认 02a；回退只认 02a 的**三条判据**，且回退后必须检查输出非空白
 - ❌ 图内自带脚注/图注/来源标注 → 读起来像"已出版 PDF 截图"，实际是组图阶段不该有的东西
 - ❌ 面板字母过大/加粗/非 serif → 对照已发表的图缩小、去粗

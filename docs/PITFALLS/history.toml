@@ -1,0 +1,206 @@
+# 阻塞点处理历史账本（history.toml）
+#
+# 本项目专属的账本：记「每轮改了哪些代码位置、为什么、出自哪份报告、哪个 commit」，
+# 供下一个 agent 动手前用下面这条命令反查，以免改坏上一轮刻意建立的行为、或重开已裁决的问题：
+#   python3 <本工具>/history.py query <路径>[:<符号>] --history <本文件> --repo <锚点所属仓库>
+#
+# 硬规则：
+#   * 只增不改：写错了就**追加**一条修正 finding，并在它的 related 里挂上旧 id，绝不重写历史。
+#   * 键用 <仓库根相对路径>[:<函数/类限定名>]，**不要用行号**（行号会漂移）。
+#   * 行号只作为**锚定到某个 commit** 的定位辅助，记进 lines_before / lines_after。
+#   * 报告（原件）修完即删；靠 `git -C <仓库> show <commit>:<path>` 随时取回，证据不丢、也不堆旧文件。
+#   * `--repo` **必给**（init / record / query 都要）：工具不做任何自动探测，不替你猜仓库。
+#
+# —— 字段定义（本注释是 schema 的唯一来源）——
+#
+# [[round]]              —— 一轮修复，一份一条
+#   id                   轮次 id，形如 R1 / R2（必填，全局唯一）
+#   date                 日期 YYYY-MM-DD（必填）
+#   code_before          本轮修改前的 commit（必填，须是真实 commit）
+#   code_after           本轮修改后的 commit（可为空串 "" = 尚未提交）
+#   summary              一句话概括本轮做了什么（必填）
+#
+#   [[round.report]]      —— 本轮**消费的全部报告**，一份一条（可能多条）
+#     path               报告在仓库根下的相对路径（必填）
+#     commit             该路径上**最新、且该 commit 里文件仍存在**的提交（record 自动查，勿手填）
+#
+#   [[round.finding]]     —— 本轮定位到的每条 finding
+#     id                 finding id，全局唯一，形如 R1-F1（必填）
+#     report             本 finding 出自哪几份报告，**可为空 []**——复核/追加类 finding 无对应报告时
+#                        留空；非空时每个名称须能在同轮 [[round.report]] 里找到（值取上面的 path，
+#                        报告名 basename 或仓库根相对路径皆可；同名 basename 命中多份须写全路径）
+#     symptom            现象的简短描述，含关键量（必填）
+#     status             仅在需要特殊对待时出现：wontfix（已裁决，不得重开）| deferred（记了未修）；
+#                        不写 = 已修
+#     where              <仓库根相对路径>[:<函数/类限定名>]（必填）
+#     lines_before       锚定到 code_before 快照的行区间 "238" 或 "238-247"（可选）
+#     lines_after        锚定到 code_after 快照的行区间（可选）
+#     reason             为什么这么改 / 为什么 wontfix（必填）
+#     related            关联到的旧 finding id 列表（改名 / 补充 / 推翻旧记录），可空
+#
+# —— 空表说明 ——
+# 本账本当前**没有任何 [[round]] 条目**。第一轮用下面这条命令追加（不要手改既有条目）：
+#   python3 <本工具>/history.py record --from-json <round.json> --history <本文件> --repo <仓库>
+
+# —— 锚点所属仓库（config，可改）——
+# repo  锚点（commit、快照路径）在哪些仓库里解析：**按顺序依次尝试、命中即用**。
+#       路径**相对本账本所在目录**（由 init --repo 归一化后写入，账本随目录树整体搬迁后仍成立）。
+#       record / query 也要给 --repo，与它**集合不一致 ⇒ 报错**（不静默换仓）。
+#       工具**不做任何自动探测**（不向上找 .git、没有默认值）：仓库是调用方本来就知道的事。
+#       *项目目录本身是个 git 仓时*（本仓 tools/ 的既定做法：每个工具一个仓），向上取只会取到
+#       **最内层**那个，所以本键必须指到锚点真正所在的**外层**仓库。
+repo = ["../../../.."]
+
+[[round]]
+id = "R1"
+date = "2026-09-20"
+code_before = "1b5ac30b5ef1b54e8b2a1f1cb2a27bfa068e6a13"
+code_after = "22a74f406e195c85113e6485deed2872b6a775bf"
+summary = "svg_grid 存量接入：消费 docs/PITFALLS/ 的 10 篇报告。分类裁决后修 7 项（convert 的文本/tspan 方言、<path> 出形态、clipPath 矩形化、非等比 <image>；内核的 textLength 归一化与 <tspan> 坐标搬运）+ 文档口径 1 项，判 3 项属外部/用法不改代码、只落文档绕行；另记 1 条同轮对抗复核发现并修掉的回归。"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/matplotlib_logtick_formatter_mathtext.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/matplotlib_svg_dc_date_rerun_svgz_hash.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/matplotlib_text_tspan_translate.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/normalize_input_max_side_portrait_cells.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/pdftocairo_glyph_outlines_and_inherited_paint.md"
+  commit = "ba349aba9f691a6a0257eef300a5df4ca2d3642f"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/pdftocairo_svg_clip_crop_and_image.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/pdftocairo_svg_glyph_counters.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/svg_grid_convert_g_transform_ancestor_of_text.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/svglite_textlength_normalize_mismatch.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/vector_surgery_open_subpaths_and_fake_crop.md"
+  commit = "f6743b49c7ca8ac7b4b3d47236c26f594b8dadad"
+
+  [[round.finding]]
+  id = "R1-F1"
+  report = ["tools/svg_grid/docs/PITFALLS/matplotlib_logtick_formatter_mathtext.md"]
+  symptom = "对数轴 / LogNorm 色标的自动刻度 formatter 生成 mathtext（SVG 形态 <g translate><text><tspan x y>），转换器 fail-closed 一次列 37 个问题；面板源码里一个 `$` 都没有也会中招"
+  where = "tools/svg_grid/convert/src/scan.rs:walk_scan"
+  reason = "①工具缺陷（convert 的方言覆盖缺口）：mathtext 是对数轴的默认产物，要求每个面板脚本自挂 FuncFormatter 等于把同一段规避复制到每个调用方。改为接受带绝对坐标的 <tspan>，并把纯平移祖先精确烘进 <text>/<tspan> 的 x/y（内核另按轴独立搬运 tspan 坐标，否则组图时 tspan 静默留在原坐标）。判据：matplotlib 真实面板 113/113 文本运行几何对齐，max|Δ|=5e-4。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F2"
+  report = ["tools/svg_grid/docs/PITFALLS/matplotlib_text_tspan_translate.md"]
+  symptom = "mathtext 逐字 <tspan x y> 与多行文本的裸 translate(x y)（matplotlib 把每行写成独立的 <text transform=translate>）都被转换器拒绝"
+  where = "tools/svg_grid/convert/src/transform.rs:normalize_transforms"
+  reason = "①工具缺陷：清掉扫描层对带坐标 <tspan> 的拒绝；<text> 上的裸 translate(tx,ty) 折进 x/y（纯平移与坐标平移可交换，结果精确）。既有形态不受影响：rotate(a,x,y) 照旧，svglite 的 translate(x,y) rotate(a) 仍只允许文本无 x/y。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F3"
+  report = ["tools/svg_grid/docs/PITFALLS/svg_grid_convert_g_transform_ancestor_of_text.md"]
+  symptom = "祖先 <g> 的整体平移盖住 <text>（典型：matplotlib 图例块 / PandaMap 图例）⇒ 转换器 exit 1 不写产物"
+  where = "tools/svg_grid/convert/src/translate/bake.rs:bake_text_translation"
+  reason = "①工具缺陷：纯平移可精确烘进 <text>/<tspan> 的 x/y 与 rotate(a,cx,cy) 中心（依据 T(e,f)·R(a,cx,cy)==R(a,cx+e,cy+f)·T(e,f)）；带缩放/旋转的祖先仍 fail-closed——烘进去会静默改字号/朝向。同时把 normalize_transforms 提到 bake 之前：否则 svglite 的 translate() rotate() 文本碰上平移祖先会先被写入 x/y、再也归一化不了，最终以含糊的 self-check 失败收场。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F4"
+  report = ["tools/svg_grid/docs/PITFALLS/pdftocairo_svg_glyph_counters.md"]
+  symptom = "带孔字形（O/0/8/B）的一条 <path> 内含外轮廓+内轮廓（常无 Z），被拆成多个各自 nonzero 填充的图元 ⇒ 孔被填实、文字不可读"
+  where = "tools/svg_grid/convert/src/translate/shapes.rs:path_shapes"
+  reason = "①工具缺陷：改为按「是否填充」而不是「是否闭合」决定形态——填充路径的全部子轮廓合进一个 <polygon>，且每条子轮廓显式闭合（环间连接边的绕数贡献相互抵消）；fill-rule 照抄，不改成 evenodd（那会改变重叠子轮廓的并集语义）。判据：真实 pdftocairo -svg 产物的 'O' 孔中心 118px 为背景色、环为填充色。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F5"
+  report = ["tools/svg_grid/docs/PITFALLS/pdftocairo_glyph_outlines_and_inherited_paint.md"]
+  symptom = "poppler 字形轮廓路径既无 Z 也无自身 fill（颜色继承自祖先 <g fill>）：按几何闭合性判形态 ⇒ 文字被重判成描边、整列刻度标签消失且无任何报错"
+  where = "tools/svg_grid/convert/src/translate/shapes.rs:path_shapes"
+  reason = "①工具缺陷，与 R1-F4 同一根因（原来按闭合性而不是 paint 语义定型）。现按 paint 语义把字形路径合成一个填充 polygon，孔保留。paint 继承由渲染器负责：转换器只解析图元自身 paint，而实测两个方言都把 paint 写在图元自身的 style 里（matplotlib/svglite 显式、poppler 字形只有继承的 fill 且无 stroke）。遗留：字形若叠加旋转/斜切等无法烘焙的变换，仍按该报告的回退——整块按 600dpi 栅格内嵌。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F6"
+  report = ["tools/svg_grid/docs/PITFALLS/pdftocairo_svg_clip_crop_and_image.md"]
+  symptom = "pdftocairo -svg 的 <clipPath> 体内是 <path>（矩形并集 + 一个退化 M x y），转换器只认 <rect> ⇒ 残留 <path> 让 post-conversion self-check exit 1"
+  where = "tools/svg_grid/convert/src/translate/shapes.rs:rectify_clip_paths"
+  reason = "①工具缺陷：把 clip 体内每条轴对齐矩形子轮廓改写成 <rect>（退化子轮廓由展平器丢弃），并让被引用 clipPath 的**全部** <rect> 随引用处的变换一起烘焙（原来只烘第一个）。非轴对齐矩形的 clip 子轮廓仍 fail-closed（响亮失败，不静默错裁）。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F7"
+  report = ["tools/svg_grid/docs/PITFALLS/pdftocairo_svg_clip_crop_and_image.md"]
+  symptom = "pdftocairo -svg -x -y -W -H 的裁切参数对 SVG 输出静默失效，产物永远是整页 viewBox"
+  status = "wontfix"
+  where = "tools/svg_grid/docs/general-figure-guide/references/02a_svg_grid_assembly.md"
+  reason = "③外部/上游客观限制：裁切矩形是栅格设备的概念，poppler 的 SVG 后端不看它，本工具无从改起。绕行（已写进 02a 坑清单第 7 条②）：转换后把根 width/height/viewBox 设成裁切框、内容包一层 translate(-x0,-y0)——这是矢量裁剪，不要栅格化重嵌。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F8"
+  report = ["tools/svg_grid/docs/PITFALLS/pdftocairo_svg_clip_crop_and_image.md"]
+  symptom = "<use> 引用的 <image> 带非等比 matrix(17.28,0,0,0.288,493.77,149.48)（1x300 的 VIP 图例色带）⇒ 被判不可烘焙、exit 1，丢掉就是丢真内容"
+  where = "tools/svg_grid/convert/src/translate/image.rs:bake_image"
+  reason = "①工具缺陷：轴对齐的非等比 scale 可以精确烘进 x/y/width/height（就是把位图框拉伸），fail-closed 过严。改为只拒绝旋转/斜切；负 scale 仍解码翻转重编码，并补 preserveAspectRatio=none。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F9"
+  report = ["tools/svg_grid/docs/PITFALLS/svglite_textlength_normalize_mismatch.md"]
+  symptom = "--normalize-input-max-side 缩了 font-size 却不缩 svglite 给每个 <text> 写的 textLength=\"102.4264px\" ⇒ 文字被静默压扁，stderr 无任何告警"
+  where = "tools/svg_grid/src/normalize.rs:scale_element"
+  reason = "①工具缺陷：把 textLength 加进归一化的长度白名单，并让数值解析容忍尾随单位后缀——\"102.4264px\" 走 parse::<f32>() 会静默跳过，等于没修。组图路径（src/transform.rs）仍不缩放它，与「font-size 在任何策略下都不缩放」的口径一致。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F10"
+  report = ["tools/svg_grid/docs/PITFALLS/normalize_input_max_side_portrait_cells.md"]
+  symptom = "02a 正文按字面写 --normalize-input-max-side <该行的格宽>；竖版面板（纵横比<1）照做后格子仍报 W1、s≠1、文字比例偏"
+  where = "tools/svg_grid/docs/general-figure-guide/references/02a_svg_grid_assembly.md"
+  reason = "②文档与实现不符：该旗标缩的是输入的**长边**，横版面板长边=宽、竖版面板长边=高。正文改成 max(格宽,格高) 并补一句理由；规范源与 svg_grid/docs 副本同步、逐字节一致（diff 为空）。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F11"
+  report = ["tools/svg_grid/docs/PITFALLS/matplotlib_svg_dc_date_rerun_svgz_hash.md"]
+  symptom = "同一脚本连跑两次，含 matplotlib 文本的面板组出的 .svgz 的 md5 每次都变（PNG 却逐字节相同）——用 .svgz 哈希做幂等/复现门禁会误报"
+  status = "wontfix"
+  where = "tools/svg_grid/docs/general-figure-guide/references/02a_svg_grid_assembly.md"
+  reason = "③外部/上游客观限制：matplotlib 在 <metadata> 写当前时间 <dc:date>，组图器对同一份字节输入是确定的（实测两次相同输入→相同 md5），分歧完全来自出图端。绕行（已写进 02a 坑清单）：做幂等核对时比对 PNG，或出图端 savefig(metadata={\"Date\": None})。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F12"
+  report = ["tools/svg_grid/docs/PITFALLS/vector_surgery_open_subpaths_and_fake_crop.md"]
+  symptom = "调用方矢量手术的两个静默杀手：Path.to_polygons() 默认 closed_only=True 丢掉全部开放子轮廓（棒棒糖横杆/网格线/参考线整套消失）；只做 translate 的\"假裁剪\"让画外内容渗进相邻格子"
+  status = "wontfix"
+  where = "tools/svg_grid/docs/general-figure-guide/references/02a_svg_grid_assembly.md"
+  reason = "④使用者用错：三处都在调用方自己的 Python 预处理/校验脚本里（matplotlib 的 closed_only=False、\"真裁\"要用 clipPath 或几何裁掉画外图元、死白带检测只统计完整窗口），不属本工具的代码。绕行仍按报告执行；此处只登记，以免下轮被当成新 bug 重开。"
+  related = []
+
+  [[round.finding]]
+  id = "R1-F13"
+  report = []
+  symptom = "同轮对抗复核抓到（无对应报告）：把多子轮廓合成一个 <polygon> 后，环之间的连接边被描边画了出来——两个互不相连的闭合矩形之间出现一条对角黑线（探针 (45,45) 由白变黑）；且开放子轮廓的连接边是真实边、会改变绕数（(31,29)/(29,31) 由黑变白）"
+  where = "tools/svg_grid/convert/src/translate/shapes.rs:path_shapes"
+  reason = "本轮对抗复核发现并修掉，故 report=[]。改为按「填充/描边/子轮廓数」决策：只填充⇒单 polygon（每条子轮廓显式闭合，连接边净绕数为 0）；填充+描边+多子轮廓⇒拆成 fill-only polygon（stroke=none，连 style 里的 stroke 声明也删）+ 每子轮廓 stroke-only（fill=none）；填充+描边+单子轮廓保持修复前形态、逐字节不变。已加像素级回归（tests/shape_paint/）。已知边界：描边只来自祖先 <g stroke> 时不拆（两个受支持方言实测 0 例）。"
+  related = []

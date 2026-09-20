@@ -1,5 +1,77 @@
 # DECISIONS
 
+## 2026-09-20 把 6 篇 PITFALLS 的"调用方规避"改成工具内实现（分类裁决：7 修 / 3 不改代码）
+
+- **背景**：`docs/PITFALLS/` 的 10 篇是 2026-09-15 真实手稿图迁移中记录的阻塞点，当时按用户指示
+  "工具处理不了就放弃该图、记录阻塞点，不要改工具源码"，10 篇的对策**全部写在调用方**（改面板脚本 /
+  预处理）。2026-09-20 用户改口要求"修掉里面的阻塞点"，故重新裁决。
+- **决定**（按 `tools/pitfalls-manager/SKILL.md` 的分类：①工具缺陷 / ②文档与实现不符 ⇒ 修；
+  ③外部客观限制 / ④使用者用错 ⇒ 不改代码）：
+  - **修**：`matplotlib_logtick_formatter_mathtext`、`matplotlib_text_tspan_translate`、
+    `svg_grid_convert_g_transform_ancestor_of_text`（文本/tspan 方言）、
+    `pdftocairo_svg_glyph_counters`、`pdftocairo_glyph_outlines_and_inherited_paint`（字形孔）、
+    `pdftocairo_svg_clip_crop_and_image` 的第 1、3 点（clip `<path>`、非等比 `<image>`）、
+    `svglite_textlength_normalize_mismatch`（归入归一化）、`normalize_input_max_side_portrait_cells`
+    （文档口径）。
+  - **不改代码**（③外部 / ④用法）：`matplotlib_svg_dc_date_rerun_svgz_hash`（`<dc:date>` 是 matplotlib
+    写的，工具不生成元数据）、`pdftocairo_svg_clip_crop_and_image` 第 2 点（`-x/-y/-W/-H` 对 `-svg`
+    失效是 poppler 行为）、`vector_surgery_open_subpaths_and_fake_crop`（`Path.to_polygons(closed_only=)`
+    与"只位移的假裁剪"、校验脚本窗口都在调用方自己的脚本里）。
+- **原因**：这 6 项不是"使用者的错"，而是 **convert 的方言覆盖缺口**——matplotlib 的自动 mathtext 是
+  对数轴的**默认**产物（源码里一个 `$` 都没有），要求每个面板脚本自带 `FuncFormatter` 规避，等于把同一段
+  代码在每个调用方复制一遍；字形孔/继承 paint 同理（poppler 字形是 PDF→矢量的必经形态）。修在适配层
+  才符合"`convert/` 负责把外源方言翻译成协议"的既有分工。
+- **代价/边界**：`pdftocairo -svg` 的裁剪参数仍须调用方事后裁（poppler 行为）；矢量手术类问题仍归调用方。
+
+## 2026-09-20 `<path>` 出形态：按"填充/描边/子轮廓数"决策，填充环必须显式闭合
+
+- **决定**（`convert/src/translate/shapes.rs`）：
+  - **只填充** ⇒ 全部子轮廓合进**一个** `<polygon>`，且**每条子轮廓显式闭合**（首尾点不等就补首点）；
+    `fill-rule` 照抄，**不改成 `evenodd`**。
+  - **只描边** ⇒ 每条子轮廓一个 `<polyline>`（同修复前）。
+  - **填充 + 描边 + 单子轮廓** ⇒ 保持修复前形态（`closed` ⇒ polygon，否则 polyline），**逐字节不变**。
+  - **填充 + 描边 + 多子轮廓** ⇒ 拆成"只填充 polygon（`stroke="none"`，连 `style` 里的 stroke 声明也删）
+    + 每子轮廓只描边元素（`fill="none"`）"。
+- **原因**（两条都是实测出来的）：
+  1. **不合并** ⇒ 字形（外轮廓 + 内轮廓在**同一条 path 里**、常无 `Z`、无自身 `fill`）被拆成各自 nonzero
+     填充的图形 ⇒ **孔被填实**（真实 `pdftocairo -svg` 产物复现）。
+  2. **合并但让环开放** ⇒ 环之间的"连接边"是**真实边**，会改变绕数（实测源渲染 (31,29) 为黑、转换后为白）；
+     **显式闭合**后连接边正反各走一次、净绕数贡献 0，填充域等于源"所有子轮廓共用同一 `fill-rule`"的语义。
+     同理，**合并后的 polygon 若仍带 `stroke`**，连接边会被描出来（实测两个互不相连的闭合矩形被一条对角
+     黑线连起来）⇒ 多子轮廓 + 描边必须拆成 fill/stroke 两类元素。
+- **已知边界**：判断"是否有描边"只看该图元自身的属性/`style`；描边只来自祖先 `<g stroke=…>` 时，
+  多子轮廓填充路径仍会画连接边——两个受支持方言都把 paint 写在图元自身（实测 0 例），**明确不做**。
+- **未采用**：直接 fail-closed（多子轮廓 + 描边在 ggplot2 `geom_sf` 多环、matplotlib `PathPatch` + `edgecolor`
+  下是真会出现的，拒收会逼调用方回到栅格化）；强行改成 `evenodd`（会改变重叠子轮廓的并集语义）。
+
+## 2026-09-20 `<tspan>` 纳入主库协议（最小核心改动）
+
+- **决定**：主库 `src/transform.rs` 新增 `<tspan>` 的 `x`/`y` 重写（两轴**各自独立**，`dx`/`dy` 是增量、
+  不动）；支持图元表由 `text` 扩到 `text`+`tspan`。
+- **原因**：SVG 里 `<tspan>` 的 x/y 是**绝对坐标**（覆盖父 `<text>` 的当前位置；标准多行惯例
+  `<tspan x="同父" dy="1.2em">` 就靠这一点），而 matplotlib 的 mathtext 正是"`<g translate>` + 逐字符
+  `<tspan>`"。组图只搬 `<text>` 的 x/y ⇒ tspan 留在原坐标 ⇒ **标签静默错位**。这属于"协议完整性缺口"，
+  与 2026-09-16 `<image>` 进主库同一性质（几何语义与既有图元同款），故按"最小核心改动"处理；
+  方言的烘焙/归一化仍全部留在 `convert/`。
+- **配套**：`convert/` 把**纯平移**祖先精确烘进 `<text>`/`<tspan>` 的 x/y 与 `rotate(a,cx,cy)` 中心
+  （依据 `T(e,f)·R(a,cx,cy) == R(a,cx+e,cy+f)·T(e,f)`）；带缩放/旋转的祖先仍 fail-closed（烘进去会静默改变
+  字号/朝向）。`translate_dialect` 的阶段顺序改为 `normalize_transforms` **先于** bake，否则
+  svglite 的 `translate(x,y) rotate(a)` 文本碰上平移祖先会先被写入 x/y、再也归一化不了。
+
+## 2026-09-20 PITFALLS 报告"原样保留、账本缓建"→ 当天即改为**消费入账并删除**
+
+- **原决定（已推翻，同日晚些时候）**：修完那 7 项后不删、不改 `docs/PITFALLS/` 的 10 篇报告，也暂不建
+  `history.toml`——理由是 `tools/pitfalls-manager` 仍在开发、其报告识别规则有缺口。
+- **改为**：工具修到 v5 后**当天**走完存量接入：`init --repo <根仓库>` → `record` 记下 **R1**（13 条
+  finding：10 篇报告各一条 + 该报告内另两处分类裁决 + 1 条同轮对抗复核发现）→ 改掉按路径引用它处的地方
+  → **删除这 10 篇报告原件**。
+- **原因**：报告一旦入账，锚点（`[[round.report]].commit` + `[[round.report]].path`）就足以取回原件
+  （`git -C <repo> show <commit>:<path>`，`query` 会直接打出这条命令）；而"目录里还剩什么"本身是有用的
+  信号——留着的报告应被当成"待处理"。继续留着会让下一个 agent 误判"还没修"。
+- **经验（写进 `tools/pitfalls-manager` 的反馈）**：本项目的账本在 `tools/svg_grid/` 内，而
+  `tools/svg_grid/` **自己是个 git 仓**，锚点却在**根仓库**——所以 `--repo` 必须显式给根仓库，
+  否则 12 条闸门全部报"commit/路径不存在"（工具 v3 曾用"从账本目录推仓库根"，正落在这个坑里）。
+
 ## 2026-09-17 skill 的组图路线改为 svg_grid 优先，cowplot 降为回退（用户要求）
 
 - **决定**：`general-figure-guide`（规范源 `tools/manuscripts_skills/general-figure-guide/`；副本
@@ -145,3 +217,21 @@
      会改变文字相对比例的静默情形。
   3. **仍不做网格参数计算器**：理由已从"cowplot 式 `rel_*` 够用、调完看图即可"变为
      "布局已按自然尺寸自动算（`--height`/`--rel-*` 均可省），不需要算参数"。
+
+## 2026-09-15 字形/paint 属于"喂进来的一方"：核心不为外源方言扩权 ⚠️ 已被 2026-09-20 部分推翻
+
+- **原决定（保留其"回退"部分，其余已被推翻）**：外源 PDF（`pdftocairo -svg`）里的文字是**字形轮廓**
+  ——`<use>` 引用 `<defs>` 中的字形 `<path>`，这些 `<path>` **既没有 `Z`、自身也没有 `fill`**，
+  颜色从**祖先 `<g fill=…>` 继承**。当时把"继承 + 未闭合"的解析与定型（填充形状按闭合处理、描边形状
+  输出为 `polyline`）留在**调用方的预处理**里，核心只接受"paint 显式、已按 paint 语义定型"的图元，
+  **本批次未改核心源码**。
+- **已被推翻的一半（2026-09-20）**：不再要求调用方预处理。转换器现在自己按 **paint 语义**定型
+  （填充路径的全部子轮廓合进一个 `<polygon>` 且显式闭合，字形孔因此保留；描边路径仍是每子轮廓一条
+  `<polyline>`）——见 `convert/src/translate/shapes.rs` 的决策表。当时"按几何闭合性判形态"的做法正是
+  字形孔被填实、文字被判成描边的根因。账本条目：`docs/PITFALLS/history.toml` 的 **R1-F4 / R1-F5**。
+- **仍然成立的一半**：**paint 的继承由渲染器负责**（转换器只解析图元自身声明的 paint，不去沿祖先链
+  解析——两个受支持方言都把 paint 写在图元自身的 `style` 里）；**无法烘焙的变换**（字形叠加旋转/斜切等）
+  仍按原回退——**该面板按 600 dpi 栅格化内嵌 `<image>`**，而不是交付"看着像文字、放大是断线"的矢量。
+  原件（成因与规避全文）已随该轮消费删档，取回：
+  `git -C /home/nihao/bioagentforge show ba349ab:tools/svg_grid/docs/PITFALLS/pdftocairo_glyph_outlines_and_inherited_paint.md`
+  （或在账本 `docs/PITFALLS/history.toml` 里查 R1-F5）。

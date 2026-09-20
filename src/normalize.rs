@@ -51,6 +51,7 @@ fn scale_element(element: &mut Element, factor: f32) {
             "ry",
             "width",
             "height",
+            "textLength",
             "font-size",
             "stroke-width",
             "markerWidth",
@@ -97,11 +98,43 @@ fn scale_numeric_attrs(element: &mut Element, attrs: &[&str], factor: f32) {
         let Some(value) = element.attr(attr) else {
             continue;
         };
-        let Ok(value) = value.parse::<f32>() else {
+        let Some(scaled) = scale_numeric_prefix(value, factor) else {
             continue;
         };
-        element.set_attr(attr, crate::format_number(value * factor));
+        element.set_attr(attr, scaled);
     }
+}
+
+/// Multiply the numeric prefix of a length attribute by `factor`, keeping
+/// whatever follows verbatim. svglite writes `textLength="102.4264px"` (a unit
+/// suffix we must preserve), and the same rule is the right one for `width`,
+/// `height`, `r`, … : a bare `"100"` scales as before, `"100px"` becomes
+/// `"200px"`, and a token with no numeric prefix (`"auto"`, `"middle"`) is left
+/// alone. Mirrors [`crate::style::scale_token`].
+fn scale_numeric_prefix(value: &str, factor: f32) -> Option<String> {
+    // Longest prefix (by character boundary) that parses as a number.
+    // `char_indices` never yields `value.len()`, so the full-value case is
+    // handled separately.
+    let (number_end, number) = match value.parse::<f32>() {
+        Ok(number) => (value.len(), number),
+        Err(_) => {
+            let mut best = None;
+            for (index, _) in value.char_indices() {
+                if index == 0 {
+                    continue;
+                }
+                if let Ok(number) = value[..index].parse::<f32>() {
+                    best = Some((index, number));
+                }
+            }
+            best?
+        }
+    };
+    Some(format!(
+        "{}{}",
+        crate::format_number(number * factor),
+        &value[number_end..]
+    ))
 }
 
 fn scale_view_box(element: &mut Element, factor: f32) {

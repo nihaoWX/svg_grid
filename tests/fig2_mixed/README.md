@@ -127,18 +127,20 @@ changed (documented above).
 * a pure `<image>`-only wrapper (`viewBox` = the PNG's own pixel size, e.g.
   `0 0 2400 2400`) converts with exit 0 and report `primitives: rect=1`;
 * **14 / 14** panels — including the 13 bitmap wrappers — convert with exit 0;
-* `convert/src/scan.rs:157-175` accepts an `<image>` whose accumulated transform
-  is a pure translation or an axis-aligned uniform flip, and
+* `convert/src/scan.rs:150-166` accepts an `<image>` whose accumulated transform
+  is axis-aligned — any x/y scale (uniform **or non-uniform**), an optional flip,
+  or a pure translation; only a rotation or shear fails closed — and
   `convert/src/translate/image.rs` bakes that transform into `x/y/width/height`
   and writes `preserveAspectRatio="none"`;
 * the matplotlib panel with `imshow` (2 embedded rasters, non-trivial transforms)
   also converts with exit 0.
 
 **No file under `tools/svg_grid/convert/` was changed by this test.** The only
-mismatch found is documentation: `convert/README.md` still says the converter
-“aborts … on `<image>` (raster / base64 content)”, which contradicts
-`scan.rs` / `translate/image.rs`. Fixed outside this task's allowed scope, so it
-is reported, not changed.
+mismatch found was documentation: `convert/README.md` then said the converter
+“aborts … on `<image>` (raster / base64 content)”, which contradicted
+`scan.rs` / `translate/image.rs`. That README has since been corrected (it now
+documents `<image>` as a supported raster child), so this is no longer an open
+mismatch.
 
 ## Things the manual does not say (learned by doing)
 

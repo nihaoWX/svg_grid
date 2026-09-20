@@ -104,10 +104,12 @@
 - 一行纵横比不同：`格宽_i = avail · a_i / Σa`（`a_i` = 该面板画布宽高比），取多数派的格宽做统一目标即可。
 
 ```
---normalize-input-max-side <该行的格宽>
+--normalize-input-max-side <该面板目标格的长边 max(格宽, 格高)>
 ```
 
 它是**逐输入**等比缩放：把每个输入的**长边**缩到该值，**几何、`font-size`、`stroke-width` 一起缩**（`style="..."` 里声明的长度同样会被缩放）。于是组图时 `s ≈ 1`，文字比例恢复设计值。
+
+所以这里的 N 要填**该面板目标格的长边** `max(格宽, 格高)`——横版面板长边恰好等于格宽，竖版面板长边是格高。竖版面板若误填成格宽（<格高），输入的长边只缩到格宽，面板最终比格子小，`s ≠ 1`（`sx`、`sy` 都偏大）并触发 W1「输入被缩放」告警，该面板的文字比例随之偏小。
 
 - 同纵横比的行 → 全部 `s = 1`（精确）；
 - 纵横比不同的行 → 有一个面板的 `s` 偏 ~5%（肉眼无差别）。
@@ -115,9 +117,9 @@
 **最稳的做法：每个面板各自缩到"它自己的格宽"**（混合纵横比的行也能全部精确 `s = 1`，且不会触发"输入被缩放"告警）：
 
 ```
-# ① 单输入调用 = 只归一化这一个面板（--width 与目标都填该面板的格宽）
+# ① 单输入调用 = 只归一化这一个面板（--width 填该面板的格宽，归一化目标填该格的长边）
 svg_grid plot-grid --input tagged/E.svg --output norm/E.svg \
-    --width <E 的格宽> --ncol 1 --plot-margin 0 --normalize-input-max-side <E 的格宽>
+    --width <E 的格宽> --ncol 1 --plot-margin 0 --normalize-input-max-side <E 的格长边 max(格宽, 格高)>
 # ② 逐行组图时**不要再带** --normalize-input-max-side（面板已在目标尺度上）
 ```
 
@@ -160,6 +162,19 @@ matplotlib 的 `<style>` 块通常只声明 `stroke-linejoin/stroke-linecap` 这
 所以：组图命令跑完后**先看 stderr**，有告警就按它给的修法处理，别只看产物在不在。
 
 > 老写法（手算画布高、把 `--rel-widths` 填成纵横比）**不再需要**：`--rel-*` 现在的语义是"乘在自然尺寸上的倍数"，沿用旧写法反而会引入比例错误。
+
+## 出图端常见的 8 类坑（本仓实测）
+
+组图本身稳,坑几乎全在**出图端**和**外源 SVG**。踩中任何一条,`svg_grid_convert` 要么 fail-closed、要么静默出坏图。
+
+1. **matplotlib 的自动 mathtext**:对数轴刻度、对数色标(`LogNorm`)的**默认 formatter** 会写出 `$\mathdefault{10^{n}}$`,落地成 `<g transform="translate(X Y)"><text><tspan x y>` 的逐字绝对坐标文本。**即使源码里一个 `$` 都没有也会出现**——这是容易忽略的隐藏来源。**现在转换器已能处理**:组图时会把伴随的**纯平移**烘平,并把 `<tspan>` 的 x/y **一并搬运**(逐轴独立,`dx/dy` 不动)。若仍想在源里去掉,可给对数轴与**色标轴**(`cb.ax`)套纯文本 formatter(`FuncFormatter` + `NullFormatter`,或直接用 Unicode 上标 `10⁻⁵`、`10²`),但**已不再是必需**。
+2. **多行文本的裸 `translate`**:**已支持**——多行文本落成 `<text transform="translate(x y)">`,包住它的**纯平移** `<g transform="translate(...)">` 同理;组图时平移会被烘进 `<text>`/`<tspan>` 的 x/y。只有祖先 `<g>` 带**缩放/旋转**时才仍 fail-closed(那时才需要拆成单行、或把变换下沉到元素自身)。
+3. **祖先 `<g transform>` 盖住 `<text>`**:**纯平移现在会被精确烘进** `<text>`/`<tspan>` 的 x/y 与 `rotate(a,cx,cy)` 中心,靠整块 `<g>` 平移挪图例/标注**不再需要**逐元素改写。只有祖先 `<g>` 带**缩放或旋转**时才仍 fail-closed。
+4. **R/`svglite` 的 `textLength`**:**已修复**——`--normalize-input-max-side` 现在把 svglite 写的 `textLength` 与 `font-size` **一起缩放**(含 `px` 后缀),不再有"缩了字号却把文字压扁、且 stderr 不报警"的静默错误,无需再手工乘因子。
+5. **竖版面板的归一化目标**:`--normalize-input-max-side` 的语义是"把输入的**长边**缩到 N",所以 N 要填该面板目标格的**长边** `max(格宽, 格高)`;横版面板才恰好等于格宽。填错会让 `s ≠ 1`。
+6. **纯描边 / 零面积路径会整根消失**:从 PDF 或矢量手术来的"棒棒糖"杆、参考线、箭头,常是**无填充的细 `<path>`**;若按多边形处理,零面积 → **不可见**(无告警、图看着少了一层)。→ 这类保留为 `<line>` / `<polyline>` + 显式 `stroke-width`。
+7. **`pdftocairo -svg` 的输出可否直接入流水线**:①`<clipPath>` 里是 `<path>` —— **已支持**:转换器把轴对齐矩形子轮廓改写成 `<rect>`(非轴对齐矩形的 clip 子轮廓仍 fail-closed);②`-x/-y/-W/-H` 裁切参数对 `-svg` **仍静默失效**(永远整页 viewBox,poppler 行为未变)→ 必须事后按 viewBox / `<g transform>` 裁;③`<use>` 引用的 `<image>` 带**非等比 matrix** —— **已支持**:任意轴对齐(含非等比)scale 都烘进 `x/y/width/height`,只有旋转/斜切才 fail-closed;④带孔字形(`O/0/8/9`)的 `<path>` 子轮廓 —— **已修复**:填充路径的全部子轮廓(外轮廓+内轮廓)合成**单条** `<polygon>` 并**保留源的 `fill-rule`**(不再拆成多条把孔填实),孔得以存活。→ 现在只剩 ② 需要绕行(事后按 viewBox 裁);其余可直接入流水线。
+8. **幂等核对看 PNG、不看 svgz**:matplotlib 会往 SVG 写 `<dc:date>`(并由此派生 clip-path id),同一输入重跑 `.svgz` **字节会变**;判据应是"PNG 逐字节/像素一致"。
 
 ## 交付前核查
 

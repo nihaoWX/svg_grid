@@ -11,7 +11,6 @@ use crate::tag::{
     count_panel_boxes, count_primitives, has_data_scale, insert_panel_box, resolve_percentages,
     wrap_root_content_in_xy, wrap_text_circles, Stats,
 };
-use crate::transform::normalize_transforms;
 use crate::translate::translate_dialect;
 use crate::warnings::collect_warnings;
 
@@ -60,11 +59,12 @@ pub fn convert(source: &str, force: bool) -> Result<Conversion, ConvertError> {
     }
 
     // 4. Convert: translate the matplotlib dialect into the composer's
-    // vocabulary (affine baking, path flattening, use expansion, image baking),
-    // then normalize the remaining (svglite) text transforms and tag.
+    // vocabulary (affine baking, path flattening, use expansion, image baking).
+    // `translate_dialect` also normalizes the remaining (svglite) text
+    // transforms, in the order that lets a translate-rotate text under a
+    // translated ancestor be baked exactly.
     let warnings = collect_warnings(&root);
     translate_dialect(&mut root)?;
-    normalize_transforms(&mut root);
     // Give every stroked primitive an explicit `stroke-width` so the composer can
     // rescale it; a shape relying on the SVG default would stay a hairline.
     stroke::materialize_stroke_width(&mut root);

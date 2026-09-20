@@ -1,0 +1,15 @@
+<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+  <!-- V2 #2 (hand-written): a poppler-style clip box written as a <path> inside
+       <clipPath> — an axis-aligned rectangle plus a degenerate trailing `M x y`
+       subpath (dropped by the flattener). The converter must rectify it to a
+       <rect> (a union of rects) instead of failing on the <path>. -->
+  <defs>
+    <clipPath id="c0">
+      <path clip-rule="nonzero" d="M 10 20 L 40 20 L 40 50 L 10 50 Z M 5 5"/>
+    </clipPath>
+  </defs>
+  <rect x="0" y="0" width="100" height="80" fill="rgb(100%, 100%, 100%)"/>
+  <g clip-path="url(#c0)">
+    <rect x="0" y="0" width="100" height="80" fill="rgb(90%, 30%, 30%)"/>
+  </g>
+</svg>

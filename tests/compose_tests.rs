@@ -468,6 +468,117 @@ fn data_scale_position_moves_points_but_keeps_radius() {
 }
 
 #[test]
+fn data_scale_position_moves_tspan_coordinates_with_the_text() {
+    // A `<tspan>`'s x/y are *absolute* positions in the current user coordinate
+    // system (they override the parent `<text>`), so the composer must move them
+    // by the same translation as the `<text>` anchor. Otherwise matplotlib's
+    // per-run coordinates (mathtext) would silently stay behind.
+    let input = temp_path("tspan_position.svg");
+    let output = temp_path("tspan_position_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="position"><text x="20" y="30">a<tspan x="25" y="30">b</tspan><tspan x="30" y="30">c</tspan></text></g>
+</svg>"##,
+    )
+    .unwrap();
+
+    // Margins l/r=10, t/b=5 on a 100x80 panel drawn into a 120x90 canvas: the
+    // panel box maps to (10,5,100,80), i.e. exactly a translation of (+10, +5)
+    // with scale 1 (so a pure "offset preserved" check is meaningful).
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 120.0,
+        height: Some(90.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins {
+            top: 5.0,
+            right: 10.0,
+            bottom: 5.0,
+            left: 10.0,
+        },
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    // The anchor and both runs move by the same translation (+10, +5).
+    assert!(svg.contains(r#"<text x="30" y="35">"#), "{svg}");
+    assert!(svg.contains(r#"<tspan x="35" y="35">"#), "{svg}");
+    assert!(svg.contains(r#"<tspan x="40" y="35">"#), "{svg}");
+    // Correctness key: the tspan offsets from the anchor are unchanged
+    // (25-20=5, 30-20=10 on x; 0 on y).
+    assert!(
+        svg.contains(r#"<text x="30" y="35">a<tspan x="35" y="35">b</tspan>"#),
+        "offsets must be preserved: {svg}"
+    );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}
+
+#[test]
+fn data_scale_position_rewrites_a_tspan_with_only_x() {
+    // `<tspan x="25" dy="1.2em">` (no y) is the standard multi-line form. The x
+    // must still be moved even though there is no y to pair it with — requiring
+    // both axes (as `rewrite_pair` does for `<text>`) would skip it silently.
+    // `dy` is an incremental offset and must be left untouched.
+    let input = temp_path("tspan_x_only.svg");
+    let output = temp_path("tspan_x_only_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="position"><text x="20" y="30">a<tspan x="25" dy="1.2em">b</tspan></text></g>
+</svg>"##,
+    )
+    .unwrap();
+
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 120.0,
+        height: Some(90.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins {
+            top: 5.0,
+            right: 10.0,
+            bottom: 5.0,
+            left: 10.0,
+        },
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+    })
+    .unwrap();
+
+    // Same (+10, +5) translation: the x-only tspan's x moves, `dy` is untouched.
+    let svg = fs::read_to_string(&output).unwrap();
+    assert!(svg.contains(r#"<text x="30" y="35">"#), "{svg}");
+    assert!(
+        svg.contains(r#"<tspan x="35" dy="1.2em">b</tspan>"#),
+        "{svg}"
+    );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}
+
+#[test]
 fn data_scale_xy_scales_circle_radius_by_geometric_mean() {
     let input = temp_path("circle_xy.svg");
     let output = temp_path("circle_xy_combined.svg");
@@ -652,6 +763,101 @@ fn normalize_scales_lengths_declared_in_style() {
         svg.contains(r#"style="stroke: #000000; stroke-width: 1.600""#),
         "stroke-width in style must scale by the same factor: {svg}"
     );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}
+
+#[test]
+fn normalize_scales_text_length_with_a_px_suffix() {
+    // svglite writes `textLength="102.4264px"` on every `<text>`: the value is in
+    // user units but carries a `px` suffix. Normalization must scale it by the
+    // *same* factor as `font-size`, or the run is silently squashed — and the
+    // unit suffix must be preserved.
+    let input = temp_path("normalize_text_length.svg");
+    let output = temp_path("normalize_text_length_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="none"><text x="10" y="20" textLength="100px" style="font-size: 8.8px; fill: #000000">A</text></g>
+</svg>"##,
+    )
+    .unwrap();
+
+    // Longest side 100 -> 200: factor 2.0 for geometry, `textLength` *and* the
+    // style lengths. `format_number` renders 17.6 as `17.600`.
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 200.0,
+        height: Some(160.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: Some(InputNormalize { max_side: 200.0 }),
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    assert!(
+        svg.contains(r#"textLength="200px""#),
+        "textLength must scale by the same factor, keeping `px`: {svg}"
+    );
+    assert!(
+        svg.contains(r#"style="font-size: 17.600px; fill: #000000""#),
+        "font-size must scale by the same factor: {svg}"
+    );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}
+
+#[test]
+fn text_length_is_untouched_without_normalization() {
+    // Like `font-size`, `textLength` is never scaled by the composer's tag
+    // policies: only the input normalization path touches it.
+    let input = temp_path("no_normalize_text_length.svg");
+    let output = temp_path("no_normalize_text_length_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="none"><text x="10" y="20" textLength="100px" style="font-size: 8.8px; fill: #000000">A</text></g>
+</svg>"##,
+    )
+    .unwrap();
+
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 200.0,
+        height: Some(160.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    assert!(
+        svg.contains(r#"textLength="100px""#),
+        "without normalization textLength must be byte-identical: {svg}"
+    );
+    assert!(!svg.contains("textLength=\"200px\""), "{svg}");
 
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
