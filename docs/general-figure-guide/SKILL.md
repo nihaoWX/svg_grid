@@ -51,7 +51,7 @@ metadata: {"version": "1.1", "skill-author": "BioAgentForge"}
 
 只有下面三条之一成立时才回退 `references/02b_cowplot_assembly.md`（R + cowplot）：
 
-1. 转换器对面板方言 **fail-closed**（RDKit `MolDraw2DSVG`、Inkscape/Illustrator 导出等），且无法改用 `svglite`/matplotlib 重出；
+1. 转换器对面板 **fail-closed**，且无法改用受支持的方言（`svglite` / matplotlib / RDKit 矢量后端）重出。**剩下的 fail-closed 都是构造性的**：非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带**缩放或旋转**的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、**非轴对齐矩形**的 clip 子轮廓、视口**不与用户空间 1:1** 的带单位长度（如 `%`/`pt` 视口里的 `px`），以及未验证的第三方导出（Inkscape/Illustrator 等）。**RDKit `MolDraw2DSVG` 现在可直接入流水线**（2026-09-20 起支持它那种 `stroke-width:2.0px` 的带单位长度）；RDKit 的**位图**后端 `MolDraw2DCairo` 照旧以内嵌 `<image>` 进成品；
 2. `svg_grid` / `svg_grid_convert` **不可用**（没编译、环境不支持、离线构建失败）；
 3. 面板**拿不到独立 `.svg`**，只能以会话内对象（ggplot/grob）组合。
 

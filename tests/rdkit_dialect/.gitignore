@@ -1,0 +1,6 @@
+# RDKit-dialect generated products (regenerate with `bash run.sh`)
+mol.svg
+mol.tagged.svg
+mol.grid.svg
+mol.grid.png
+__pycache__/

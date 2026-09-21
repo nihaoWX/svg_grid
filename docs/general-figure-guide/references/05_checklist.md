@@ -32,9 +32,11 @@ H, W = a.shape
 
 print("size", (W, H), "ink %.1f%%" % ((a < 250).mean() * 100))
 
-# 1) 无死白带：每 200px 行带都要有墨
-bands = [float((a[i:i+200] < 245).mean()) for i in range(0, H, 200)]
-assert min(bands) > 0, f"empty band at {bands.index(0.0)*200}px"
+# 1) 无死白带：只统计**完整**的 200px 窗口
+#    末尾不足 200px 的余量**另判**——它常常就是画面边距，按"必须有墨"要求会误报
+#    （旧写法 range(0, H, 200) 把这段余量当成一条完整带，正是误报的来源）
+bands = [float((a[i:i+200] < 245).mean()) for i in range(0, H - 199, 200)]
+assert bands and min(bands) > 0, f"empty band at {bands.index(0.0)*200}px"
 
 # 2) 面板字母存在且大小/字重正确
 #    （在预期字母位置取包围盒，量宽高与墨迹填充率）

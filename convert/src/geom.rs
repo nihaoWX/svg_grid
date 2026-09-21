@@ -5,6 +5,7 @@
 
 use crate::dom::Element;
 use crate::error::{svg_finding, Finding};
+use crate::units::plain_number;
 
 pub(crate) struct CanvasBox {
     pub(crate) x: String,
@@ -28,8 +29,10 @@ impl CanvasBox {
 /// * a `viewBox` attribute that is present must be four whitespace-separated
 ///   numbers (a comma-separated `viewBox` makes the composer fall back to
 ///   `width`/`height` and changes the geometry);
-/// * with no usable `viewBox`, `width`/`height` must be plain numbers (the
-///   composer parses them with `parse_f32`, so `288.00pt` would fail);
+/// * with no usable `viewBox`, `width`/`height` must be plain numbers *or* `px`
+///   lengths (the composer parses them with `parse_f32`, so `288.00pt` would
+///   fail; a `px` length is a user unit by definition here, so its suffix is
+///   dropped and the number is used);
 /// * the resulting width/height must be positive.
 pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
     if root.name != "svg" {
@@ -76,12 +79,14 @@ pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
         });
     }
 
-    let width = root.attr("width").unwrap_or("0").trim().to_string();
-    let height = root.attr("height").unwrap_or("0").trim().to_string();
-    let (Ok(width_value), Ok(height_value)) = (width.parse::<f32>(), height.parse::<f32>()) else {
+    let width_raw = root.attr("width").unwrap_or("0").trim();
+    let height_raw = root.attr("height").unwrap_or("0").trim();
+    let (Some((width, width_value)), Some((height, height_value))) =
+        (plain_number(width_raw), plain_number(height_raw))
+    else {
         return Err(vec![svg_finding(format!(
-            "canvas size is not a pure number (width={width:?}, height={height:?}) and there is no \
-             usable viewBox; the composer parses width/height with parse_f32, so a unit suffix \
+            "canvas size is not a pure number (width={width_raw:?}, height={height_raw:?}) and there \
+             is no usable viewBox; the composer parses width/height with parse_f32, so a unit suffix \
              such as `pt` would be rejected"
         ))]);
     };
@@ -93,8 +98,8 @@ pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
     Ok(CanvasBox {
         x: "0".to_string(),
         y: "0".to_string(),
-        width,
-        height,
+        width: width.to_string(),
+        height: height.to_string(),
         width_value,
         height_value,
     })
@@ -134,6 +139,19 @@ mod tests {
             "{:?}",
             findings[0]
         );
+    }
+
+    #[test]
+    fn px_canvas_without_viewbox_is_a_plain_number() {
+        // No `viewBox`: the SVG viewport *is* the user space (1 user unit = 1 px),
+        // so `width='300px'` is a plain canvas of 300×200 — not a unit error.
+        let done = crate::test_support::converted(
+            r#"<svg width='300px' height='200px' xmlns='http://www.w3.org/2000/svg'>
+<circle cx='1' cy='1' r='1'/></svg>"#,
+        );
+        assert_eq!(done.report.canvas, "0 0 300 200", "{}", done.svg);
+        assert!(done.svg.contains(r#"width="300""#), "{}", done.svg);
+        assert!(!done.svg.contains("px"), "{}", done.svg);
     }
 
     #[test]

@@ -12,6 +12,7 @@ use crate::tag::{
     wrap_root_content_in_xy, wrap_text_circles, Stats,
 };
 use crate::translate::translate_dialect;
+use crate::units::{strip_px_lengths, viewport_allows_px};
 use crate::warnings::collect_warnings;
 
 /// Convert one SVG document. Pure: no I/O, nothing written.
@@ -26,15 +27,27 @@ pub fn convert(source: &str, force: bool) -> Result<Conversion, ConvertError> {
         Ok(canvas) => canvas,
         Err(findings) => return Ok(Conversion::Incompatible(findings)),
     };
-    resolve_percentages(&mut root, &canvas);
 
-    // 2. Full fail-closed scan of the whole tree.
+    // Decide `px` acceptance from the *original* root, before `resolve_percentages`
+    // rewrites a `100%` width into its absolute value: an absolute width that then
+    // matches the `viewBox` would look like a 1:1 viewport and the unit would be
+    // stripped with the wrong scale.
+    let px_is_user_unit = viewport_allows_px(&root);
+    resolve_percentages(&mut root, &canvas);
+    if px_is_user_unit {
+        // 2. Adapt `px` lengths into plain user units (RDKit's
+        // `width='300px' viewBox='0 0 300 200'`). A non-1:1 viewport keeps its
+        // unit-bearing lengths and fails the scan below, as before.
+        strip_px_lengths(&mut root);
+    }
+
+    // 3. Full fail-closed scan of the whole tree.
     let findings = scan(&root);
     if !findings.is_empty() {
         return Ok(Conversion::Incompatible(findings));
     }
 
-    // 3. Idempotency, only for a *complete* conversion product.
+    // 4. Idempotency, only for a *complete* conversion product.
     let boxes = count_panel_boxes(&root);
     if !force && boxes >= 1 {
         let has_scale = has_data_scale(&root);
@@ -58,7 +71,7 @@ pub fn convert(source: &str, force: bool) -> Result<Conversion, ConvertError> {
         return Err(ConvertError::Incomplete(detail));
     }
 
-    // 4. Convert: translate the matplotlib dialect into the composer's
+    // 5. Convert: translate the matplotlib dialect into the composer's
     // vocabulary (affine baking, path flattening, use expansion, image baking).
     // `translate_dialect` also normalizes the remaining (svglite) text
     // transforms, in the order that lets a translate-rotate text under a

@@ -5,7 +5,7 @@
 
 ## 0. 什么时候才走这条
 
-- `svg_grid_convert` 对面板方言 **fail-closed**（RDKit `MolDraw2DSVG`、Inkscape/Illustrator 导出等），且无法改用 `svglite`/matplotlib 重出；
+- `svg_grid_convert` 对面板 **fail-closed**（非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带缩放/旋转的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、非轴对齐矩形的 clip 子轮廓、视口不与用户空间 1:1 的带单位长度，或未验证的第三方导出如 Inkscape/Illustrator），且无法改用 `svglite`/matplotlib/**RDKit 矢量后端**重出；
 - `svg_grid` / `svg_grid_convert` **不可用**（没编译、环境不支持、离线构建失败）；
 - 面板**拿不到独立 `.svg`**，只能以会话内对象（ggplot/grob）组合。
 

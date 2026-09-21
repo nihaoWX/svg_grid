@@ -15,7 +15,7 @@
 
 判据**仅三条**，任一成立才回退：
 
-1. **转换器 fail-closed**：面板 SVG 是 `convert/` 未覆盖的方言（如 RDKit `MolDraw2DSVG`、Inkscape/Illustrator 导出），且无法改用它支持的方言（`svglite` / matplotlib）重出；
+1. **转换器 fail-closed**：面板 SVG 触到了它不接受的构造（非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带缩放/旋转的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、非轴对齐矩形的 clip 子轮廓、视口不与用户空间 1:1 的带单位长度如 `%`/`pt` 视口里的 `px`，或未验证的第三方导出如 Inkscape/Illustrator），且无法改用受支持方言（`svglite` / matplotlib / RDKit 矢量后端）重出。**RDKit `MolDraw2DSVG` 现在可直接入流水线**（带单位长度已支持）；它的位图后端 `MolDraw2DCairo` 仍以内嵌 `<image>` 进成品；
 2. **工具不可用**：`svg_grid` 或 `svg_grid_convert` 没编译、环境不支持、离线构建失败；
 3. **面板拿不到独立 `.svg`**：只能以会话内对象（如 R 的 ggplot/grob）组合。
 
@@ -172,7 +172,7 @@ matplotlib 的 `<style>` 块通常只声明 `stroke-linejoin/stroke-linecap` 这
 3. **祖先 `<g transform>` 盖住 `<text>`**:**纯平移现在会被精确烘进** `<text>`/`<tspan>` 的 x/y 与 `rotate(a,cx,cy)` 中心,靠整块 `<g>` 平移挪图例/标注**不再需要**逐元素改写。只有祖先 `<g>` 带**缩放或旋转**时才仍 fail-closed。
 4. **R/`svglite` 的 `textLength`**:**已修复**——`--normalize-input-max-side` 现在把 svglite 写的 `textLength` 与 `font-size` **一起缩放**(含 `px` 后缀),不再有"缩了字号却把文字压扁、且 stderr 不报警"的静默错误,无需再手工乘因子。
 5. **竖版面板的归一化目标**:`--normalize-input-max-side` 的语义是"把输入的**长边**缩到 N",所以 N 要填该面板目标格的**长边** `max(格宽, 格高)`;横版面板才恰好等于格宽。填错会让 `s ≠ 1`。
-6. **纯描边 / 零面积路径会整根消失**:从 PDF 或矢量手术来的"棒棒糖"杆、参考线、箭头,常是**无填充的细 `<path>`**;若按多边形处理,零面积 → **不可见**(无告警、图看着少了一层)。→ 这类保留为 `<line>` / `<polyline>` + 显式 `stroke-width`。
+6. **纯描边 / 零面积路径**:从 PDF 或第三方工具来的"棒棒糖"杆、参考线、箭头,常是**无填充的细 `<path>`**。**工具侧已按 paint 语义定型**——`fill:none` 的路径会被输出成 `<polyline>`(不会当零面积多边形丢掉),且描边图元会被补上显式 `stroke-width`。**剩下的风险在调用方自己写的矢量手术脚本里**:matplotlib 的 `Path.to_polygons()` **默认 `closed_only=True`**,会把开放子轮廓(无 `Z`、末点≠首点)整批静默丢掉 → 必须传 `closed_only=False`,开放的按"仅描边"处理(输出 `<line>`/`<polyline>` + 显式 `stroke-width`),不要按零面积多边形处理。
 7. **`pdftocairo -svg` 的输出可否直接入流水线**:①`<clipPath>` 里是 `<path>` —— **已支持**:转换器把轴对齐矩形子轮廓改写成 `<rect>`(非轴对齐矩形的 clip 子轮廓仍 fail-closed);②`-x/-y/-W/-H` 裁切参数对 `-svg` **仍静默失效**(永远整页 viewBox,poppler 行为未变)→ 必须事后按 viewBox / `<g transform>` 裁;③`<use>` 引用的 `<image>` 带**非等比 matrix** —— **已支持**:任意轴对齐(含非等比)scale 都烘进 `x/y/width/height`,只有旋转/斜切才 fail-closed;④带孔字形(`O/0/8/9`)的 `<path>` 子轮廓 —— **已修复**:填充路径的全部子轮廓(外轮廓+内轮廓)合成**单条** `<polygon>` 并**保留源的 `fill-rule`**(不再拆成多条把孔填实),孔得以存活。→ 现在只剩 ② 需要绕行(事后按 viewBox 裁);其余可直接入流水线。
 8. **幂等核对看 PNG、不看 svgz**:matplotlib 会往 SVG 写 `<dc:date>`(并由此派生 clip-path id),同一输入重跑 `.svgz` **字节会变**;判据应是"PNG 逐字节/像素一致"。
 

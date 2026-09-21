@@ -59,6 +59,7 @@ mod stroke;
 mod tag;
 mod transform;
 mod translate;
+mod units;
 mod warnings;
 
 #[cfg(test)]

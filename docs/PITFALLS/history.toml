@@ -204,3 +204,54 @@ summary = "svg_grid 存量接入：消费 docs/PITFALLS/ 的 10 篇报告。分�
   where = "tools/svg_grid/convert/src/translate/shapes.rs:path_shapes"
   reason = "本轮对抗复核发现并修掉，故 report=[]。改为按「填充/描边/子轮廓数」决策：只填充⇒单 polygon（每条子轮廓显式闭合，连接边净绕数为 0）；填充+描边+多子轮廓⇒拆成 fill-only polygon（stroke=none，连 style 里的 stroke 声明也删）+ 每子轮廓 stroke-only（fill=none）；填充+描边+单子轮廓保持修复前形态、逐字节不变。已加像素级回归（tests/shape_paint/）。已知边界：描边只来自祖先 <g stroke> 时不拆（两个受支持方言实测 0 例）。"
   related = []
+
+[[round]]
+id = "R2"
+date = "2026-09-21"
+code_before = "92cdb4f8e30d8ff3fd2c1ce87b8c8710dbf0a0c3"
+code_after = "4993d4c9fa011b8fa20906c18bd8ff6b926a954b"
+summary = "消费 1 份报告：带单位长度（px）被拒导致 RDKit MolDraw2DSVG 面板整块 fail-closed。修法是适配层消化单位（仅视口与用户空间 1:1 时脱 px，否则继续 fail-closed）+ 无 viewBox 时根尺寸容许 px；并同步出图 skill 的 3 处（RDKit 误诊的回退判据、已过时的坑清单第 6 条、死白带判据自身的误报）。"
+
+  [[round.report]]
+  path = "tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"
+  commit = "4993d4c9fa011b8fa20906c18bd8ff6b926a954b"
+
+  [[round.finding]]
+  id = "R2-F1"
+  report = ["tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"]
+  symptom = "RDKit MolDraw2DSVG 的 300x200 产物（根 width/height 与 22 条路径的 style 都带 px：stroke-width:2.0px）被判 22 个「非数字几何」节点 ⇒ 转换 exit 1、不写产物；最小复现只要 1 个 path"
+  where = "tools/svg_grid/convert/src/units.rs:strip_px_lengths"
+  reason = "①工具缺陷（协议完整性缺口）：px 是合法 SVG 长度形式，RDKit 恰好用它。修法=把单位当适配层职责消化：仅当根元素数值宽高与 viewBox 逐轴相等（视口与用户空间 1:1）时脱掉 px（数值即用户单位、保持不变）；不成 1:1（% / pt 视口、与 viewBox 不符）**不脱、继续 fail-closed**（工具不做单位换算，静默按 1:1 会静默错比例）。1:1 判定必须在 resolve_percentages 之前求值，否则 width='100%' 会先被解析成 300 而误判成 1:1。font-size / textLength 刻意不动（核心从不重写它们）。判据：真实 RDKit 产物 exit 0、px 残留 0、组图 PNG 墨迹 3.96%；非 1:1 的三种输入仍被拒。"
+  related = []
+
+  [[round.finding]]
+  id = "R2-F2"
+  report = ["tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"]
+  symptom = "无 viewBox 时，根 width='300px' height='200px' 被当「非纯数字」拒绝（同一根因的另一处）"
+  where = "tools/svg_grid/convert/src/geom.rs:canvas_box"
+  reason = "①无 viewBox 时视口本身就是用户空间（1 用户单位 = 1 px），px 天然 1:1 ⇒ 应得画布 300x200；pt 等其它单位继续拒绝（既有测试 unit_canvas_without_viewbox_is_rejected 保留）。"
+  related = []
+
+  [[round.finding]]
+  id = "R2-F3"
+  report = ["tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"]
+  symptom = "出图 skill 把「RDKit MolDraw2DSVG」举为「convert 未覆盖的方言」的回退样板（SKILL.md / 02a / 02b 三处）——是误诊，会把 agent 引向更贵且更危险的 cowplot 回退"
+  where = "tools/manuscripts_skills/general-figure-guide/SKILL.md"
+  reason = "②文档与实现不符：RDKit 的失败与 <path>/方言无关（<path> 早已支持），是带单位长度被拒。三处改写为**构造性**的 fail-closed 清单（非 svg 根 / 嵌套 svg / symbol / 解析不到的 use / 带缩放或旋转祖先的 text / 非轴对齐的 image|rect|circle / 非轴对齐矩形的 clip / 环境非 1:1 的带单位长度 / 未验证的第三方导出），并明确 RDKit **矢量**后端现在可直接入流水线（位图后端 MolDraw2DCairo 照旧内嵌 image）。"
+  related = []
+
+  [[round.finding]]
+  id = "R2-F4"
+  report = ["tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"]
+  symptom = "02a 坑清单第 6 条要求调用方自己把零面积/无填充路径保留成 line/polyline —— 转换器现在已按 paint 语义定型（fill:none ⇒ polyline），该条只剩「调用方自己的矢量手术脚本」那半边成立"
+  where = "tools/manuscripts_skills/general-figure-guide/references/02a_svg_grid_assembly.md"
+  reason = "②按现状改写，避免 agent 做多余的规避动作：工具侧已定型（fill:none 的路径输出成 polyline、描边图元补显式 stroke-width）；仍成立的是调用方脚本里 matplotlib Path.to_polygons() 默认 closed_only=True 会静默丢掉开放子轮廓（须传 closed_only=False）。"
+  related = []
+
+  [[round.finding]]
+  id = "R2-F5"
+  report = ["tools/svg_grid/docs/PITFALLS/unit_bearing_lengths_px_rejected.md"]
+  symptom = "05_checklist 的死白带判据 range(0, H, 200) 把末尾不足 200px 的余量当成一条完整带 ⇒ 余量是白的就误报（校验脚本自身的误报会掩盖真问题）"
+  where = "tools/manuscripts_skills/general-figure-guide/references/05_checklist.md"
+  reason = "④用法类结论的回填：该教训原本只记在已消费的报告里、没落到规则里。改为只统计完整窗口 range(0, H-199, 200)，余量另判（它常常就是边距）；01_canvas_layout 的同类表述同步。规范源与 svg_grid/docs 副本逐字节一致（diff -r 为空）。"
+  related = []
