@@ -1,6 +1,10 @@
 # svg_grid
 
-是一个专门用作组图的库，它设计初衷是在生信领域（但不止于此，任何组图需求都可以尝试），与R和python接轨。
+是一个**纯rust写的**专门用作组图的库，它设计初衷是在生信领域（但不止于此，任何组图需求都可以尝试），与R和python接轨。
+
+**工作流舒适**：
+- 它开箱即用，只需一句话即可让agent组图/出图
+- agent打基础，人精调，agent通过skill完成大部分工作，若细节不满意，除了告诉agent外还可以人工调整，svg也是一种适合人编辑的格式
 
 # 为什么用它
 
@@ -12,7 +16,8 @@ R和python的组图很割裂，R的ggplot2系统和python的matplotlib不互通�
 - svg_grid也可以处理混合场景：例如png+svg混合组图。
 - **与agent接轨**：仓库附带一整套出图+组图skill，开箱即用。并且作者正在尝试优化svg_grid让agent使用它更加节省token更加丝滑，不过作者推荐使用有视觉功能的agent。
 - 低占用并且开源：你可能说我用ppt，ps，ai组图，但是这很重，svg_grid是rust，那很轻了。
-- 仿照cowplot：作者偏好cowplot的组图逻辑，因此本svg_grid的组图逻辑跟它很接近，本库开发的目的也是尝试弄一个cowplot通用版，因为cowplot只能在R使用（R的grob和ggplot2对象与python不互通）。
+- 仿照cowplot的丝滑组图体验：作者偏好cowplot的组图逻辑，因此本svg_grid的组图逻辑跟它很接近，本库开发的目的也是尝试弄一个cowplot通用版，因为cowplot只能在R使用（R的grob和ggplot2对象与python不互通）。
+- svg适合人工调整：如果agent的图你怎么都不满意，svg本身也适合人工编辑，可以使用inkscape这款免费软件编辑。
 
 # 怎么用
 
