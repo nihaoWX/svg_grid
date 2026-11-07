@@ -1,7 +1,14 @@
-# svg_grid_convert
+# svg_grid_convert (the converter behind `svg_grid convert`)
 
 Convert an SVG panel exported by R (`svglite` / `ggplot2`) into the **tag
 protocol** that `svg_grid plot-grid` consumes.
+
+**How it ships**: this crate is a **library dependency** of the `svg_grid` crate, so
+the user-facing command is the subcommand `svg_grid convert …` — one installed
+binary, no second executable on `PATH` (`ARCHITECTURE/cli.md`, `ARCHITECTURE/install.md`).
+The `svg_grid_convert` binary in this crate stays in the workspace for its own
+process-level tests (`tests/cli.rs`) and is **not** installed. Both entry points run
+the same code, so they print the same messages and exit with the same codes.
 
 `svg_grid` is not a general SVG tool: it is a tagged grid composer. Each input
 must carry a `<rect data-panel-box="main" .../>` panel box and `data-scale`
@@ -164,8 +171,11 @@ cargo fmt --check && cargo clippy --offline --all-targets -- -D warnings
 ## CLI
 
 ```text
-svg_grid_convert --input PANEL.svg [--output OUT.svg] [--check] [--report] [--force]
+svg_grid convert --input PANEL.svg [--output OUT.svg] [--check] [--report] [--force]
 ```
+
+(The workspace-only `svg_grid_convert` binary takes exactly the same flags without
+the `convert` word in front.)
 
 | flag | meaning |
 |---|---|
@@ -180,10 +190,10 @@ warnings go to stderr; reports go to stdout.
 
 ```bash
 # dry run: is this panel composable at all?
-svg_grid_convert --input fig3_p1.svg --check --report
+svg_grid convert --input fig3_p1.svg --check --report
 
 # convert
-svg_grid_convert --input fig3_p1.svg --output fig3_p1.tagged.svg --report
+svg_grid convert --input fig3_p1.svg --output fig3_p1.tagged.svg --report
 ```
 
 ## Two-step pipeline (convert → plot-grid)
@@ -213,10 +223,9 @@ cell such as `1296 x 561.6` keeps the aspect ratio and the geometry, but it halv
 the *relative* size of the text — see “缩放后果与配准建议” above.)
 
 ```bash
-SVG=tools/svg_grid/convert/target/release/svg_grid_convert
-GRID=tools/svg_grid/target/release/svg_grid
+GRID=tools/svg_grid/target/release/svg_grid   # or just `svg_grid` once installed
 
-"$SVG"  --input  fig3_p1.svg  --output fig3_p1.tagged.svg
+"$GRID" convert --input fig3_p1.svg --output fig3_p1.tagged.svg
 
 "$GRID" plot-grid \
   --input fig3_p1.tagged.svg \

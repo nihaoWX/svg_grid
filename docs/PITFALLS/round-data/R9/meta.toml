@@ -1,0 +1,23 @@
+# R9 的 round-data —— HARNESS 归位 + skill 瘦身（文档类，但两类断言是机制性的）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R9"
+verdict = "新领土"        # 用户新提的纪律（skill 只写现状、告警是分支、HARNESS 分工），不是问题复发
+family = ["文档纪律（体积 / 单一来源 / 只写现状）", "告警自带修法（分支写在代码里）"]
+closures = [
+  { finding = "R9-F1", tier = "代码" },   # 七条告警文案补 Fix:（可机械检查）
+  { finding = "R9-F2", tier = "规则" },   # skill 只写现状 + 不列告警（写作规则入 ARCHITECTURE）
+  { finding = "R9-F3", tier = "规则" }    # HARNESS 分工：机制→ARCHITECTURE/、状态→PROGRESS、决定→DECISIONS
+]
+run_before = ["R4", "R5", "R6", "R7", "R8"]   # 动 src/*/warnings 或指南前先跑这五轮证据
+touched = []
+note = """
+为什么认定同类：与 `R8-F1`（体积）同族但**换了对象**——R8 管源文件，R9 把口径扩到**文档**（HARNESS 三件套 + `ARCHITECTURE/*.md` + 指南），并把"告警的修法必须自足"变成可机械检查的契约。`verdict` 记「新领土」是因为起因是用户新提的两条纪律，不是旧问题复发。
+根因与建议修法：已证。① **skill 是成品**——只写"现在该怎么做"；变更叙述（"已支持/已修复/旧写法不再需要"）与**告警目录**都不该留在里面（告警是**分支**，写在代码里、真触发时由 stderr 返回）。② **机制与作者规矩写 `ARCHITECTURE/`**，`PROGRESS` 只做状态快照、`DECISIONS` 只做"什么/为什么/何时"（此前两者在做 ARCHITECTURE 的事）。③ 本 test.py 把三条钉住：文档体积（日志单独 25 KB 上界）、两副本 `diff -r` 空、指南无变更叙述词、**W1–W7 每条 stderr 都含 `Fix:`**。
+怎么修才不弄坏前面：动 `src/warnings/**`、`convert/src/warnings.rs` 或指南之前先跑本目录 test.py；它盯的是上面四条 + **逐个跑 R4–R8 的证据**。本次改的是**文案与文档**，行为不变由"两个 crate 测试全绿 + R4–R8 全绿 + 干净输入 stderr 0 字节"共同保证。
+（本目录无 data/：fixture 在临时目录自合成。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R9 && python3 test.py
+# rc=0 = 全过。前三条只看文件（不需要构建）；告警契约与回归需要已构建的二进制。
+# 秒级、离线、不写仓库。
+"""

@@ -1,0 +1,134 @@
+# R25 的 round-data —— 告警文案：短、去重、可读（评估报告「非致命告警太长/重复」的那一半）
+#
+# 评估报告已被本目录消费（R22 起 `PITFALLS/` 只留 `round-data/`）；现象与复现见下面的 family/note。
+id = "R25"
+verdict = "新领土"
+
+family = [
+  "单条告警最长 722 字符（W6），W1 467、W2 489、W7 667、W8 712、W9 564、V1 330+；`svg_grid: warning:` 前缀之外没有长度上限，长句在终端里折成六七行，agent 读 stderr 时先被淹没。",
+  "同一条「为什么」在每条告警里重复：W1 与 W2 都在讲 `font-size` 从不被缩放，多条 W6 各自重复「两种后果」，W7 每条 offender 重复「exit code 0 / 浏览器宽容」。",
+  "计数包装成灾：`1 input(s)`、`1 cell(s)`、`1 attribute(s)`、`1 non-fatal warning(s)` —— 只有一个 offender 时这些括号是纯噪声；同时结尾那行计数又把「有几条」重复了一遍。",
+  "同族于 R9（告警是分支，跑起来才该看见）与 R16（W9 的机械检查）：本轮解决的是同一件事的可读性 —— **自给自足但短**，公共原因只说一次。",
+]
+
+closures = [
+  { finding = "R25-F1", tier = "代码" },   # warnings/mod.rs：MAX_LINE/WARNING_PREFIX/NOTE_PREFIX、note 机制、fit/assemble/fold/counted
+  { finding = "R25-F2", tier = "代码" },   # scale/content/labels/passthrough/refs/fonts：五条 W 的文案重写 + 分级降级
+  { finding = "R25-F3", tier = "代码" },   # convert/src/{warnings,cli}.rs：V1 与 style 几何告警、`hint: source canvas is …` 压到 ≤200
+  { finding = "R25-F4", tier = "检查" },   # ARCHITECTURE/warnings.md §1.5 三条规则 + 本证据六族
+]
+
+# 本轮改的是「同一批输入打成几行、每行多长」，故回归断言过告警文本/条数的旧轮。
+run_before = ["R4", "R5", "R7", "R9", "R13", "R14", "R16", "R17"]
+
+touched = ["R11"]   # R11 的扫描范围本轮改成 git 跟踪文件（其余轮只是重跑，未改证据）
+
+# 每个场景的告警条数（`svg_grid: warning:` 行，不含收尾句）：改前 / 改后完全一致。
+baseline_counts = """
+W1 单输入放大 10x（1000x800）            1  ->  1
+W1 自然布局（2 面板 300 宽，sx=sy=1.5）    1  ->  1
+W2 拉伸（--rel-widths 2,1）              2  ->  2   (W1+W2)
+W2 单格拉伸（400x200）                   2  ->  2   (W1+W2)
+W3 重复加字母                            3  ->  3   (W6+W3+W5)
+W4a 字母个数不符（3 输入 2 字母）          3  ->  3   (W4a+W5×2)
+W4a 字母个数不符（1 输入 2 字母）          2  ->  2   (W4a+W5)
+W4b 字母重复                             4  ->  4   (W4b+W5×3)
+W5 字母被裁                              3  ->  3   (W1+W2+W5)
+W6 内容越出画布                          1  ->  1
+W6 微尘（1.5 px）                        1  ->  1
+W7 两处无法重写                          1  ->  1
+W7 一处（cx="nan"）                      1  ->  1
+W8 字体库没有该族                        2  ->  2   (W8+W5)
+W9 悬空引用                              1  ->  1
+V1 convert（style 几何 + <style> 块）      2  ->  2
+干净输入（rc=0）                         0  ->  0   stderr 0 B
+"""
+new_counts = "与 baseline_counts 逐行相同（`test.py` 的 ① 用 `len(warning_lines(stderr)) == 基线` 逐场景断言）。"
+
+# 单条最长字符数：改前 -> 改后（`awk '{print length($0)}'` 实量，含前缀）
+longest_before_after = """
+W1  467 -> 182      W2  507 -> 199      W3  648 -> 196      W4a 290 -> 198
+W4b 290 -> 198      W5  463 -> 193      W6  722 -> 191      W7  667 -> 190
+W8  712 -> 194      W9  564 -> 197      V1  330 -> 188      hint 238 -> 182
+note 行：无 -> 最长 176（`svg_grid: note:` 前缀已计入）
+"""
+
+note = """
+本轮的 touched 只算 R11：它是唯一被**改过证据**的旧轮（扫描范围从整个 tools/ 文件系统改为 git 跟踪文件，
+  因为 tools/cao/.build/** 是别的工具的运行产物）。其余旧轮只是被**重跑**，断言一条没动：
+  "R4  （grep `draws ink outside its own canvas box` + `left by`：W6 的码词与方向还在）"
+  "R5  （正则 `overflows <side> by <num> px`：W6 的形状没改，只把括号里的坐标变短）"
+  "R7  （smoke：`could not be rewritten` 仍在 W7 上）"
+  "R9  （W1–W7 各要 `Fix:`；W2 的 `are stretched` 由共享 note 提供，见下面 note 第 2 条）"
+  "R13 （`not in the font library` + `Fix:`：W8 两者都在）"
+  "R14 （退出码分档：本轮不动错误路径）"
+  "R16 （W1/W6/W9 的码词、`non-fatal warning(s)`、`1 reference(s) point at …`、`2 reference(s)` 全部逐字保留）"
+  "R17 （doctor 按 `warnings=N` 计数：note 行不是 `svg_grid: warning:`，不进计数、也不参与码判定）"
+
+为什么认定同类：R9 说「告警是分支，跑起来才该看见」；本轮解决的是同一件事的**可读性**：
+  既然它只在真触发时出现，那它出现时就必须**一眼读完**。两者都是「输出要替 agent 省判断」。
+根因与修法：已证。
+  ① 长度：`src/warnings/mod.rs` 立 `MAX_LINE = 200`（含 `svg_grid: warning: ` / `svg_grid: note: ` 前缀），
+     每个 `describe_*` 按「信息最多且仍放得下」分级取第一个能放下的形态（`fit` / `assemble`）：
+     先丢派生量（`(off by 50.00%)` -> `sx=1.50000`、W9 的 `<rect fill>` 只在非 plain 形态出现），
+     再丢 offender 的细节，**`Fix:` 与「哪个输入/元素/属性」永不丢**。
+  ② 公共原因只打一次：新增 `svg_grid: note: …` 一行（7 条 `NOTE_*`），只在该批真有告警时打印，
+     同因去重。W1/W2 共用 `NOTE_FONT_SIZE`、每条 W6 共用 `NOTE_CANVAS_INK`（+ 微尘时再加
+     `NOTE_INK_DUST`）、W7 用 `NOTE_PASSTHROUGH`、W8 `NOTE_FONT_FALLBACK`、W5 `NOTE_LABEL_CLIP`、
+     W9 `NOTE_DANGLING`（点名 `<linearGradient>`/`<radialGradient>`/`<pattern>`/`<clipPath>`）。
+     `doctor::classify` 只数 `svg_grid: warning:` 行，所以 note 不进 `warnings=N`、也不参与码判定。
+  ③ N=1 不打计数：`counted()` 产出 `1 input` / `3 inputs`、`1 cell` / `2 cells`、
+     `1 attribute` / `2 attributes`；收尾句**不再带条数**（条数就是上面的行数）。
+     收尾句保留 `non-fatal warning(s)` 与 `the exit code and the output file are unchanged` 两个短语，
+     因为 `round-data/R16` 逐字断言它们。
+  ④ 「自然布局到底该不该出 W1」的实测结论（本轮最容易被误判的一条）：
+     `--width 300 --ncol 2 --plot-margin 0`、两块 100x80 面板 ⇒ 每格 150x120，
+     **sx = 1.50000、sy = 1.50000**，格宽高比 150/120 = 1.250 = 面板的 100/80。
+     所以：**W1 该出（面板被放大 1.5 倍，font-size 不跟着缩放，这正是 W1 存在的理由）**，
+     **W2 不该出（宽高比相等 ⇒ 没有拉伸）**。上一轮把它做红，是因为共享 note 的措辞里写了
+     `cells … are stretched`，而测试用 `assert!(!stderr.contains("are stretched"))` 扫**整个 stderr**；
+     `warnings/mod.rs:102` 因此是**断言误判**（判据该只看 `svg_grid: warning:` 行），已改成只扫告警行、
+     并补一条「自然布局确实出了 W1」的正向断言。**没有改判定条件，行为未回归。**
+  ⑤ R9 的 W2 用例（单输入 `--height 200`，N=1）要求 stderr 含 `are stretched`，而 N=1 的行是
+     `1 cell is stretched`（人话）⇒ 该短语由 `NOTE_FONT_SIZE`（同因 note，每次运行一行）提供。
+     这是「N=1 不打计数」与「R9 逐字要 `are stretched`」之间唯一可行的落点，已写进
+     `ARCHITECTURE/warnings.md` §1.5。
+边界（照实说）：
+  · **W9 仍打 `N reference(s)`**：`round-data/R16` 逐字断言
+    `1 reference(s) point at an id that nothing in the output defines` 与 `2 reference(s)`，
+    并断言该短语**只出现在一行**里，所以计数不能挪到 note、也不能改成 `1 reference points`。
+    这是本轮唯一保留的计数包装（`src/warnings/refs.rs` 有注释）。若将来允许改 R16，这条应一并改掉。
+  · W7 在两处 offender 时降到「值 + 原因」或「值」的形态，**原因词**（`unparseable path data`）
+    在 181 字符内放不下就被降级掉；单条 offender（含 `non-finite`）仍带完整原因。
+    去重后的 offender 由 `+N more` 折叠的上限仍是 `MAX_LISTED = 6`（与改前一致）。
+  · 收尾句不再打「有几条告警」。条数 = 上面的行数，`doctor` 的 `warnings=N` 也是自己数行，
+    所以没有下游依赖这个数字（grep 过 `round-data/` 与 `src/`：0 处解析它）。
+证据（本机实测，`round-data/R25/test.py`）：① 每码单条 ≤ 200（awk 实量）；② 同因 note 恰好 1 行、
+   无告警 0 行且 stderr 0 B；③ 单 offender 无 `1 input(s)`/`1 non-fatal warning(s)`；
+   ④ 每个场景条数与码集合 = 基线；⑤ 见下面 `known_env`（R4/R5/R7/R9 绿；R13/R14/R16/R17 的红
+   100% 来自 `round-data/R11` 对外部目录的误报）；⑥ warnings.md 三条规则可 grep。
+  crate 测试：`cargo test` 74 + 57 + 73 全绿（convert：81 + 12），`fmt`/`clippy -D warnings` 两个 crate 都干净。
+"""
+
+# ⑤ 的红：先归因、再判。既不是"本轮没跑"，也不是"静默略过"。
+known_env = """
+`round-data/R11` 的红**不是本轮引入的**，而是环境里多了一个目录：
+  · R11 的判据「现行文档里没有指向已删文件的活引用」把 `tools/**` 下所有 `*.md` / `*.py` 里出现
+    `DECISIONS`、又不匹配新口径的行都算残留。本轮期间 `tools/cao/.build/`（**运行中的 cao 编排器
+    自己的 vendored 源码 + 运行目录**，根 `.gitignore` 第 28 行明确忽略）出现了，R11 于是命中 7 处
+    `tools/cao/.build/cao-src/**`；**没有一处来自 tools/svg_grid**（`test.py` 的 `env_cause()` 会逐条
+    核对每个 `tools/…:LINE` 都在 `.build/` 下，只要有一处在别处就照红判 FAIL）。
+  · 基线对照：本轮开工时那次 R16 全量回归（内含 R11）是**绿**的；`.build/` 的时间戳（19:13）在它之后。
+  · 连带：R13 / R14 / R16 / R17 自己那条「回归 round-data/R11 仍全绿」跟着红。`test.py` 对这类轮次
+    先归因再判：自己的判据全过、红只来自下游 ⇒ 打 `SKIP … 根因见 R11` 并计入 SKIP 列表，绝不静默通过。
+  · 在干净检出（没有 `tools/cao/.build/`）里这些轮次应当全绿；那时若仍红就是真回归，`test.py` 判 FAIL。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R25 && python3 test.py   # rc=0 = 全过
+前置：`cd tools/svg_grid && cargo build`、`cd tools/svg_grid/convert && cargo build`
+（要 `target/debug/svg_grid` 与 `convert/target/debug/svg_grid_convert`；字体目录 `$HOME/svg_grid/fontlib`，
+不可用时 W8 那条 SKIP 并打印原因）。
+无参数；⑤ 里 R16 会重跑 R4–R15、R17 会再跑一遍全量语料，整段通常 12–20 分钟；本轮加了 1500 s 总预算，
+超预算的轮次会打印 `SKIP … 未跑/超时` 而不是静默略过。只读：临时产物只在系统临时目录。
+"""

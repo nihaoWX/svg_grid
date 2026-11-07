@@ -44,14 +44,23 @@ pub fn find_canvas_box(root: &Element) -> Result<Rect> {
     })
 }
 
-pub fn scale_panel_to_cell(panel: Rect, canvas: Rect, cell: Rect) -> Result<Rect> {
+/// The layout scale of one panel: `sx = cell.width / canvas.width`,
+/// `sy = cell.height / canvas.height`.
+///
+/// The **single** definition of that ratio — [`scale_panel_to_cell`] applies it, W1
+/// reports it and `plot-grid --plan` prints it, so "what the plan says" and "what the
+/// figure does" cannot drift apart.
+pub fn cell_scale(cell: Rect, canvas: Rect) -> Result<(f32, f32)> {
     if canvas.width <= 0.0 || canvas.height <= 0.0 {
         return Err(SvgGridError::InvalidInput(
             "input SVG canvas must have positive width and height".to_string(),
         ));
     }
-    let sx = cell.width / canvas.width;
-    let sy = cell.height / canvas.height;
+    Ok((cell.width / canvas.width, cell.height / canvas.height))
+}
+
+pub fn scale_panel_to_cell(panel: Rect, canvas: Rect, cell: Rect) -> Result<Rect> {
+    let (sx, sy) = cell_scale(cell, canvas)?;
     Ok(Rect {
         x: cell.x + (panel.x - canvas.x) * sx,
         y: cell.y + (panel.y - canvas.y) * sy,

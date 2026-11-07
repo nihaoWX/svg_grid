@@ -92,7 +92,7 @@
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_1">
       
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="1114.244,909.785 1114.244,938.952"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="1114.244,909.785 1114.244,938.952"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_1">
@@ -105,7 +105,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-xtick_2">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_2">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="2063.923,909.785 2063.923,938.952"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="2063.923,909.785 2063.923,938.952"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_2">
@@ -118,7 +118,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-xtick_3">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_3">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="3013.602,909.785 3013.602,938.952"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="3013.602,909.785 3013.602,938.952"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_3">
@@ -131,7 +131,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-xtick_4">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_4">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="3963.281,909.785 3963.281,938.952"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="3963.281,909.785 3963.281,938.952"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_4">
@@ -150,7 +150,7 @@
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_5">
       
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,287.080 610.238,287.080"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,287.080 610.238,287.080"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_6">
@@ -160,7 +160,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_2">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_6">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,360.339 610.238,360.339"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,360.339 610.238,360.339"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_7">
@@ -170,7 +170,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_3">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_7">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,433.599 610.238,433.599"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,433.599 610.238,433.599"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_8">
@@ -180,7 +180,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_4">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_8">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,506.858 610.238,506.858"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,506.858 610.238,506.858"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_9">
@@ -190,7 +190,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_5">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_9">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,580.117 610.238,580.117"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,580.117 610.238,580.117"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_10">
@@ -200,7 +200,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_6">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_10">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,653.377 610.238,653.377"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,653.377 610.238,653.377"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_11">
@@ -210,7 +210,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_7">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_11">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,726.636 610.238,726.636"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,726.636 610.238,726.636"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_12">
@@ -220,7 +220,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_8">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_12">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,799.896 610.238,799.896"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,799.896 610.238,799.896"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_13">
@@ -230,7 +230,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_9">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_13">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="639.405,873.155 610.238,873.155"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="639.405,873.155 610.238,873.155"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_14">
@@ -370,7 +370,7 @@
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_14">
       
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="4615.238,799.896 4644.404,799.896"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="4615.238,799.896 4644.404,799.896"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_51">
@@ -380,7 +380,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_11">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_15">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="4615.238,662.534 4644.404,662.534"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="4615.238,662.534 4644.404,662.534"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_52">
@@ -390,7 +390,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_12">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_16">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="4615.238,525.173 4644.404,525.173"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="4615.238,525.173 4644.404,525.173"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_53">
@@ -400,7 +400,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_13">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_17">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="4615.238,387.811 4644.404,387.811"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="4615.238,387.811 4644.404,387.811"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_54">
@@ -410,7 +410,7 @@
     <g id="svg-grid-cell0-svg-grid-cell0-ytick_14">
      <g id="svg-grid-cell0-svg-grid-cell0-line2d_18">
       <g>
-       <g><polygon stroke-width="6.667" style="stroke: #000000" points="4615.238,250.450 4644.404,250.450"/></g>
+       <g><polyline stroke-width="6.667" style="stroke: #000000" points="4615.238,250.450 4644.404,250.450"/></g>
       </g>
      </g>
      <g id="svg-grid-cell0-svg-grid-cell0-text_55">

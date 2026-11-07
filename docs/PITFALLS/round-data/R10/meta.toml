@@ -1,0 +1,28 @@
+# R10 的 round-data —— 指南规范源裁决 + 账本两条路径并轨
+#
+# **就地补**：R10 入账时漏建证据（自检① 每轮 record 都报），2026-10-06 按 `references/02_consume.md`
+# §4.3「某旧轮一旦被证实复发，就地补它（在补的那一刻把当前行为固定成期望）」补上。
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R10"
+verdict = "复发"          # R10-F1 的 related 指向更早的 R9-F2；R10-F2 的 where 与更早的 R7-F2 相同（自检① 报的就是这两条）
+family = ["同一份文件的两条路径把账本历史切成两半", "规范源 / 复制件的同步纪律"]
+closures = [
+  { finding = "R10-F1", tier = "规则" },   # 规范源唯一 + 复制件 rsync 覆盖（写进 ARCHITECTURE/general-figure-guide.md §3）
+  { finding = "R10-F2", tier = "检查" }    # link L6/L7/L8 + 每次调用的悬空自检（可机械检查）
+]
+run_before = ["R9"]       # 动指南或 `ARCHITECTURE/general-figure-guide.md` 之前先跑 R9 的 test.py
+touched = []
+note = """
+为什么认定同类：与 `R9-F2`（指南怎么写、放哪）和 `R7-F2`（拆分后账本路径失联）同族——都属"**文件的身份**变了，
+而账本按路径索引跟不上"。R10 换的是"同一份文件的两个位置"，与 R7 的"一个文件变成多个"是同一个病。
+根因与建议修法：已证。① 规范源只有一个（`tools/svg_grid/docs/general-figure-guide/`），另一处是复制件、
+用 `rsync -a --delete` 覆盖、**永不单独编辑**；② 两条路径的历史用 `link` 的等价组合并（L6/L7/L8），
+`query` 任一条都命中同一批——**正确性不靠 agent 记得去 link**（每次调用都跑悬空自检）。
+怎么修才不弄坏前面：本 test.py **只读**（`diff -r` + `pitfalls-manager query` 的命中集与 stderr），不写仓库、不构建；
+动指南或 `ARCHITECTURE/general-figure-guide.md` 之前跑它 + R9 的 test.py。牵连的旧族：R7（拆分 / link）。
+（本目录无 data/：两条材料都在仓库里。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R10 && python3 test.py
+# rc=0 = 全过。秒级、离线、只读。
+"""

@@ -1,0 +1,24 @@
+# R8 的 round-data —— 把 > 20 KB 的源文件都拆了（体积 + 不脱离模块树）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R8"
+verdict = "新领土"        # 计划内的体积清理（关闭 R7 的遗留），不是问题复发
+family = ["体积（源文件 ≤ 20 KB）", "模块树完整（fmt 门禁必须看得见每个文件）"]
+closures = [
+  { finding = "R8-F1", tier = "代码" },   # 六个超标文件全拆
+  { finding = "R8-F2", tier = "代码" },   # include! → mod（修静默失效）
+  { finding = "R8-F3", tier = "代码" },   # 判据脚本改薄壳 + 包
+  { finding = "R8-F4", tier = "代码" }    # 两个 compose 资产脚本拆分
+]
+run_before = ["R4", "R5", "R6", "R7"]   # 动 src/convert/tests/scripts 之前，先跑这四轮证据
+touched = []
+note = """
+为什么认定同类：`related` 指向 `R7-F1`（体积）—— 本轮把它**推到房屋口径**（每个源文件 ≤ 20 KB，按 20000 B 从严）：R7 只拆了用户点名的 `ink`/`path`，本轮按**字节**把剩下 6 个超标的（`tests/compose_tests.rs` 88 440、`s22_repro/compose_s22.py` 30 397、`convert/src/translate/shapes.rs` 25 513、`src/warnings.rs` 24 378、`fig2_mixed/compose_fig2.py` 22 970、`scripts/check_deliverable.py` 21 645）全拆；`verdict` 因此记「新领土」。
+根因与建议修法：已证。① 体积 = 一个文件混了多个职责 ⇒ 按**现有分节**切、入口保持薄（`scripts/check_deliverable.py` 变薄壳 + `deliverable_checks/` 包；`tests/compose_tests.rs` 变目录 + 薄 `main.rs`）；② **本轮的教训**：拆测试文件时先用 `include!` 保"测试名不带模块前缀"，结果 **rustfmt 不跟进 `include!`**（我实测：塞一行丑代码 `cargo fmt --check` 仍 rc=0）⇒ 文件**永久脱离 fmt 门禁且 fmt 谎报干净**，属静默失效 ⇒ 改回 `mod`（代价只是测试名带模块前缀）。本 test.py 把这条钉成断言（不许出现 `include!`、每个 .rs 必须被 `mod` 声明）。
+怎么修才不弄坏前面：动 `src/**`、`convert/src/**`、`tests/**`、`scripts/**` 之前先跑本目录 test.py；它盯的是「所有源文件 ≤ 20000 B」「没有文件脱离模块树/不被 fmt 看见」「判据脚本仍是薄壳」「smoke（干净/W6/W7）」，并**逐个跑 R4–R7 的证据**。行为不变另用 `before_bin` vs 新版的多组 fixture 逐字节比对（四个子轮各自做过：R8a 14 组、R8b 28 次运行、R8c 三入口产物 md5、R8d 测试清单+53 项全绿；Orchestrator 又用自己的一组 fixture 复验 8/8）。
+（本目录无 data/：fixture 在临时目录自合成。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R8 && python3 test.py
+# rc=0 = 全过。多数断言只看文件（不需要构建）；smoke 与 R4–R7 证据需要已构建的二进制与
+# ~/.venv 的 numpy/Pillow（缺则显式 SKIP 并说明）。秒级、离线、不写仓库。
+"""

@@ -1,0 +1,28 @@
+# R5 的 round-data —— 主库纳入 `<path>`（几何等价的搬运属于主库能力）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R5"
+verdict = "复发"          # 与 R4 同族：内容越界静默 —— 本轮补的是 W6 够不着的两个入口
+family = ["内容越界静默（path / defs 也要够得着）", "主库图元能力（path 纳入）"]
+closures = [
+  { finding = "R5-F1", tier = "代码" },   # path 纳入主库（用户裁决）
+  { finding = "R5-F2", tier = "检查" },   # ink.rs 覆盖 path 与 defs/use（三种写法一致）
+  { finding = "R5-F3", tier = "代码" },   # normalize 的 scale_path
+  { finding = "R5-F4", tier = "代码" },   # 悬空 use 的误报
+  { finding = "R5-F5", tier = "待议" },   # nan/inf 口径（既有图元会静默写出 NaN）
+  { finding = "R5-F6", tier = "待议" },   # 镜像等比 + 旋转弧（CLI 不可达）
+  { finding = "R5-F7", tier = "待议" }    # 体积（ink.rs 942 / path.rs 793）
+]
+run_before = []            # R4 的证据不构成本轮前置；本轮反过来**扩展**了同一族的覆盖
+touched = []               # R4 的 test.py 未被改动（其族一断言是"旋转 ylabel"，与本轮无关）
+note = """
+为什么认定同类：R4 已把这一族的解药定为 W6；本轮复核发现 **W6 够不着 `<path>` 与 `<defs>`**——**同一个几何**写成 `polyline` 会报、写成 `path` 或 `<defs>`+`<use>` 就静默（实测三者 stderr 分别为 741B / 0B / 0B，修好后一字不差）。用户裁决（「直接做进主库就行」「它们都属于主库的能力」）把 path 的搬运正式收进主库。
+根因与建议修法：已证。根因 = 主库只认协议图元 + ink.rs 只走常规子树；修法 = 新增 `src/path.rs`（解析 / 按轴重写 / 展平）供 `transform.rs` 搬运与 `ink.rs` 求盒；`ink.rs` 另按 id 索引 `<defs>`、在 `<use>` 处实例化（按 (x,y) 平移后并入）。保真边界：**非等比 × 旋转椭圆弧 ⇒ 该弧展平**（容差 0.02 源单位，与 convert 同值）。
+怎么修才不弄坏前面：动 `src/path.rs`、`transform.rs` 的 path 臂、`ink.rs` 的 path/defs 支之前，先跑本目录 test.py——它盯的正是「三种写法结论必须一致」「弧的两条规则」「悬空 use 与未引用 defs 不得误报」。
+（本目录无 data/：fixture 在临时目录自合成。R4 的 test.py 未改，其族一断言仍成立。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R5 && python3 test.py
+# rc=0 = 全过。需要已构建的二进制 tools/svg_grid/target/{debug,release}/svg_grid
+#   （缺则 `cd tools/svg_grid && cargo build --offline`，否则显式 SKIP 并说明原因）。
+# 秒级、离线、不写仓库。
+"""

@@ -57,6 +57,15 @@ pub struct GridSpec<'a> {
 }
 
 pub fn compute_grid(spec: GridSpec<'_>) -> Result<GridLayout> {
+    // Validate the requested grid *before* any arithmetic on it: `div_ceil(0)`
+    // panics, and a panic (`rc=101`) tells the caller the tool is broken instead
+    // of that its argument was (`ARCHITECTURE/cli.md` §退出码).
+    if spec.nrow == Some(0) || spec.ncol == Some(0) {
+        return Err(SvgGridError::InvalidInput(
+            "nrow and ncol must be greater than zero".to_string(),
+        ));
+    }
+
     let (rows, cols) = match (spec.nrow, spec.ncol) {
         (Some(rows), Some(cols)) => (rows, cols),
         (Some(rows), None) => (rows, spec.count.div_ceil(rows)),

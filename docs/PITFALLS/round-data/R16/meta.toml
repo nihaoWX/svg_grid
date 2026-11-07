@@ -1,0 +1,61 @@
+# R16 的 round-data —— 渐变 / 图案（paint server）被静默丢弃，`url(#…)` 变悬空引用
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-阻塞点-R16-渐变与图案被丢弃.md`。
+id = "R16"
+verdict = "缺陷"
+
+family     = [
+  "paint server 被整段丢掉：`<linearGradient>`/`<radialGradient>`/`<pattern>` 在第一段（方言 → 协议）消失，引用它们的 91 处 `fill=\"url(#…)\"` 保留 ⇒ 引用悬空、图元不画（渐变柱整排、hatch 那组柱子与图例键变白）",
+  "静默：两段 rc 都是 0、没有一条针对性告警，成品「看着正常，其实少了一大块墨水」——正是本工具存在的理由（convert.md §2 明禁）",
+  "没有机械检查能发现「引用指向不存在的东西」：同类丢失（`<clipPath>` 被丢）可以再犯一次而无人知晓，故本轮同时补 W9",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。F1–F3 是落盘的代码修复（convert 保留 paint server、
+# 变换不改写坐标域、W9 本体），F4–F6 是本轮 test.py 钉住的可跑证据。
+closures   = [
+  { finding = "R16-F1", tier = "代码" },   # convert/src/translate/{bake,mod,uses}.rs：`<defs>` 里的 paint server 原样保留
+  { finding = "R16-F2", tier = "代码" },   # src/transform/mod.rs：重写坐标时不碰 paint server 的坐标域
+  { finding = "R16-F3", tier = "代码" },   # src/warnings/{refs,mod}.rs + src/lib.rs：W9（定义集 vs url(#…) 引用集）
+  { finding = "R16-F4", tier = "检查" },   # 两张目标图墨水恢复：gradient_fill ≥ 0.55、bars_grouped ≥ 0.35（含消融对照）
+  { finding = "R16-F5", tier = "检查" },   # tagged 的 paint server 计数与源图一致、`url(#…)` 零悬空（两张图 + 58 张全量）
+  { finding = "R16-F6", tier = "检查" },   # W9 出声（是什么/为什么/Fix:）/ 干净输入零输出；58 张两段全量 rc=0 + W1/W6 统计
+]
+
+# 本轮动了 convert 的 defs 翻译与 src/transform、src/warnings（全管线的公共件），故动手前先跑全部旧轮证据。
+run_before = ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14", "R15"]
+
+# 本轮没有改写任何旧轮的断言期望（旧轮的 test.py 一字未改）。
+touched    = []
+
+note = """
+为什么认定同类：三条是同一件事的三个面 —— 丢（paint server 被整段丢弃）/ 静（rc=0、无告警，成品看着完整）/
+  不可复查（没有任何机械检查能发现 `url(#…)` 悬空）。同族于 R4（越界墨水被静默裁掉）与 R8（畸形输入静默走样）：
+  都是「成品错了但没有任何信号」。
+根因与建议修法：已证。① convert 的 defs 翻译不再把 `<linearGradient>`/`<radialGradient>`/`<pattern>` 当装饰丢掉，
+  id 与引用一起进协议格式；② 组图侧重写坐标时只动可重算的属性，paint server 的坐标域（userSpaceOnUse 的
+  x1/y1/x2/y2、pattern 的 patternUnits/tile）原样保留；③ 补 W9：把「树里定义的 id 集合」与「`url(#…)` 引用的
+  id 集合」对一遍，对不上就出声（英文、是什么/为什么/`Fix:`、非致命、rc 与产物不变）。
+证据（本机实测，仓库内 debug 二进制，`--width 216 --plot-margin 0 --png-dpi 300`，墨水 = PNG 灰度 < 250 的像素占比）：
+  · `ggplot2/gradient_fill`：**0.0672 → 0.6809**（源图 0.6713，cairosvg 渲的）；tagged 里
+    `<linearGradient>`×13 / `<radialGradient>`×12 与源图一致，91 处 `url(#…)` 全部解析得到。
+  · `matplotlib/bars_grouped`：**0.2180 → 0.4245**（源图 0.3891）；`<pattern>`×1 保留。
+  · 两张的组图侧 stderr 都是 **0 字节**（干净路径零输出）；58 张语料两段全量：57 跑通 + 1 SKIP（`matplotlib/mathtext`
+    按 MANIFEST 的 `expect = "unsupported"`，转换器 fail-closed，rc=1），W9 全 0。
+怎么修才不弄坏前面：只补回被丢的 defs、只对 paint server 做「不重写」而非「不改」，再新增 W9（W1–W8 一条未动）；
+  旧轮 test.py 一字未改（touched 为空），回归 R4–R15 在本轮 test.py 里全跑。
+注意：本轮 test.py 显式用**仓库内**的 `convert/target/debug/svg_grid_convert` 与 `target/debug/svg_grid`
+  （`~/.local/bin` 上是旧版本，用它会把修复判成没修），字体目录用 `$SVG_GRID_FONT_DIR` / `--font-dir` 显式指，
+  不依赖 cwd。源图墨水值（0.6713 / 0.3891）是 cairosvg 渲的，本机没装 cairosvg ⇒ 该条**只打印参考值不判**，
+  判据用阈值 + 消融对照（把 tagged 里的 paint server 删掉再渲，墨水必须塌回阈值之下）。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R16 && python3 test.py   # rc=0 = 全过；失败打出族名
+前置：`cargo build --offline`（两个 crate，都要 debug）与已填充的字体目录
+  （`$SVG_GRID_FONT_DIR`，缺省 `$HOME/svg_grid/fontlib`，用 `fontlib/setup.sh` 装）。
+无 data/：全部 fixture 来自仓库 `tests/fixtures/`，临时产物在临时目录。离线、只读（不写仓库）。
+约 6–8 分钟：本体约 40 s（58 张两段全量约 5 s），其余是回归 R4–R15（R15 自己会重跑 R4–R14，约 4–5 分钟）。
+跳过一律打印原因：`matplotlib/mathtext` 按 MANIFEST 计 SKIP；本机无 cairosvg ⇒ 源图墨水只打参考值；
+字体目录不可用 ⇒ 依赖渲染的断言 SKIP（②③ 与回归照跑）。
+"""

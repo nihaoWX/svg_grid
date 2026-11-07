@@ -1,0 +1,69 @@
+# R17 的 round-data —— `svg_grid doctor`：一条命令把整套语料跑完并给判据
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+id = "R17"
+verdict    = "新领土"
+
+family     = [
+  "没有「一条命令说清语料过不过」：58 张 fixture 只能靠手写驱动（R16 的 test.py 就是），换一轮就要重抄一遍判据",
+  "判据散落在证据脚本里：两段 rc、非空、PNG 有没有墨水、W7/W9 该不该一票否决，各自的实现互不一致，谁也没锁住",
+  "语料跑不动的两类环境错（第一段二进制不在、语料目录不在）没有分档：应当 3（配置错）+ Fix:，实际只会「看起来像工具坏了」",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。F1/F2/F7 是本轮落盘的代码，其余用可跑证据钉住。
+closures   = [
+  { finding = "R17-F1", tier = "代码" },   # src/cli/doctor/**：子命令本体（两段、按自然尺寸、判据、--jobs、--json、--keep）
+  { finding = "R17-F2", tier = "代码" },   # convert 定位（同目录 → PATH）+ 缺则 rc=3 + `Fix:`；语料目录缺同理
+  { finding = "R17-F3", tier = "代码" },   # src/cli/{parse,help,cli}.rs：子命令面、`doctor --help`、退出码 0/1/2/3 分档（CliError::Config/Failure）
+  { finding = "R17-F4", tier = "检查" },   # 全量语料：rc=0、pass≥56 / fail=0 / skip=1、SKIP 的 why 被打印、W1=W7=W9=0
+  { finding = "R17-F5", tier = "检查" },   # 坏 fixture：悬空 url(#nope) 与空图 ⇒ FAIL + rc=1（判据与 stderr 关键行点名）
+  { finding = "R17-F6", tier = "检查" },   # --only 只跑命中项（命中不到 ⇒ 2）；--json 可 json.loads 且字段齐；--keep 留中间产物
+  { finding = "R17-F7", tier = "代码" },   # 单测：src/cli/doctor/tests.rs（纯函数面）+ tests/doctor_tests/（2–3 条小语料端到端）
+  { finding = "R17-F8", tier = "检查" },   # 配置错分档：缺 convert ⇒ 3 + Fix:；缺语料 ⇒ 3 + Fix: + 怎么指
+]
+
+# 本轮动了 src/cli 的公共件（解析器/帮助/错误分档）与 Cargo.toml（png 进 dependencies），
+# 故动手前先跑全部旧轮证据（R4–R16，全绿才动）。
+run_before = ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14", "R15", "R16"]
+
+# 本轮没有改写任何旧轮的断言期望（旧轮 test.py 一字未改）。
+touched    = []
+
+note = """
+为什么认定同类：三族是同一件事的三个面 —— 没有入口（要靠手写脚本驱动 58 张）/ 没有统一判据（每份证据各写一套）/
+  没有分档（环境错被当成工具错）。同族于 R14（错误不分档、帮助文本坏掉）与 R15（安装不可测）：都是
+  「工具本身没有可跑的自检面」。
+根因与建议修法：已证。① 新增 `svg_grid doctor`：`--fixtures`（缺省 `<exe 同级>/../../tests/fixtures`）、
+  `--only <glob>`、`--jobs <n>`、`--json`、`--keep <dir>`；每条 fixture 走真实两段
+  （`svg_grid_convert --input … --output …` → `plot-grid --input … --output … --output-png … --png-dpi 300`）；
+  ② **按源 SVG 的自然尺寸组图**（`--width = 自然宽 + 2×默认 margin`，不传 `--plot-margin`），
+  于是默认没人吃 W1，真被缩的照实打印 W1；③ 判据机械、可解释：两段 rc=0 / 产物非空 / PNG 非纯白（数非白像素）/
+  stderr 无 W7 无 W9；其余告警只计数；④ 输出两形态：逐条一行
+  `PASS|FAIL|SKIP  <id>  <step>  <ms>  warnings=N` + `summary: N pass, M fail, K skip`，
+  有 FAIL ⇒ 退出 1 并把失败项、具体判据与 stderr 关键行再列一遍；`--json` 给机读版（rc / 告警码 / 墨水像素 / 耗时）。
+证据（本机实测，仓库内 debug 二进制；doctor 自己找 `convert/target/debug/svg_grid_convert`）：
+  · 全量 58 张：rc=0、`summary: 57 pass, 0 fail, 1 skip`，唯一 SKIP 是 `matplotlib/mathtext`（`why` 打印），
+    告警码统计 `{V1: 57, W6: 13}`，**W1=0 / W7=0 / W9=0**；串行总用时约 3 s。
+  · 坏语料（悬空 `url(#nope)` + 空图）⇒ `summary: 1 pass, 2 fail, 0 skip`、rc=1，
+    两条 FAIL 的判据分别是「stderr contains W9」与「PNG has no ink (all pixels pure white)」。
+  · `--only 'ggplot2/*'` ⇒ 30 条；`--only 'matplotlib/mathtext'` ⇒ 1 条 SKIP；`--only 'nope/*'` ⇒ rc=2。
+  · 缺 convert（PATH 空、同目录无）⇒ rc=3 + 一句英文 + `Fix:`；缺语料目录 ⇒ rc=3 + `Fix:` + `--fixtures`。
+怎么修才不弄坏前面：只新增 `src/cli/doctor/**` 与 `tests/doctor_tests/**`，`src/cli.rs` 增加两个错误档
+  （`Config`=3、`Failure`=1），`--help` 增加 doctor 段（R14 的「覆盖全部 flag」单测继续锁死），
+  `Cargo.toml` 把 `png` 从 dev-dependencies 提到 dependencies（doctor 要数 PNG 的非白像素）。
+  convert 侧一字未改，故 R16 的判据不受影响（本轮 R4–R16 全绿）。
+注意：doctor 的**契约**（参数、两段管线、判据、输出格式、语言）本轮一个字没改——发现契约本身有问题会报回来，
+  不在代码里自行放宽；`--plot-margin` 仍按契约不传，靠 `--width/--height` 把 cell 撑成面板自然尺寸。
+  skill（`docs/general-figure-guide/`）**未改**：指南 02a 现有 19988 B，R9 的证据要求每个指南文件 ≤ 20000 B，
+  加一句指针就会越线；且按 warnings.md §4，doctor 属「工具能力」，不该在成品指南里复述。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R17 && python3 test.py   # rc=0 = 全过；失败打出族名
+前置：`cargo build --offline`（两个 crate，都要 debug）与已填充的字体目录
+  （`$SVG_GRID_FONT_DIR`，缺省 `$HOME/svg_grid/fontlib`，用 `fontlib/setup.sh` 装）。
+无 data/：全部 fixture 来自仓库 `tests/fixtures/`，坏语料在临时目录现造。离线、只读（不写仓库）。
+约 8–10 分钟：①–④ 约 10 s（全量 58 张串行约 3 s），其余是回归 R4–R16
+  （R16 自己会重跑 R4–R15，单它一项约 3 分 16 秒，故整段必须留足时间）。
+跳过一律打印原因：`matplotlib/mathtext` 按 MANIFEST 计 SKIP；字体目录不可用 ⇒ 依赖渲染的断言 SKIP（④ 与回归照跑）。
+"""

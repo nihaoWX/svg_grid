@@ -1,0 +1,23 @@
+# R7 的 round-data —— 行为保持型拆分（ink.rs / path.rs → 目录）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R7"
+verdict = "新领土"        # 本质是计划内重构（关闭 R5 的遗留），不是问题复发
+family = ["体积（源文件几百行以内）", "重构不得改行为"]
+closures = [
+  { finding = "R7-F1", tier = "代码" },
+  { finding = "R7-F2", tier = "检查" },   # 拆分 ⇒ 必须 link（否则旧路径 records 失联）
+  { finding = "R7-F3", tier = "规则" }    # cargo fmt --all 会顺带重排既有未格式化文件
+]
+run_before = ["R4", "R5", "R6"]   # 动 src/** 之前，先跑这三轮证据
+touched = []                      # 没有改任何旧轮的断言期望（只在 R6 之后动代码）
+note = """
+为什么认定同类：`related` 指向 `R5-F7`（"体积超出取向"）—— 本轮是把它**关掉**，不是问题复发；`verdict` 因此记「新领土」。另外本轮触发了一个**机制层面**的动作：拆分会把旧路径的 finding 打成悬空。
+根因与建议修法：已证。① 体积 = 两个文件把"遍历/盒/文本/引用/展平"混在一起 ⇒ 按**现有职责分节**切：`path/{mod,parse,rewrite,flatten,tests}`、`ink/{mod,walk,bbox,shapes,text,uses,tests}`，**`mod.rs` 只做 `mod` + `pub use`**（够薄 ⇒ `lib.rs`/`transform.rs`/`normalize.rs` 一行未改）；② 拆分 = 改名/移动 ⇒ **必须 `link`**（`ink.rs`→`ink/*` 与 `path.rs`→`path/*` 两组，已 link 为 L1/L2；`query` 对旧名与新名现在命中同一批、stderr 0B）。
+怎么修才不弄坏前面：动 `src/ink/**`、`src/path/**` 之前，先跑本目录 test.py；它盯的是「结构底线（文件不存在/门面薄/每个文件 ≤350 行）」「行为 smoke（弧 path / 畸形 d 走 W7 / 越界走 W6）」，**并逐个跑 R4/R5/R6 的证据**——重构的验收标准就是"前面三轮都不能坏"。md5 逐字节比对是拆分当时的一次性验证（执行方 8 个 fixture + Orchestrator 另 9 个 fixture，结论一致），不入库（任何正当的行为改动都会让它失效）。
+（本目录无 data/：smoke fixture 在临时目录自合成。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R7 && python3 test.py
+# rc=0 = 全过。需要已构建的二进制（tools/svg_grid/target/{debug,release}/svg_grid，缺则 cargo build --offline）
+# 与 ~/.venv 里的 numpy + Pillow（跑 R4/R6 证据时用）。秒级、离线、不写仓库。
+"""

@@ -1,0 +1,457 @@
+# Fixture manifest for the svg_grid corpus.
+#
+# Every [[fixture]] is one generated SVG; regenerate the whole set with the
+# scripts next to it (ggplot2/gen_*.R, matplotlib/gen_*.py, seaborn/gen_seaborn.py).
+# id      = "<package>/<svg basename>"; the file itself is tests/fixtures/<id>.svg
+#           (so `id = "ggplot2/violin"` is tests/fixtures/ggplot2/violin.svg)
+# package = the plotting package that produced it
+# call    = the one-line call this figure exercises
+# covers  = the constructs this file really contains (evidence for coverage)
+# expect  = "pass" | "unsupported" (then `why` says which construct is not supported)
+#
+# Registration set: 58 entries <-> 58 files, 1:1, no duplicates, checked 2026-11-04.
+# `covers` is evidence, not a contract: it lists the constructs worth naming, so a
+# file may contain more than it declares (all 30 ggplot2 files contain a `<defs>`
+# for their clipPath, and 25 files use the plain `opacity` property; neither is
+# declared everywhere). Read the union as "at least this much", not as exhaustive.
+#
+# Baseline measurement (2026-11-04). Every entry was run through the real two-stage
+# pipeline, no parameter tuning:
+#   svg_grid_convert --input <id>.svg --output <tmp>/tagged.svg
+#   svg_grid plot-grid --input <tmp>/tagged.svg --output <tmp>/o.svg \
+#                      --output-png <tmp>/o.png --png-dpi 300
+# Binaries: ~/.local/bin/svg_grid_convert and ~/.local/bin/svg_grid (the in-repo
+# target/release/ has svg_grid only — there is no convert build there).
+# Result: 55 pass (A), 1 unsupported (B: matplotlib/mathtext), 2 known defects
+# (C: ggplot2/gradient_fill, matplotlib/bars_grouped — kept at expect = "pass" on
+# purpose so `doctor` keeps reporting them as FAIL; see the per-entry notes).
+
+[[fixture]]
+id = "ggplot2/annotate"
+package = "ggplot2"
+call = "annotate('rect'/'text'/'segment'/'point') + rotated axis.text"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "stroke-dasharray", "fill-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/area_ribbon"
+package = "ggplot2"
+call = "geom_area(stacked) + geom_ribbon band"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/bars_dodged"
+package = "ggplot2"
+call = "geom_col(position=position_dodge()) + theme_minimal"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/bars_stacked"
+package = "ggplot2"
+call = "geom_col(position='stack') + scale_fill_brewer"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/boxplot"
+package = "ggplot2"
+call = "geom_boxplot + geom_jitter overlay"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/contour_density"
+package = "ggplot2"
+call = "geom_density_2d_filled + geom_density_2d"
+covers = ["rotate()", "<clipPath>", "<path>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/coord_flip"
+package = "ggplot2"
+call = "coord_flip() + geom_col + geom_text(hjust=-0.2)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/coord_polar"
+package = "ggplot2"
+call = "coord_polar(theta='y') pie with xlim hole"
+covers = ["<clipPath>", "<polygon>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/curve"
+package = "ggplot2"
+call = "geom_curve(curvature=+-0.45, arrow()) => grid flattens the curve into a polyline"
+covers = ["<clipPath>", "<polyline>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/dotplot"
+package = "ggplot2"
+call = "geom_dotplot(binaxis='y', stackdir='center') + geom_hline(dashed)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "stroke-dasharray", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/errorbar"
+package = "ggplot2"
+call = "geom_errorbar + geom_pointrange + geom_linerange + geom_crossbar"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/facet_grid"
+package = "ggplot2"
+call = "facet_grid(am ~ cyl) strip rows and columns"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/facet_wrap"
+package = "ggplot2"
+call = "facet_wrap(~cls, ncol=2, scales='free_x') + geom_smooth(lm)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+# KNOWN DEFECT (C, measured 2026-11-04) — kept at expect = "pass" on purpose.
+# convert drops the `<linearGradient>`/`<radialGradient>` paint servers (13 + 12 of
+# them, ids pat-0..pat-24) while keeping the 91 `url(#...)` references that point
+# at them (52 + 26 clipPath references + 13 gradient fills), so every
+# gradient-filled shape is left unpainted: rc = 0, no warning, ink
+# 0.6713 -> 0.0672 of the canvas
+# (deleting those same defs from the source with a text edit reproduces 0.0672
+# exactly). Silent ink loss, i.e. the failure mode convert.md §2 forbids.
+id = "ggplot2/gradient_fill"
+package = "ggplot2"
+call = "geom_col(fill=grid::linearGradient()) + geom_point(fill=radialGradient()) + panel.background gradient"
+covers = ["<defs>", "rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "linearGradient", "radialGradient", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/guides"
+package = "ggplot2"
+call = "legend.position='bottom' + colour/shape merged into one key"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/hist_density"
+package = "ggplot2"
+call = "geom_histogram(aes(y=after_stat(density))) + geom_density + geom_rug"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<rect>", "<line>", "<text>", "<style> CSS block", "opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/jitter"
+package = "ggplot2"
+call = "geom_jitter(width=0.15) + stat_summary(fun=mean, geom='crossbar')"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/lines_linetypes"
+package = "ggplot2"
+call = "geom_line + geom_point with scale_linetype_manual(solid/dashed/dotted/longdash)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "stroke-dasharray", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/points_aes"
+package = "ggplot2"
+call = "geom_point(colour/shape/size/alpha = mapped) + scale_shape_manual + theme_bw"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<circle>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/polygon"
+package = "ggplot2"
+call = "geom_polygon closed rings + coord_equal"
+covers = ["<clipPath>", "<polygon>", "<circle>", "<rect>", "<style> CSS block", "fill-opacity"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/quantile"
+package = "ggplot2"
+call = "geom_quantile(quantiles=c(0.1,0.5,0.9)) over geom_point"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/scales_date"
+package = "ggplot2"
+call = "scale_x_date(date_breaks='3 weeks') + rotated labels"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/scales_log"
+package = "ggplot2"
+call = "scale_y_log10 + scale_x_reverse"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/segments"
+package = "ggplot2"
+call = "geom_segment(arrow()) + geom_hline/geom_vline/geom_abline"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<line>", "<text>", "<style> CSS block", "stroke-dasharray", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/smooth_ribbon"
+package = "ggplot2"
+call = "geom_smooth(method='loess', se=TRUE) confidence ribbon"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<circle>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/steps"
+package = "ggplot2"
+call = "geom_step(direction='hv'/'vh') + geom_point"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<circle>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/text_angle"
+package = "ggplot2"
+call = "geom_text(angle=45/90, hjust, vjust) + geom_label"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/themes"
+package = "ggplot2"
+call = "theme_dark + panel.border + axis.text.x(angle=-30) + legend.position='none'"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<rect>", "<text>", "<style> CSS block", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/tile_heatmap"
+package = "ggplot2"
+call = "geom_tile + scale_fill_gradient2 (colourbar rendered as <image>)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "id + xlink:href", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "ggplot2/violin"
+package = "ggplot2"
+call = "geom_violin(trim=FALSE) + geom_boxplot(width=0.12)"
+covers = ["rotate()", "<clipPath>", "<polyline>", "<polygon>", "<rect>", "<line>", "<text>", "<style> CSS block", "fill-opacity", "textLength"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/annotate_arrow"
+package = "matplotlib"
+call = "annotate(arrowprops arc3/'-|>', bbox) + rotated text"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/barh"
+package = "matplotlib"
+call = "barh() with value labels and dashed grid"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+# KNOWN DEFECT (C, measured 2026-11-04) — kept at expect = "pass" on purpose.
+# Same paint-server drop as ggplot2/gradient_fill, here for the hatch fill: the
+# `<pattern id="h4e0184d927">` body is removed while `fill="url(#h4e0184d927)"`
+# survives, so the hatched bars are blank. rc = 0, no warning, ink 0.3891 -> 0.2180
+# (deleting only the `<pattern>` element from the source reproduces 0.2180 exactly).
+id = "matplotlib/bars_grouped"
+package = "matplotlib"
+call = "bar() grouped + hatch='//' (pattern def)"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "<pattern>", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/bars_stacked"
+package = "matplotlib"
+call = "bar(bottom=...) stacked + per-bar text totals"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/boxplot"
+package = "matplotlib"
+call = "boxplot(patch_artist=True) with fliers and coloured boxes"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/contour"
+package = "matplotlib"
+call = "contourf + contour + clabel inline labels"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "fill-opacity", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/date_axis"
+package = "matplotlib"
+call = "date axis with autofmt_xdate + marker line"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/errorbar"
+package = "matplotlib"
+call = "errorbar(asymmetric yerr, xerr, caps) + fill_between band"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/fill_between"
+package = "matplotlib"
+call = "fill_between(where=..., step='mid', alpha) + axhline dashed"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "fill-opacity", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/hexbin"
+package = "matplotlib"
+call = "hexbin(gridsize=10) hexagonal bins + colorbar"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/hist"
+package = "matplotlib"
+call = "hist() two datasets stacked"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/imshow"
+package = "matplotlib"
+call = "imshow(24x30, interpolation='nearest') + colorbar"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/lines_markers"
+package = "matplotlib"
+call = "plot() 3 lines with markers 'o'/'s'/'^' and '-'/'--'/':' linestyles"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/log_axes"
+package = "matplotlib"
+call = "loglog + semilogy with minor ticks (auto mathtext labels)"
+covers = ["<defs>", "<use>", "<g transform>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<tspan>", "<style> CSS block", "opacity", "stroke-opacity", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/mathtext"
+package = "matplotlib"
+call = "mathtext in title/labels/text ($\\alpha$, $\\sum$, $\\frac$) via <tspan>"
+covers = ["<defs>", "<use>", "<g transform>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<tspan>", "<style> CSS block", "id + xlink:href"]
+# Measured 2026-11-04: convert exits 1. The mathtext itself (<text>/<tspan>) is not
+# the problem — the rotated y-axis label is: matplotlib wraps it in
+# `<g transform="translate(14.370313 87.60418) rotate(-90)">` and a <text> under an
+# ancestor with rotation/scale is fail-closed (convert.md §2), because baking it
+# would silently change font size and orientation. The refusal is loud and names
+# the node, which is exactly what §2 asks for.
+expect = "unsupported"
+why = "<text> under a rotated ancestor <g transform=\"translate(...) rotate(-90)\"> (matplotlib rotated y-axis label): only a pure translation can be baked into text, so the converter refuses instead of misplacing the label"
+
+[[fixture]]
+id = "matplotlib/patches"
+package = "matplotlib"
+call = "Rectangle/Circle/Polygon/Ellipse/Wedge/Arc + Bezier PathPatch + path with a hole"
+covers = ["<clipPath>", "<path>", "<rect>", "<style> CSS block", "stroke-dasharray", "opacity", "path C (cubic)"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/pcolormesh"
+package = "matplotlib"
+call = "pcolormesh 8x6 quads with edgecolors + colorbar"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/pie"
+package = "matplotlib"
+call = "pie(explode, autopct) wedges"
+covers = ["rotate()", "<path>", "<text>", "<style> CSS block", "path C (cubic)"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/quiver"
+package = "matplotlib"
+call = "quiver() vector field with a mapped colour"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/scatter_colorbar"
+package = "matplotlib"
+call = "scatter(s=..., c=...) + fig.colorbar (embedded gradient PNG)"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "fill-opacity", "stroke-opacity", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/step_stem"
+package = "matplotlib"
+call = "step(where='mid') and stem() side by side"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/subplots_gridspec"
+package = "matplotlib"
+call = "gridspec 2x2 (height_ratios, shared axes) + suptitle + panel letters"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/twinx"
+package = "matplotlib"
+call = "twinx() + twiny() twin axes with combined legend"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "stroke-dasharray", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "matplotlib/violinplot"
+package = "matplotlib"
+call = "violinplot(showmeans/showextrema/showmedians)"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "seaborn/catplot"
+package = "seaborn"
+call = "sns.catplot(kind='box', col=...) small multiples"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "path C (cubic)", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "seaborn/heatmap"
+package = "seaborn"
+call = "sns.heatmap(annot=True, diverging cmap) + colorbar"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<image>", "image/png;base64", "<style> CSS block", "id + xlink:href"]
+expect = "pass"
+
+[[fixture]]
+id = "seaborn/kdeplot"
+package = "seaborn"
+call = "sns.kdeplot 2D filled density, 4 levels"
+covers = ["rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block"]
+expect = "pass"
+
+[[fixture]]
+# Not byte-reproducible (measured 2026-11-04): two consecutive runs of
+# seaborn/gen_seaborn.py differ in the regression CI band (and hence in the path
+# id hash) — sns.regplot's bootstrap draws from the global numpy RNG, which the
+# script does not seed. The other 57 fixtures regenerate byte-identically.
+id = "seaborn/regplot"
+package = "seaborn"
+call = "sns.regplot scatter + regression line + bootstrap CI band"
+covers = ["<defs>", "<use>", "rotate()", "<clipPath>", "<path>", "<rect>", "<text>", "<style> CSS block", "fill-opacity", "stroke-opacity", "path C (cubic)", "id + xlink:href"]
+expect = "pass"

@@ -1,25 +1,23 @@
 # 组图首选路线：`svg_grid`（文件级矢量组图）
 
 > **首选路线**——**所有组图默认走这里**，包括全 R、同会话的情形（面板先各自落成 `.svg`，再交给 `svg_grid` 组）。
+> **panel 从哪来见 `00_native_plots.md`**（原生出图优先）；本文件只负责把已有 `.svg` 拼成成品。
 > 只有本路线**走不通**时才回退 `02b_cowplot_assembly.md`，判据见下节。
-> 布局语义按 cowplot 的思路设计（组图期只填内容，不试尺寸）；协议与文件结构见 `tools/svg_grid/ARCHITECTURE.md`。
+> 工具侧的协议、布局语义与设计依据见 `tools/svg_grid/ARCHITECTURE/tag-protocol.md` 与 `…/layout.md`。
 
 ## 为什么默认走这条
 
-- 面板**跨语言/跨步骤**（R svglite、matplotlib、渲染器位图）本来就是常态，文件级是唯一通用解；
-- 成品**保留矢量**（`.svg` 是主素材，`.png` 只是预览与正文嵌入）；
-- 具备 cowplot 式的"谁跟谁一组 + 各自占比"（`--rel-*` 语义与 `plot_grid` 一致），但不绑定语言；
-- cowplot 的**文件级**读图路线在本机实测过**静默产出 0.00% 墨量的全白图**（仅告警、退出码 0）——正是本工具要避免的失败模式。
+面板**跨语言/跨步骤**（R svglite、matplotlib、渲染器位图）是常态，文件级是唯一通用解；成品**保留矢量**
+（`.svg` 是主素材，`.png` 只是预览与嵌入）；具备 cowplot 式的"谁跟谁一组 + 各自占比"但不绑定语言。
+
 
 ## 什么时候才回退 `02b`（cowplot）
 
-判据**仅三条**，任一成立才回退：
+**判据只有三条**，任一成立才回退：① 转换器对面板 **fail-closed**，且无法改用受支持方言（`svglite` /
+matplotlib / RDKit 矢量后端）重出；② `svg_grid`（含 `convert` 子命令）**不可用**（没编译、环境不支持、
+离线构建失败）；③ 面板**拿不到独立 `.svg`**（只能以会话内对象组合）。
 
-1. **转换器 fail-closed**：面板 SVG 触到了它不接受的构造（非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带缩放/旋转的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、非轴对齐矩形的 clip 子轮廓、视口不与用户空间 1:1 的带单位长度如 `%`/`pt` 视口里的 `px`，或未验证的第三方导出如 Inkscape/Illustrator），且无法改用受支持方言（`svglite` / matplotlib / RDKit 矢量后端）重出。**RDKit `MolDraw2DSVG` 现在可直接入流水线**（带单位长度已支持）；它的位图后端 `MolDraw2DCairo` 仍以内嵌 `<image>` 进成品；
-2. **工具不可用**：`svg_grid` 或 `svg_grid_convert` 没编译、环境不支持、离线构建失败；
-3. **面板拿不到独立 `.svg`**：只能以会话内对象（如 R 的 ggplot/grob）组合。
-
-回退路线的做法与代价见 `02b_cowplot_assembly.md`。
+**完整清单**（仍 fail-closed 的构造）与**回退的代价**见 `02b_cowplot_assembly.md` §0——本指南不复述。
 
 ## 流水线
 
@@ -28,13 +26,16 @@
      R         : ggsave(..., device = svglite::svglite)
      matplotlib: rcParams["svg.fonttype"] = "none"     # 保留 <text>，不要转轮廓
                  savefig(name.svg, format="svg")
-② 转换：svg_grid_convert --input panels/A.svg --output tagged/A.svg
+② 转换：svg_grid convert --input panels/A.svg --output tagged/A.svg
      补 <rect data-panel-box="main"> + data-scale 分组；把外源方言翻译成协议图元；
      并给描边图元补上显式 stroke-width
-③ 组图：一行一次调用，只给"内容"与列数
+③ 计划：同一套输入/布局参数加 --plan，读它给的「每格多大 / s / 要不要先归一化」
+     svg_grid plot-grid --input tagged/A.svg --input tagged/B.svg \
+         --plan --width 4961 --ncol 2 --labels
+④ 组图：一行一次调用，只给"内容"与列数（需要时先把面板缩到 --plan 给的格宽）
      svg_grid plot-grid --input tagged/A.svg --input tagged/B.svg \
          --output row1.svg --width 4961 --ncol 2 --labels
-④ 纵向拼：把各"行块"当外层输入
+⑤ 纵向拼：把各"行块"当外层输入
      svg_grid plot-grid --input row1.svg --input row2.svg --input row3.svg \
          --output Figure.svg --output-png Figure.png --png-dpi 600 --ncol 1 --width 4961
 ```
@@ -57,8 +58,7 @@
 | height 与 rel 的关系 | **显式给 `--width/--height` 时完全正交**：画布你定，`rel_*` 只在矩形内重分配格子。**省略 `--height`（auto）时**，`--rel-heights` 还会**决定推出的画布高**（画布高 = Σ行高，行高 = 自然高 × 倍数）——此时它不只是内部比例 |
 | 缩放语义 | 组图**只重写坐标**（另按策略缩放 `stroke-width`），**不缩放 `font-size`** → 见下节 |
 | 字母开关 | **不传 `--labels` = 不加字母**；**裸传 `--labels` = 自动编号 A/B/C…**；但自动编号**每次调用都从 A 重新开始**，所以逐行组图时**必须逐行显式给该行的字母**（`--labels A,B` / `--labels C,D,E` / `--labels F`）；`--labels none` 关闭 |
-| 字母样式 | 默认是 **sans-serif + 粗体**，与指南相反 → 显式覆盖为 `--label-fontfamily serif --label-fontface normal`；大小默认 `auto`、位置默认面板左上外侧 |
-| 字母位置/大小 | 默认已在**面板左上外侧**、大小默认 `auto`（≈画布宽的 2.7%，等价于 serif `A` 墨宽≈2%）；要自定义才传 `--hjust/--vjust/--label-size` |
+| 字母字体 | 默认 **`Arial`** + 粗体；族名可换成任意族或 **CSS 列表（回退链）**。字体**只**从字体库读（`$HOME/svg_grid/fontlib`）、不读系统字体 ⇒ 缺族会 W8、空库要出 PNG/加字母会**非零退出**。细则（serif 写法、`--list-fonts`/`--font-dir`、`fontlib/setup.sh`）见 `01_canvas_layout.md` §2 |
 | 字母空间 | 用 `--labels` 且**未显式给 `--plot-margin`** 时，会自动留出字母带；显式给了 margin 就尊重它，并在字母会被裁时向 stderr 告警 |
 | 字母加在哪层 | **只为"拥有该面板作为直接输入"的那一次调用加字母**；**组合图本身（行块）绝不要加字母**。嵌套时：各行为自己的面板加字母，**外层不要传 `--labels`**——传了会给行块整体重新编号，造成**字母重号/串位**（中途给组合图加字母是最常见的错法）；某格要跳过就留空（`--labels A,,C`）。平铺图（一次调用）则天然就是"最后一步加" |
 | 空位/垫片 | 用 `--input none` 在序列里插一个空白格（R 的 `plot_grid(NULL, pp, NULL, rel_widths=c(0.08,1-0.16,0.08))` 等价物）；垫片的自然纵横比按 1:1 计，可用 `--rel-widths` 调 |
@@ -66,6 +66,10 @@
 | 描边宽度 | 描边图元必须**带显式 `stroke-width`**（自身或祖先声明）；靠默认值的图元放大后不会变粗（转换器会自动补齐） |
 | 位图 | 位图面板（渲染器出图、`imshow` 热图、colorbar 渐变）以内嵌 `<image>` 进入成品，属正常 |
 | dpi | `--png-dpi`（默认 600）**只写 PNG 的 pHYs 元数据**，不改像素数 |
+
+**交付前必须成立的 5 件事**（可直接断言）：① 每个格子 `sx = sy ≈ 1`（`--plan` 直接读出；不为 1 须能说明为什么、且文字比例仍可接受）；② 每个格子**宽高比 == 面板画布宽高比**（防变形）；③ 转换产物里**不再有**
+`<path>` / `<use>` / `<g transform>`；④ 外层拼装**给了 `--plot-margin 0`**；⑤ **一行内的面板等宽等高**。
+（字母的样式/位置/墨宽、配色、落盘命名与图注另见 `01` / `03` / `04`；判据脚本见 `05` 与硬规则表的 dpi 行。）
 
 ## 位图 panel（svg + 位图混合组图）
 
@@ -96,98 +100,89 @@
 
 `s ≈ 1` 时文字比例与设计一致；`s` 明显大于 1（面板被放大）时文字会**相对变小**——这是协议的设计（保证不同面板字号一致），**不是渲染或标签出错**。
 
-**正规做法：一行一次调用，先把该行的目标格宽算出来，再用归一化把面板缩到该尺度。**
+**正规做法：不再手算格宽 —— 让工具算（`--plan`，只读、不出图）。**
 
-在"省略 `--rel-*`"的自然布局下，格宽是可算的（不用试）：
-
-- 一行 n 个**同纵横比**面板：`avail = W − 2·margin − (n−1)·gap`，**格宽 = avail / n**；
-- 一行纵横比不同：`格宽_i = avail · a_i / Σa`（`a_i` = 该面板画布宽高比），取多数派的格宽做统一目标即可。
+给**与真跑完全相同**的输入/布局参数（`--ncol/--rel-*/--width/--height/--plot-margin/--gap`），加 `--plan`：
 
 ```
---normalize-input-max-side <该面板目标格的长边 max(格宽, 格高)>
+$ svg_grid plot-grid --input tagged/E.svg --input tagged/F.svg --plan --width 4961 --ncol 2 --labels
+canvas 4961x1902.082
+#0 tagged/E.svg  canvas 1052x744  cell 2456.500x1737.297  s=2.335x2.335  Δ+0.00%
+note: #0 is not at its cell size (s=2.335); re-emit it at the cell size first:
+svg_grid plot-grid --input tagged/E.svg --output tagged/E.cell.svg --width 2456.500 --ncol 1 --plot-margin 0 --normalize-input-max-side 2456.500
+#1 tagged/F.svg  …（每个输入一行，形状同上）
 ```
 
-它是**逐输入**等比缩放：把每个输入的**长边**缩到该值，**几何、`font-size`、`stroke-width` 一起缩**（`style="..."` 里声明的长度同样会被缩放）。于是组图时 `s ≈ 1`，文字比例恢复设计值。
-
-所以这里的 N 要填**该面板目标格的长边** `max(格宽, 格高)`——横版面板长边恰好等于格宽，竖版面板长边是格高。竖版面板若误填成格宽（<格高），输入的长边只缩到格宽，面板最终比格子小，`s ≠ 1`（`sx`、`sy` 都偏大）并触发 W1「输入被缩放」告警，该面板的文字比例随之偏小。
-
-- 同纵横比的行 → 全部 `s = 1`（精确）；
-- 纵横比不同的行 → 有一个面板的 `s` 偏 ~5%（肉眼无差别）。
-
-**最稳的做法：每个面板各自缩到"它自己的格宽"**（混合纵横比的行也能全部精确 `s = 1`，且不会触发"输入被缩放"告警）：
-
-```
-# ① 单输入调用 = 只归一化这一个面板（--width 填该面板的格宽，归一化目标填该格的长边）
-svg_grid plot-grid --input tagged/E.svg --output norm/E.svg \
-    --width <E 的格宽> --ncol 1 --plot-margin 0 --normalize-input-max-side <E 的格长边 max(格宽, 格高)>
-# ② 逐行组图时**不要再带** --normalize-input-max-side（面板已在目标尺度上）
-```
+`canvas` 是**成品画布**（= 最终 `.svg` 的 width/height、PNG 像素数）；`cell` 是该面板落进的格子；`s` 是
+`格子 ÷ 面板画布`（`Δ` = 非等比的那部分，`0.00%` 即不变形）。`note:` 说这个输入要不要先归一化，要就
+**把下一行命令照抄执行**：按格宽出图 + 归一化到格长边 ⇒ 画布正好等于格子 ⇒ 之后组图**不用再带**
+`--normalize-input-max-side`。计划与真跑共用同一处布局计算，所以它报 `s=1` 就是 `s=1`；
+改了 `--rel-*`/`--width`/`--plot-margin` 就再跑一次。
 
 代价：**逐行按各自格宽归一化 ⇒ 不同行的纸面字号会不同**（例如 5.85 / 3.96 / 9.10 pt）。这是"保证 `s = 1`"的必然结果；若要全图字号一致，只能放弃 `s = 1`（文字与几何脱钩）或让各行格宽一致。
 
-**替代做法**（面板还没出图、或想一次定死）：在**出图端**按目标尺寸画 —— `figsize` 与所有以 pt 为单位的尺寸（字号、线宽、标记、刻度）同乘 `k = 目标格子宽 ÷ 画布宽`。注意 matplotlib 的 rcParam 里有些项的单位是**字号倍数**（`legend.handlelength/borderpad/labelspacing` 等），它们会随 `font.size` 一起缩放，**不能**再乘一遍。
+**同一行内的面板必须"同宽 + 同高"（不只是同宽）**：行内两格共享行高，所以纸面字号实际由 `格长边 ÷ 面板长边` 决定——两个面板**不同高**时，必然一个被放大、一个被缩小（实测同行 `2180×1500` 与 `2180×2500`：`1875/1500 = 1.25×` vs `1875/2500 = 0.75×`，后者从 5.0 pt 掉到 3.75 pt；逐格归一化只能保证每格 `s = 1`，改不了这个倍率的绝对值）。**定版式前先把同行的面板画成同一画布尺寸**，则每格 1:1、`sx = sy = 1`、纸面字号 = 设计字号。校验式：一行两张等宽 `W₀`、等高 `H₀` 的面板，当 `2·W₀ + gap + 2·margin` 恰等于行宽时，行高就是 `H₀`（例 `24 + 2180 + 40 + 2180 + 24 = 4448` ✓）。
+
+**替代做法**（面板还没出图、或想一次定死）：在**出图端**按目标尺寸画 —— `figsize` 与所有以 pt 为单位的尺寸（字号、线宽、标记、刻度）同乘 `k = 目标格子宽 ÷ 画布宽`。注意 matplotlib 的 rcParam 里有些项的单位是**字号倍数**（`legend.handlelength/borderpad/labelspacing` 等），它们会随 `font.size` 一起缩放，**不能**再乘一遍。**要求全图纸面字号一致时首选这条**（出图端按 `figsize(in) = 格px/600` 画 + 全图统一 base 字号）；逐格归一化只适合"各路面板本来就按同一 scale 出图"的情形。
 
 **别把字号放大到超过几何缩放比例 `s`**：matplotlib 面板的轴外元素（标题、y 轴标签、图例）是出图时按点烘死的，放大超过 `s` 会把它们裁掉或压到刻度上。`k = s` 是唯一可证安全的档位。
 
 **核对 `s` 的方法**：用**带 `data-scale` 标签**的元素坐标反解（`sx = (out.x − out_panelbox.x) / (in.x − in_panelbox.x)`）。**不要**用 `data-panel-box` 那个 rect 判断——它通常没有 `data-scale` 标签，默认策略是"只平移"，尺寸本来就不变。
+
+同理 **`data-panel-box="main"` 的出现次数不是面板数**：`plot-grid` 的**每个输出**（含只作容器的"行块"）都带一份，嵌套后层层叠加（实测 3 面板 2 行 ⇒ 9 次、4 面板 4 行 ⇒ 13 次）。要断言面板数就用 `data-scale="xy"`（每个真实面板恰好一个）或内层 `data-svg-grid-cell` 的格子数。
 
 ## 嵌套拼装（2 列 / 3 列 / 1 列）
 
 1. **逐行组图**：`--ncol <行内面板数>` + `--width`，**不给 `--height`、不给 `--rel-*`** → 行块画布 = 内容自然尺寸。
 2. **纵向拼**：把行块当外层输入，`--ncol 1` + `--width` + **`--plot-margin 0`**（同样不给 height/rel）→ 行块按各自自然高叠起来；同层各块**共享同一列宽**（块内部比例再极端也一样）。
    外层**必须显式给 `--plot-margin 0`**：若不显式给，默认的 24 会把每个行块整体再缩一次（`(W−2×24)/W`，W=4961 时约 **0.99**），最终 `s = 行级 s × 0.99` 而不是 1——这是一次**静默的 1% 压缩**。
-3. 字母在**第 1 步**（行那次调用）加；**外层不传 `--labels`**。规则：字母只加在"拥有该面板为直接输入"的那一层，**组合图（行块）本身不加字母**——给组合图加字母会造成重号与错位（这是本工具里最常见的错法之一）。
+3. 字母在**第 1 步**（行那次调用）加；**外层不传 `--labels`**——规则见上表「字母加在哪层」。
 4. 想改变某行的高度占比时，才在外层给 `--rel-heights`（倍数，如 `1.05,1,1`）。注意这**会改变该行格子的宽高比** ⇒ 该行面板被纵向拉伸（工具会因此告警）；要既改行高又不变形，得改画布宽或该行面板的纵横比。
+5. **行调用的 `--plot-margin` 用 4 值给**：给单值 `150` 会让该行块**上下也各留 150**（3 行合计多 900 px 边距）⇒ 成品高比 A4 多出 ~600 px。想"横向留白、竖向交给外层"就用 `0,m,0,m`（`top,right,bottom,left`）——**`m` 必须等于你格子模型里的 margin**（见条目 8），否则该行字号会漂移。
+6. **同纵横比的面板优先用"单次 flat 调用"**：逐行 + 外层只在各行纵横比**不同**时才必要。同纵横比硬走逐行时，行块自带的上下 margin + 字母带会把高度顶爆 A4——实测 2×3 逐行拼出 `4961 × 7618`（≠ 7016），外层强拉 `--height 7016` 则 `sy = 0.918`（纵向压缩 ~8%，触发 W1/W2）。同一批面板改用**一次 `--ncol 2` flat 调用** + `--width 4961 --height 7016` 即精确命中 A4、`sx = sy ≈ 1`。
+7. **字母带按行累加**：逐行加 `--labels` 且未显式给 `--plot-margin` 时，**每一行都自动留一条字母带** ⇒ 成品高 ≈ Σ(各面板按画布宽归一后的高) + 行数 ×(字母带 + 底部边距)。实测每行 ~150 px（S36：4 面板内容和 7650 px → 成品 8168 px，+6.8%）。**别把"成品高 ≠ Σ面板高"当出错**——拿成品高反推面板尺寸会系统性偏大。**若要成品高精确等于 Σ 面板高**：把这几张面板当"**一行内 n 格**"（一次调用给 `--labels A,B,C,D`），或先把它们拼成一整张面板再当单输入——两者都只留一条字母带（代价是失去逐行独立排版）。
+8. **行调用自动字母带的横向内缩 = 默认 `--plot-margin`（24）**：`s = 1` 成立的前提是"格子模型里的 margin"与"行调用留给字母带的边距"相等。若给行调用显式 `--plot-margin ≠ 24`（或用 4 值改了横向值）、或改画布宽使自动内缩 ≠ 24，该行面板就被 `(W−2m)/W ≠ 1` 缩放；协议**不缩放 `font-size`** ⇒ 该行字号漂移（W1 会报，但得有人读 stderr）。
 
-## 跑完必须读 stderr（工具会替你把静默错误喊出来）
+## 跑完必须读 stderr
 
-`plot-grid` 会在这几种"看着成功其实悄悄错"的情形告警（**非致命，退出码与产物都不变**）：
+`plot-grid` 把"看着成功其实悄悄错"的情形打成 stderr 告警（**W1–W7，一律非致命**：退出码与产物字节都不变）。
+**每条告警自己会说明"发生了什么 / 为什么重要 / 怎么修"**，照它给的修法改即可——本指南**不再逐条罗列**
+（清单、判据与容差理由见 `tools/svg_grid/ARCHITECTURE/warnings.md`）。所以：**跑完先看 stderr**，
+别只看产物在不在。
 
-- **某输入被缩放 ≠1**（>0.5%）→ 协议不缩放 `font-size`，该面板文字相对大小会随之改变（最常见的来源：外层拼装漏给 `--plot-margin 0`）；
-- **某格子被拉伸**（格子宽高比与面板画布宽高比差 >1%）→ 面板变形；修法是省略 `--rel-*`；
-- **给组合图重复加字母**（输入已含 `data-svg-grid-label` 又传 `--labels`）→ 重号/串位；
-- **`--labels` 个数与输入数不符**，或**字母重复**；
-- **字母会被画布裁掉**。
+- **量 `s` 时分清两层**："层内格级 `s`"（应为 1）与"原始面板 → 成品的总缩放"（= 归一化倍数，本来 ≠ 1）
+  是两回事，别把后者当成出错。
+- 转换器另会报一条**看着吓人、实际多无害**的告警（`<style>` CSS 块不被解析）：matplotlib 的 `<style>` 块
+  通常只声明 `stroke-linejoin`/`stroke-linecap` 这类**装饰**属性、没有东西需要重算。**判断方法**：打开该块
+  看一眼——出现长度 / `font-size` 才真的没被缩放。
 
-另外转换器会报一条**看起来吓人、实际多无害**的告警：
+## 出图端与调用方仍须自己做的四件事（工具管不了）
 
-```
-document contains a <style> CSS block; the composer does not parse CSS, so geometry/typography declared there is not rescaled
-```
+**其余"出图端坑"都已进工具**（mathtext/`<tspan>`、祖先 `<g transform>`、`textLength`、零面积描边路径、
+字形孔、`clipPath`、非等比 `<image>`）——正常链路里不会再遇到，遇到也会由 stderr 出声。仍归调用方的只有这四件：
 
-matplotlib 的 `<style>` 块通常只声明 `stroke-linejoin/stroke-linecap` 这类**装饰**属性（不含长度与字号）→ 没有东西需要重算，可忽略。**判断方法**：打开该块看一眼——若里面出现长度/`font-size`，那些值确实不会被缩放。
-
-**量 `s` 时分清两层**：多级流水线里"层内格级 `s`"（应为 1）与"原始面板 → 成品的总缩放"（= 归一化倍数，本来就不等于 1）是两回事，别把后者当成出错。
-
-所以：组图命令跑完后**先看 stderr**，有告警就按它给的修法处理，别只看产物在不在。
-
-> 老写法（手算画布高、把 `--rel-widths` 填成纵横比）**不再需要**：`--rel-*` 现在的语义是"乘在自然尺寸上的倍数"，沿用旧写法反而会引入比例错误。
-
-## 出图端常见的 8 类坑（本仓实测）
-
-组图本身稳,坑几乎全在**出图端**和**外源 SVG**。踩中任何一条,`svg_grid_convert` 要么 fail-closed、要么静默出坏图。
-
-1. **matplotlib 的自动 mathtext**:对数轴刻度、对数色标(`LogNorm`)的**默认 formatter** 会写出 `$\mathdefault{10^{n}}$`,落地成 `<g transform="translate(X Y)"><text><tspan x y>` 的逐字绝对坐标文本。**即使源码里一个 `$` 都没有也会出现**——这是容易忽略的隐藏来源。**现在转换器已能处理**:组图时会把伴随的**纯平移**烘平,并把 `<tspan>` 的 x/y **一并搬运**(逐轴独立,`dx/dy` 不动)。若仍想在源里去掉,可给对数轴与**色标轴**(`cb.ax`)套纯文本 formatter(`FuncFormatter` + `NullFormatter`,或直接用 Unicode 上标 `10⁻⁵`、`10²`),但**已不再是必需**。
-2. **多行文本的裸 `translate`**:**已支持**——多行文本落成 `<text transform="translate(x y)">`,包住它的**纯平移** `<g transform="translate(...)">` 同理;组图时平移会被烘进 `<text>`/`<tspan>` 的 x/y。只有祖先 `<g>` 带**缩放/旋转**时才仍 fail-closed(那时才需要拆成单行、或把变换下沉到元素自身)。
-3. **祖先 `<g transform>` 盖住 `<text>`**:**纯平移现在会被精确烘进** `<text>`/`<tspan>` 的 x/y 与 `rotate(a,cx,cy)` 中心,靠整块 `<g>` 平移挪图例/标注**不再需要**逐元素改写。只有祖先 `<g>` 带**缩放或旋转**时才仍 fail-closed。
-4. **R/`svglite` 的 `textLength`**:**已修复**——`--normalize-input-max-side` 现在把 svglite 写的 `textLength` 与 `font-size` **一起缩放**(含 `px` 后缀),不再有"缩了字号却把文字压扁、且 stderr 不报警"的静默错误,无需再手工乘因子。
-5. **竖版面板的归一化目标**:`--normalize-input-max-side` 的语义是"把输入的**长边**缩到 N",所以 N 要填该面板目标格的**长边** `max(格宽, 格高)`;横版面板才恰好等于格宽。填错会让 `s ≠ 1`。
-6. **纯描边 / 零面积路径**:从 PDF 或第三方工具来的"棒棒糖"杆、参考线、箭头,常是**无填充的细 `<path>`**。**工具侧已按 paint 语义定型**——`fill:none` 的路径会被输出成 `<polyline>`(不会当零面积多边形丢掉),且描边图元会被补上显式 `stroke-width`。**剩下的风险在调用方自己写的矢量手术脚本里**:matplotlib 的 `Path.to_polygons()` **默认 `closed_only=True`**,会把开放子轮廓(无 `Z`、末点≠首点)整批静默丢掉 → 必须传 `closed_only=False`,开放的按"仅描边"处理(输出 `<line>`/`<polyline>` + 显式 `stroke-width`),不要按零面积多边形处理。
-7. **`pdftocairo -svg` 的输出可否直接入流水线**:①`<clipPath>` 里是 `<path>` —— **已支持**:转换器把轴对齐矩形子轮廓改写成 `<rect>`(非轴对齐矩形的 clip 子轮廓仍 fail-closed);②`-x/-y/-W/-H` 裁切参数对 `-svg` **仍静默失效**(永远整页 viewBox,poppler 行为未变)→ 必须事后按 viewBox / `<g transform>` 裁;③`<use>` 引用的 `<image>` 带**非等比 matrix** —— **已支持**:任意轴对齐(含非等比)scale 都烘进 `x/y/width/height`,只有旋转/斜切才 fail-closed;④带孔字形(`O/0/8/9`)的 `<path>` 子轮廓 —— **已修复**:填充路径的全部子轮廓(外轮廓+内轮廓)合成**单条** `<polygon>` 并**保留源的 `fill-rule`**(不再拆成多条把孔填实),孔得以存活。→ 现在只剩 ② 需要绕行(事后按 viewBox 裁);其余可直接入流水线。
-8. **幂等核对看 PNG、不看 svgz**:matplotlib 会往 SVG 写 `<dc:date>`(并由此派生 clip-path id),同一输入重跑 `.svgz` **字节会变**;判据应是"PNG 逐字节/像素一致"。
+1. **`Path.to_polygons()` 默认丢开放子轮廓**：matplotlib 默认 `closed_only=True`，把无 `Z`、末点 ≠ 首点的
+   子轮廓**整批静默丢掉** ⇒ 传 `closed_only=False`，开放的按"仅描边"处理（`<line>`/`<polyline>` + 显式
+   `stroke-width`），不要当零面积多边形。
+2. **`pdftocairo -svg` 的 `-x/-y/-W/-H` 静默失效**（poppler 行为，产物永远整页 viewBox）⇒ 必须事后按
+   `viewBox` / `<g transform>` 裁。
+3. **幂等核对看 PNG、不看 svgz**：matplotlib 往 SVG 写 `<dc:date>`（并由此派生 clip-path id）⇒ 同一输入
+   重跑 `.svgz` **字节会变**；判据应是"PNG 逐字节/像素一致"。
+4. **CJK 面板的静默缺字**：matplotlib 的 `font_manager` **默认不索引 `.ttc` 字体集合**，而本机 CJK 字体只以
+   `.ttc` 存在 ⇒ `font.serif = "Noto Serif CJK SC"` **匹配不上**、静默回落到无 CJK 字形的 `DejaVu Serif`
+   （PNG/SVG 照出、退出码 0，只在 stderr 冒 `UserWarning: Glyph NNNNN missing from font(s) ...`）。
+   - ① 出图脚本开头 `fontManager.addfont("/usr/share/fonts/opentype/noto/NotoSerifCJK-Regular.ttc")`，
+     并用**注册后的 face 名**（实测是 `Noto Serif CJK JP`，**不是**文件名里的 `SC`）；
+   - ② **字形覆盖逐符号查**：CJK 字体集不含 `⋔ ⊣ ⊸ ⊥ ⊤` 这批数学/转向符号，而 matplotlib 只对**整段文本**
+     选一个 family、**不逐字回退** ⇒ 缺哪个静默丢哪个（实测 `⊣` 整字消失，改用 `—|`）；
+   - ③ 交付前把 `Glyph ... missing` **一律当失败**（死白带检查只查"有没有墨"，查不出"该有的字没画出来"）；
+     别把它跟其它 warning 一起 `grep -v` 掉。
 
 ## 交付前核查
 
-- [ ] 每个格子 `sx = sy ≈ 1`（若不为 1，须能说明为什么以及文字比例是否仍可接受）
-- [ ] 每个格子**宽高比 == 面板画布宽高比**（防变形）；可用"背景多边形落在预期格子矩形上"断言
-- [ ] 转换产物里**不再有** `<path>` / `<use>` / `<g transform>` / 带 transform 的 `<image>`
-- [ ] 没有靠默认值描边的图元（放大后会是发丝线）；每个描边图元都有显式 `stroke-width`
-- [ ] 字母：serif 常规体（**默认是 sans-serif + 粗体，需显式覆盖**）、墨宽占画布宽 1.8–2.2%（`A`）、位于面板左上外侧、不重叠、**不被画布边缘裁掉**
-- [ ] 渲染出的 PNG 里内嵌 `<image>` 区域**确实有内容**（唯一颜色数远大于 1）
-- [ ] 热图类面板**行序与参考图一致**（`imshow` 默认 `origin="upper"`、`pcolormesh` 默认 `"lower"`，换画法会上下翻转——**散图之间必须自洽，组图不替你做内容修正**）
-- [ ] 无 ≥200 px 的整行/整列纯白带（以成品实测，不靠肉眼）
-- [ ] 字母是**逐行显式给**的（`AUTO` 每次调用从 A 重新编号，靠它排 A–F 会重号）
-- [ ] 外层拼装给了 `--plot-margin 0`（否则行块被静默缩 ~1%）
-- [ ] 量 `s` 时分清了"层内格级 `s`"（应=1）与"原始→成品总缩放"（≠1 正常）
-- [ ] 一行内单个面板过小时，字号是否已低于期刊可读下限（~5–6 pt）——若是，**回到出图端按目标尺寸重画**，不要靠组图硬拉
-- [ ] 最后**用 vision 打开成品图**逐块看一遍（通用规则见 `05_checklist.md`）
+逐条自查见 `05_checklist.md`（内容 / 版式 / 程序化 / 落盘 / 观感五项，**vision 目视成品图是硬步骤**）。
+本路线专有的不变量已并入上面的「硬规则」表与「交付前必须成立的 5 件事」；程序化判据**只跑一个脚本**：
+
+```bash
+~/.venv/bin/python tools/svg_grid/scripts/check_deliverable.py <成品.png> --margin <本图预算> [--gap]
+```

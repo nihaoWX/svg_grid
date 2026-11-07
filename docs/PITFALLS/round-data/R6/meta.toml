@@ -1,0 +1,25 @@
+# R6 的 round-data —— 宽松化口径 / 恒真检查的删除（含对 R4 证据的 **touched**）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R6"
+verdict = "复发"          # 改的是 R4（W6/判据脚本）与 R5（path）碰过的位置
+family = ["内容越界静默（W6 的可用性）", "判据恒真（死重量）", "解析宽严口径"]
+closures = [
+  { finding = "R6-F1", tier = "代码" },   # path 宽松化（用户裁决）
+  { finding = "R6-F2", tier = "代码" },   # 新增 W7（聚合、非致命）
+  { finding = "R6-F3", tier = "代码" },   # W6 微尘提示（不改判据）
+  { finding = "R6-F4", tier = "检查" },   # 删掉恒真的检查 2
+  { finding = "R6-F5", tier = "代码" }    # 体积拆分（下一轮 R7 执行）
+]
+run_before = ["R4", "R5"]   # 动 W6 报文 / path 臂 / 判据脚本前，先跑这两轮的证据
+touched = ["R4"]            # R6 改了 R4 证据引用的脚本：R4 的 test.py 文案与 meta 已同步（断言本身是 rc==0）
+note = """
+为什么认定同类：三件都落在 R4/R5 刚碰过的位置——W6 的报文体、path 的解析臂、以及 R4 建的判据脚本；而同族的老毛病是"**结论对了但噪音/口径不对**"（R4 那条记录里就写着"检查 2 恒真、待裁决"）。
+根因与建议修法：已证。① **W6 的容差不该放宽**（1.5 px 也是真越界、F2 那种 1 px 必须抓得到）⇒ 改为"报文自报优先级"（全部 < 2 px 时加一句提示），判据一字不动；② **path 的严格解析把"以前能跑通的输入"变成整图 exit 1**（通配面收窄）⇒ 按用户裁决改成"警告 + 原样透传"（新增 W7；非有限数值同办），**但"属性串根本不成形"仍 fail-closed**；③ **恒真的检查是死重量** ⇒ 删掉"内容未触边"（对位图恒真），把它的 bbox 并进"外框 2 px 墨迹 = 0"。
+怎么修才不弄坏前面：动 `src/warnings.rs`（W6/W7）、`src/transform.rs`（path 臂与非有限检查）、`scripts/check_deliverable.py` 之前，先跑本目录 test.py；它盯的是「畸形 d 必须 rc=0 且 `d` 原样」「rect x=abc 必须仍 exit≠0」「1.5 px 有提示、32 px 没有」「脚本两条检查」。**另：R4/R5 的 test.py 也一并跑**（R6 改了 R4 引用的脚本 ⇒ 已声明 touched）。
+（本目录无 data/：fixture 在临时目录自合成。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R6 && python3 test.py
+# rc=0 = 全过。需要已构建的二进制 tools/svg_grid/target/{debug,release}/svg_grid（缺则 cargo build --offline）
+# 与 ~/.venv 里的 numpy + Pillow（判据脚本那部分）。秒级、离线、不写仓库。
+"""

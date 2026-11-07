@@ -3,3 +3,12 @@ __pycache__/
 
 tests/s22_repro/out/
 tests/fig2_mixed/out
+
+# Font library: the font files themselves are NOT tracked (Arial / Times New Roman
+# are Microsoft fonts — shipping them in a public repo is not allowed). The two text
+# files that describe / rebuild the library ARE tracked, so only the binaries are
+# ignored: `fontlib/setup.sh` copies them from the local machine.
+fontlib/*.ttf
+fontlib/*.otf
+fontlib/*.ttc
+fontlib/*.otc

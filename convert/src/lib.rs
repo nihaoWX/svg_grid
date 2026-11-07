@@ -65,7 +65,7 @@ mod warnings;
 #[cfg(test)]
 mod test_support;
 
-pub use cli::run;
+pub use cli::{run, run_args, run_in};
 pub use dom::{Element, Node};
 pub use error::{ConvertError, Finding};
 pub use options::{Conversion, Converted, Options, Report};

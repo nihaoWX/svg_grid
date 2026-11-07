@@ -1,0 +1,27 @@
+# R13 的 round-data —— 字体库 `fontlib/`：来源唯一 + 默认 Arial + 缺族出声
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R13"
+verdict = "新领土"        # 用户新提的要求（字体只从 fontlib/ 读、字母默认 Arial），不是某缺陷复发
+family = ["字体来源不可复现（本机系统字体库）", "面板字母的字体没有默认口径、缺族静默回退"]
+closures = [
+  { finding = "R13-F1", tier = "代码" },   # 只读 fontlib + 默认族 Arial + --font-dir/--list-fonts + W8 + 空库 fail-closed
+  { finding = "R13-F2", tier = "规则" }    # skill 文案（字母字体可调/默认值/字体目录/查族/回退链）+ 两副本同步
+]
+run_before = ["R9", "R10"]   # 动渲染/字母/指南之前：R9 盯"正常路径零输出"，R10 盯两副本逐字节一致
+touched = []
+note = """
+为什么认定同类：两条都属"**成品取决于环境而不是资产**"——① 字体来自宿主机系统字体库，换机器/CI 就变；
+② 字母字体没有默认口径，族名写错静默回退（实测不存在的族名与 `serif` **逐像素相同**、无一条告警）。同族于 R10
+（同一份文件的两个位置 ⇒ 结果取决于你从哪儿跑）。
+根因与建议修法：已证。① 字体来源唯一 = `fontlib/`，代码里不再有 `load_system_fonts`，resvg 的 `system-fonts`
+feature 已去掉（连"顺手读系统"的路都断掉）；② 默认族 `Arial`（字母 + 渲染库的无声明默认族）；③ 缺族 ⇒ **W8**
+（英文、三要素、带 Fix、非致命）；④ 空库且真的要字体 ⇒ fail-closed（配置错，不是输入畸形）。
+怎么修才不弄坏前面：动渲染/字母/指南之前先跑 R9（正常路径必须零输出）与 R10（两副本 `diff -r` 必须空）；
+本 test.py 另把上面四条 + "干净路径 stderr 0 字节" + 回归 R4–R11 一起钉住。`fontlib/` 为空时跳过字体相关断言并**打印原因**。
+（本目录无 data/：fixture 在临时目录自合成，字体来自仓库的 `fontlib/`。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R13 && python3 test.py
+# rc=0 = 全过。需要 target/debug/svg_grid（cargo build --offline）与已填充的 fontlib/（fontlib/setup.sh）。
+# 秒级、离线、只读。
+"""

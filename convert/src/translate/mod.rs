@@ -18,7 +18,9 @@
 //!    (`<path>` → `<rect>`).
 //! 3. **`<use>`/`<defs>` expansion** (`uses`) — each `<use>` becomes a `<g
 //!    translate>` wrapper around a copy of the referenced element; unreferenced
-//!    `<defs>` content is dropped (only `<clipPath>`/`<style>` survive).
+//!    `<defs>` content is dropped (only what a `url(#…)` can point at survives:
+//!    `<clipPath>`, `<style>` and the paint servers `<linearGradient>` /
+//!    `<radialGradient>` / `<pattern>` — see `uses::REFERENCE_TARGETS`).
 //! 4. **`<image>` baking** (`image`) — a pure translation and any axis-aligned
 //!    scale (uniform or not, optionally with a flip) are baked into the box
 //!    `x`/`y`/`width`/`height`; a negative scale decodes the embedded PNG, flips
@@ -188,6 +190,42 @@ mod tests {
             "{}",
             done.svg
         );
+    }
+
+    #[test]
+    fn defs_paint_servers_survive_with_their_references() {
+        // Round-data/R16: dropping a paint server while keeping `fill="url(#…)"`
+        // paints nothing at all — the shapes vanish silently (rc 0, no warning).
+        let done = converted(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<defs><linearGradient id='g' gradientUnits='userSpaceOnUse' x1='0' y1='0' x2='10' y2='10'><stop offset='0' stop-color='#ffffff'/></linearGradient></defs>
+<defs><radialGradient id='r' gradientUnits='userSpaceOnUse' cx='5' cy='5' r='4'><stop offset='1' stop-color='#000000'/></radialGradient></defs>
+<rect x='1' y='2' width='5' height='6' fill='url(#g)'/>
+<circle cx='9' cy='9' r='2' fill='url(#r)'/></svg>"#,
+        );
+        assert!(done.svg.contains("<linearGradient"), "{}", done.svg);
+        assert!(done.svg.contains(r#"id="g""#), "{}", done.svg);
+        assert!(done.svg.contains("<radialGradient"), "{}", done.svg);
+        assert!(done.svg.contains(r#"id="r""#), "{}", done.svg);
+        assert!(done.svg.contains("url(#g)"), "{}", done.svg);
+        assert!(done.svg.contains("url(#r)"), "{}", done.svg);
+    }
+
+    #[test]
+    fn pattern_body_is_translated_like_any_other_geometry() {
+        // The `<pattern>` body is reached only through a reference, but it is still
+        // drawn: its `<path>` must become a polyline/polygon like any other, or the
+        // converter's own residue check refuses the output (round-data/R16).
+        let done = converted(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<defs><pattern id='p' patternUnits='userSpaceOnUse' x='0' y='0' width='4' height='4'>
+<path d='M 0 0 L 4 4' style='fill: none; stroke: #000000'/></pattern></defs>
+<rect x='0' y='0' width='20' height='20' fill='url(#p)'/></svg>"#,
+        );
+        assert!(done.svg.contains("<pattern"), "{}", done.svg);
+        assert!(done.svg.contains("url(#p)"), "{}", done.svg);
+        assert!(!done.svg.contains("<path"), "{}", done.svg);
+        assert!(done.svg.contains("<polyline"), "{}", done.svg);
     }
 
     /// 8x4 RGB PNG with a red top row and a blue bottom row (a clear vertical

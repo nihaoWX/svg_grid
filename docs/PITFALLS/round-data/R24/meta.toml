@@ -1,0 +1,52 @@
+# R24 的 round-data —— I/O 报错必须点名文件（评估报告 M5 中"报错自给自足"的那一半）
+#
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R24-IO报错点名文件.md`。
+id = "R24"
+verdict = "新领土"
+
+family = [
+  "一次组图要读 N 个输入、写最多 4 个输出；任何一处 I/O 失败原先只报操作系统那句话（`I/O error: No such file or directory`），**不说哪个文件** —— agent 拿到报错无法判断是输入路径写错、输出目录不存在，还是某个中间文件的问题，只能逐个试。",
+  "形状还不统一：PNG 写入失败被归成 `rasterization error: failed to write PNG <p>: …`，AVIF 是裸的 `I/O error: …`（不带路径）。",
+  "同族于 R14（退出码分档：错误类型要能自证）—— 本轮解决的是同一件事的另一半：**错误要说清发生在哪个文件上**。",
+]
+
+closures = [
+  { finding = "R24-F1", tier = "代码" },   # error.rs：Io 带 Option<PathBuf>；at() 构造；两种显示形状 + 单测
+  { finding = "R24-F2", tier = "代码" },   # input.rs / output.rs / raster.rs：读输入、写 svg/svgz/png/avif 全走 at()
+  { finding = "R24-F3", tier = "代码" },   # doctor：语料清单/目录读失败也点名（-keep 目录创建失败同理）
+  { finding = "R24-F4", tier = "检查" },   # 本证据六族
+]
+
+# 本轮改了错误类型与四条输出路径的报错形状，故回归「错误/退出码」与「doctor/安装」两面的旧轮。
+run_before = ["R14", "R15", "R17"]
+
+touched    = []   # 旧证据没有一条断言过这些文案（grep 过 `I/O error` / `failed to write PNG`：0 命中）
+
+note = """
+为什么认定同类：R14 把「失败属于哪一档」写进错误类型（退出码 1/2/3）；本轮把「失败发生在哪个文件」写进去。
+  两者都是「错误必须自证」：读者不该靠试错去定位。
+根因与修法：已证。
+  ① `SvgGridError::Io` 从元组变结构体：`Io { path: Option<PathBuf>, source }`；新增 `SvgGridError::at(path, error)`；
+     `From<std::io::Error>` 保留（path = None）给确实没有路径的情形（`current_exe`）。
+     Display：有路径 ⇒ `I/O error at <path>: <os error>`；无路径 ⇒ 旧形状 `I/O error: <os error>`。
+     `exit_code()` 仍是 1，`source()` 仍返回原 io::Error（不吞原因）。
+  ② 有路径的地方全部改走 `at()`：读输入（含 `.svgz` 的 gzip 解码失败）、写 `.svg`、写 `.svgz`（含 gzip 编码失败）、
+     写 `.png`、写 `.avif`、读语料清单、读语料目录、创建 `--keep` 目录。
+     PNG 写入从 `rasterization error` 归到 I/O（它本来就是 I/O；编码失败仍归 Raster）。
+  ③ `src/` 里不再出现元组形式 `SvgGridError::Io(`（测试里也一并改），这条由本轮的断言 ⑤ 守住。
+证据（本机实测，`round-data/R24/test.py`）：
+  · 读输入失败 ⇒ `I/O error at <那个输入>: No such file or directory`，rc=1，仍是一行。
+  · `.svg` / `.svgz` / `.png` / `.avif` 四条输出各自失败时，stderr 都含**它自己的**目标路径、rc=1，
+    形状统一 `svg_grid: I/O error at <path>: …`（PNG 也统一了）。
+  · 坏掉的 `.svgz` 输入 ⇒ stderr 含该 `.svgz` 路径。
+  · 退出码分档没被改坏：未转换的原始 fixture 仍是 `invalid input` rc=2；语料目录不存在仍 rc=3。
+  · `cargo test --lib error::` 2 条过（两种显示形状）；`cargo test` 65 + 57 + 73 全绿；`fmt`/`clippy -D warnings` 干净。
+  · 回归：R14（退出码分档/字体解析）、R15（安装器）、R17（doctor 全量）全绿。
+边界（照实说）：`convert` crate 有自己的错误类型，但它读/写失败的文案本来就带路径（`failed to read <p>: …`），
+  本轮未动它；若将来要统一形状，应在它自己的 crate 里改并同步它自己的证据。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R24 && python3 test.py   # rc=0 = 全过
+前置：`cargo build --offline`（要 `target/debug/svg_grid` 与 58 张语料）。
+无参数；约 11 分钟（⑥ 里 R17 自己会跑更早的轮次）。只读：临时产物只在系统临时目录。
+"""

@@ -1,8 +1,11 @@
 //! `<use>` → `<defs>` expansion.
 //!
 //! Each `<use>` becomes a `<g translate>` wrapper around a copy of the
-//! referenced element; unreferenced `<defs>` content is dropped (only
-//! `<clipPath>`/`<style>` survive).
+//! referenced element; unreferenced `<defs>` content is dropped. What survives is
+//! what a `url(#…)` reference can point at: `<clipPath>`, `<style>`, and the paint
+//! servers (`<linearGradient>`/`<radialGradient>`/`<pattern>`) — dropping those
+//! leaves every `fill="url(#…)"` dangling and the shapes silently unpainted
+//! (round-data/R16).
 
 use std::collections::HashMap;
 
@@ -156,6 +159,20 @@ fn merge_presentation(use_element: &Element, clone: &mut Element) {
     }
 }
 
+/// `<defs>` children that are *not* drawn where they sit but are the ink of the
+/// shapes that reference them through `url(#…)`, so they must survive.
+///
+/// `style` is kept for the CSS report, `clipPath` for clipping; the paint servers
+/// are the ones whose loss is silent — a `fill="url(#pat-0)"` whose
+/// `<linearGradient>`/`<radialGradient>`/`<pattern>` is gone paints **nothing**.
+const REFERENCE_TARGETS: [&str; 5] = [
+    "clipPath",
+    "style",
+    "linearGradient",
+    "radialGradient",
+    "pattern",
+];
+
 pub(super) fn prune_defs(element: &mut Element) {
     let mut out = Vec::with_capacity(element.children.len());
     for node in std::mem::take(&mut element.children) {
@@ -164,7 +181,7 @@ pub(super) fn prune_defs(element: &mut Element) {
             if child.name == "defs" {
                 child.children.retain(|node| {
                     matches!(node, Node::Element(child)
-                        if child.name == "clipPath" || child.name == "style")
+                        if REFERENCE_TARGETS.contains(&child.name.as_str()))
                 });
                 if child.children.is_empty() {
                     continue;

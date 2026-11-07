@@ -1,0 +1,58 @@
+# R23 的 round-data —— Windows 的安装面：数据根跨平台 + 一份可照做的手动指引
+#
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R23-Windows安装与数据根适配.md`。
+id = "R23"
+verdict = "新领土"
+
+family = [
+  "`install.sh` 是 bash + rsync + chmod，只适用于 Linux/macOS：**Windows 用户没有任何安装路径**，README 只有一句「在 win/linux/macOS 编译它」。",
+  "运行时的**数据根只认 `HOME`**（`raster.rs` 与 `cli/doctor/mod.rs` 各写一遍）；Windows 的 cmd/PowerShell 不设 `HOME`、只有 `USERPROFILE`，于是数据根退化成相对路径 `svg_grid\\fontlib` —— 装好了也永远找不到字体/语料，而且两处各写一遍，容易只改一处。",
+  "文档里写死 `~/`、`~/.local/bin`：Windows 读者要自己翻译。同族于 R2x 的「交付面」问题（R18 少一个二进制、R22 少一半 skill）：本轮是**少一个平台**。",
+]
+
+closures = [
+  { finding = "R23-F1", tier = "代码" },   # src/home.rs：HOME → USERPROFILE（空值跳过）；字体与语料共用
+  { finding = "R23-F2", tier = "规则" },   # docs/install-windows.md：不脚本、不预编译，本机编译 + 手动就位
+  { finding = "R23-F3", tier = "规则" },   # README「安装」段：Linux/macOS 一条命令；Windows 指路；数据根两平台
+  { finding = "R23-F4", tier = "默认" },   # --help / doctor 文案改说 <home>/svg_grid，并注明 %USERPROFILE%
+  { finding = "R23-F5", tier = "检查" },   # 本证据六族 30 条
+]
+
+# 本轮动了库的数据根解析（raster）、doctor 的语料定位与两处文案，故回归字体面与 doctor 面。
+run_before = ["R14", "R15", "R17"]
+
+touched    = []   # 旧证据的断言一条都没改（R14/R15/R17 全绿）
+
+note = """
+为什么认定同类：R18（交付面少一个二进制）、R22（发布面少一半 skill）、本轮（交付面少一个平台）——
+  都是「装完之后，用户/A 该有的东西是不是都在」。根因不在功能而在**边界**：安装器与数据根都是按 Linux 写的。
+根因与修法：已证。
+  ① 数据根解析抽成 `src/home.rs`：`home_dir()` = `HOME` → `USERPROFILE`，空值跳过；
+     `data_root()` = `<home>/svg_grid`，两者都没有时退相对 `svg_grid`（**不会**变成 `/svg_grid`）。
+     `raster::data_root_font_dir()` 与 `doctor` 的语料定位都改走它 ⇒ 「家在哪儿」只有一份实现。
+     顺序与空值规则由纯函数 `pick()` 承载，三条单测（HOME 优先 / USERPROFILE 回退 / 空值穿透）。
+  ② `docs/install-windows.md`：**不提供脚本、不预编译二进制**（用户裁决）——本机 `cargo build --release`，
+     然后手动就位 exe→PATH、字体→`%USERPROFILE%\\svg_grid\\fontlib`、语料→`…\\fixtures`、
+     skill→`%USERPROFILE%\\.commandcode\\skills\\general-figure-guide`；末尾四条可判定验收 + 常见问题表 + 更新步骤。
+  ③ README 新增「安装」段：Linux/macOS 一条 `install.sh`（幂等、`--check`），Windows 指向上面那份；
+     并说明两平台的数据根分别是 `~/svg_grid` 与 `%USERPROFILE%\\svg_grid`。
+  ④ 面向 agent 的文案不再写死 `~/`：`--help` 的字体与语料两段都写 `<home>/svg_grid/…` 并注明
+     `%USERPROFILE% on Windows`；`doctor` 的「没有语料」报错补一句 Windows 怎么放语料，且**仍是一句话一行**。
+  ⑤ 裁决入判据：仓库里没有 `install.ps1` / `.bat` / `.cmd`，也没有入库的 `*.exe`。
+证据（本机实测，`round-data/R23/test.py`，30 条）：
+  · 只有 `USERPROFILE` ⇒ 报错里的字体目录是 `<USERPROFILE>/svg_grid/fontlib`；
+    只有 `HOME` ⇒ `<HOME>/svg_grid/fontlib`；两者都有 ⇒ 取 `HOME`；都没有 ⇒ 相对 `svg_grid/fontlib`。
+  · `cargo test home::` 3 条过；`raster.rs` 与 `doctor` 里都不再有 `var_os("HOME")`。
+  · `docs/install-windows.md` ≤ 20 KB 且九处关键步骤都在；README 的「安装」段与相对链接可解析。
+  · `--help` 不再出现 `$HOME/svg_grid`；`doctor --fixtures <不存在>` 仍 exit 3、报错仍是单行、含 `%USERPROFILE%` 与 `Windows`。
+  · `git ls-files '*.exe'` 为空；工具目录无 `install.ps1`/`.bat`/`.cmd`。
+  · 回归：R14（字体解析不变式）、R15（安装器报告与 `--dry-run`）、R17（doctor 全量）全绿。
+边界（照实说）：Windows 上的**真实**编译/运行没有在本机验过（本机是 Ubuntu）。可以机械保证的是
+  数据根解析顺序、文档内容完整性、以及"没有 Windows 脚本/预编译二进制"这条裁决；Windows 的编译链
+  （MSVC）与字体文件名属于工具链/系统事实，按官方文档写出，未实测。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R23 && python3 test.py   # rc=0 = 全过
+前置：`cargo build --offline`（要 `target/debug/svg_grid`）；② 会跑 `cargo test home::`。
+无参数；约 1 分钟。只读：不写仓库、不建目录。
+"""

@@ -19,11 +19,41 @@ R和python的组图很割裂，R的ggplot2系统和python的matplotlib不互通�
 - 仿照cowplot的丝滑组图体验：作者偏好cowplot的组图逻辑，因此本svg_grid的组图逻辑跟它很接近，本库开发的目的也是尝试弄一个cowplot通用版，因为cowplot只能在R使用（R的grob和ggplot2对象与python不互通）。
 - svg适合人工调整：如果agent的图你怎么都不满意，svg本身也适合人工编辑，可以使用inkscape这款免费软件编辑。
 
+# 安装
+
+三个平台都是**在你自己的机器上编译**（仓库不发布预编译的 Windows 二进制）。装好后 `svg_grid` 直接在 PATH 上可用，
+组图 skill 也装进 agent 的 skill 目录。
+
+**Linux / macOS** —— 一条命令做完：编译、装唯一的那个二进制、装 skill、装语料与字体（字体从本机复制，不入库）：
+
+```bash
+git clone <repo-url> && cd <repo>
+bash tools/svg_grid/install.sh
+# 之后：svg_grid doctor    （自检：57 pass / 0 fail / 1 skip）
+```
+
+再跑一次是幂等的；`bash tools/svg_grid/install.sh --check` 只读自检（二进制是否最新、skill 是否与源一致）。
+
+**Windows** —— 没有安装脚本（bash + rsync 的分叉不值得维护），改为手动四步：编译 → 放进 PATH → 复制字体 →
+复制语料/skill：
+
+```powershell
+cd tools\svg_grid
+cargo build --release
+```
+
+完整步骤（PATH、`%USERPROFILE%\svg_grid`、字体、语料、skill、`doctor` 自检、常见问题）见
+**[docs/install-windows.md](docs/install-windows.md)**。
+
+> 两个平台的数据根都是用户级的 `svg_grid/`：Linux/macOS 是 `~/svg_grid/`，Windows 是 `%USERPROFILE%\svg_grid\`
+> （运行时按 `HOME` → `USERPROFILE` 解析）。里面只有两样：`fontlib/`（字体）与 `fixtures/`（自检语料）。
+
 # 怎么用
 
-- 先克隆仓库
-- 在win/linux/macOS编译它
-- 然后阅读这个skill，agent自己会懂：svg_grid/docs/general-figure-guide。或许需要自己调整一下，因为这个skill以及svg_grid仍在开发
+- 编译/安装见上
+- 然后阅读这个 skill，agent 自己会懂：`svg_grid/docs/general-figure-guide`（`install.sh` 会把它装进
+  `~/.commandcode/skills/general-figure-guide/`）。或许需要自己调整一下，因为这个 skill 以及 svg_grid 仍在开发
+- 命令行入口：`svg_grid --help`（组图 `plot-grid`、方言转换 `convert`、自检 `doctor`）
 
 # 注意事项
 

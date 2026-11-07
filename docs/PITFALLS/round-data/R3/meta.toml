@@ -1,0 +1,40 @@
+# R3 的 round-data —— **补记**：R3 当时没有留下可跑证据（2026-09-27 那会儿还没立 round-data 纪律）。
+#
+# R3 的事实（findings、闭包档位、报告出处）**唯一来源仍是账本**——用
+#   pitfalls-manager query tools/svg_grid/docs/general-figure-guide/references/02a_svg_grid_assembly.md --repo tools/svg_grid
+# 取。本目录只补它缺的那一半：一份**可跑**的证据，防止"删掉一句等于删掉一个结论"。
+id = "R3"
+verdict = "复发"          # 原判：与 R1-F7 同类（同一份文档的缺口反复出现）
+
+family = [
+  "R3 的闭包全是**文档缺口**类：不改代码，只把 svg_grid 的静默失败与尺度陷阱写进 02a（坑 9 的 W1 缩放、同一行同宽同高、--plot-margin 单值/四值、外层必须显式 0、同纵横比优先单次 flat、字母带按行累加、行调用 24 内缩、data-panel-box 不当面板数）。",
+  "这类结论没有运行时可断言的对象 —— 能机械判定的只有「这些话还在不在」。所以证据按**语义锚点**（不是行号）逐条 grep。",
+]
+
+closures = [
+  { finding = "R3-F1", tier = "规则" },
+  { finding = "R3-F2", tier = "规则" },
+  { finding = "R3-F3", tier = "规则" },
+  { finding = "R3-F4", tier = "规则" },
+  { finding = "R3-F5", tier = "规则" },
+  { finding = "R3-F6", tier = "规则" },
+  { finding = "R3-F7", tier = "规则" },
+  { finding = "R3-F12", tier = "wontfix" },   # 账本原判：已覆盖、不改
+]
+
+run_before = []           # 本轮只补证据、不改任何东西
+touched    = []           # 没有旧证据被改
+
+note = """
+为什么补而不是 retire：账本把 R3 判为「复发（recurrence）」，而 `retire --kind no-evidence` 只该用于
+  「那一轮从来没有、也不会有可跑证据」的悬空引用 —— 用它把「已判复发却没证据」抹掉等于逃避自检。
+  本轮就按规则补证据。
+为什么锚点而不是行号：R3 记的 lines_after = 128 / 136 / 145-148 / 186-189 早已随 R20/R21 的编辑漂走；
+  行号一漂，证据就成了噪声。锚点选的是"只有这一层意思"的短语（11 条，对应 F1–F7）。
+边界（照实说）：本证据只能保证"这些结论**还写着**"，不能保证"这些结论**仍然正确**" ——
+  后者要靠 `doctor` 与 02a 里那些可跑判据；两者分工不同，故不去假装能测。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R3 && python3 test.py    # rc=0 = 全过；失败逐条打出锚点
+无参数、秒级、离线、只读（只读 02a 与两副本做比对）。
+"""

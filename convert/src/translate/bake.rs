@@ -58,9 +58,26 @@ fn bake_element(
     }
 
     match element.name.as_str() {
-        // `<defs>` holds the `<clipPath>` rectangles, which must stay in the
-        // (root) coordinate system of the geometry they clip.
-        "defs" => out.push(Node::Element(element.clone())),
+        // `<defs>` is not drawn where it sits: its content is reached through a
+        // reference. It still needs the same leaf rewrites as in-place geometry —
+        // a `<pattern>` body is a `<path>`/`<rect>` that must become a
+        // polyline/polygon like any other (round-data/R16) — but it lives in the
+        // *referencing* element's user space, so the accumulator is reset: an
+        // ancestor transform on `<defs>` does not move the pattern content.
+        // `<clipPath>` boxes are handled by `rectify_clip_paths`/`apply_clip_refs`:
+        // this recursion does not descend into a `<clipPath>` (its own children are
+        // only matched as `_` here).
+        "defs" => {
+            bake_children(&mut element.children, Affine::IDENTITY, clip_refs)?;
+            out.push(Node::Element(element.clone()));
+        }
+        // A `<pattern>` body is drawn once per tile in the *referencing* element's
+        // user space, so its `<path>`/`<rect>` children get the same leaf rewrites
+        // with the accumulator reset (round-data/R16).
+        "pattern" => {
+            bake_children(&mut element.children, Affine::IDENTITY, clip_refs)?;
+            out.push(Node::Element(element.clone()));
+        }
         "g" => {
             element.remove_attr("transform");
             bake_children(&mut element.children, world, clip_refs)?;

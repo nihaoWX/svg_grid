@@ -1,0 +1,57 @@
+# R22 的 round-data —— `install.sh` 装两件事：二进制度 + **随工具发布的 skill**
+#
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R22-装二进制也要装skill.md`。
+id = "R22"
+verdict = "新领土"
+
+family = [
+  "`install.sh` 只装二进制（+ 语料 + 字体）：装完之后 harness 的 skill 目录里没有 `general-figure-guide`，别的会话根本触发不到这份组图工作流 —— 工具"装了"，但 agent 发现不了它。",
+  "guide 是**规范源 + 复制件**两份，可两者都只服务"能在仓库里读到"的场景；agent 真正读的是 harness 装好的那份。",
+  "二进制的三件事（幂等 / `--dry-run` 零写入 / 可判定验收）在 skill 这一半全都没有：装没装、是不是最新、有没有混进开发侧文件，没有任何机械判据。",
+  "同族于 R18（能力齐、交付面缺一个）与 R17（自检没有入口）：本轮是**发布面缺一半**。",
+]
+
+closures = [
+  { finding = "R22-F1", tier = "代码" },   # install.sh 第 3 步：白名单拷贝 → harness skill 目录（--project ⇒ 项目级）
+  { finding = "R22-F2", tier = "检查" },   # install.sh --check：binary / skill 逐字节 + 无多出 / location
+  { finding = "R22-F3", tier = "规则" },   # ARCHITECTURE/install.md：契约表加这一步 + "改了 guide 也要重跑"
+  { finding = "R22-F4", tier = "检查" },   # 本证据六族
+]
+
+# 本轮改了 install.sh（报告多一行 `skill:`、新增 --project/--no-skill/--check），故回归安装面的旧轮。
+run_before = ["R15", "R18"]
+
+# R15 的"报告正好五行（version/installed/fixtures/fonts/PATH 各一行）"随本轮变成六行
+# （多了 skill 一行）——这是**期望值变化**，不是放宽：条的语义不变，只加一类事实。
+touched    = ["R15"]
+
+note = """
+为什么认定同类：R18 是"要交付的东西多了一个"，本轮是"要交付的东西少了一半" —— 都属**发布面**：
+  装完这台机器上，agent 该看到的东西是不是都到位了。同族于 R17（自检能力齐、入口缺）。
+根因与修法：已证。`install.sh` 从"装二进制 + 数据"变成"装二进制 + **skill** + 数据"，
+  照 `tools/agent-tool-design/references/tool-install.md` 的形状（参考实现是 `tools/pitfalls-manager/install.sh`）：
+  ① 白名单拷贝（`SKILL.md` + `references/`，**不拷** `ARCHITECTURE*/src/docs/PROGRESS.md`），
+     目标 `~/.commandcode/skills/general-figure-guide/`，`--project <dir>` ⇒ `<dir>/.commandcode/skills/…`，
+     目录名取自 `SKILL.md` 的 `name:`（不一致 harness 会静默跳过）；
+  ② **拷贝不用软链**（外部使用者 clone 下来没有开发树，软链必断）；
+  ③ 幂等：先在 `$skills_root` 内 `mktemp -d` 暂存 → `diff -r` 比较 → 一致就 `up to date`、不动一字节；
+     不一致才「旧目录 `mv` 开 → 新目录 `mv` 到位 → 删旧」（原子替换，避免半装状态）；
+  ④ `--check`：只读、不编译、不写，逐项 `OK:`/`FAIL:`，任一不满足 `exit 2` 并给 `fix:`
+     —— 二进制 sha256 == 最近一次 release 产物、skill 与源逐字节一致且**没有多出**开发侧文件、目标目录确实是
+     `<root>/.commandcode/skills/<name>`；
+  ⑤ `--no-skill` 只跳过这一步（其余照装），`--dry-run` 只打印 `would install skill …`。
+证据（本机实测，`round-data/R22/test.py`）：
+  · `bash install.sh` 之后 `~/.commandcode/skills/general-figure-guide/` 只有 **8** 个白名单文件，
+    与 `docs/general-figure-guide/` **逐字节一致**；目录名 == `name:`；不是软链；没有开发侧文件。
+  · 再跑一次 ⇒ `skill: … (up to date, 8 files, global)`，整棵树 **mtime 不变**。
+  · `--check` ⇒ rc=0 且恰好 3 行 `OK:`（binary / skill / location）。
+  · 隔离的 `--project <tmp>`：多塞 `ARCHITECTURE.md` ⇒ rc=2 且输出 `must not have`；改坏 `SKILL.md` 一字节 ⇒
+    rc=2 且点名该文件；重装后 rc=0 且多出的文件被清掉；全局那份 sha256 不受影响。
+  · `--dry-run` ⇒ 打印 `would install skill …`、rc=0，装好的目录 mtime 不变。
+  · 真装后 `cmd skills list` 能看到 `general-figure-guide`（harness 侧确认，不只看目录）。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R22 && python3 test.py   # rc=0 = 全过
+前置：先 `bash install.sh`（本证据假定全局那份已装；破坏性验证全在临时目录里做，不碰真装）。
+无参数；约 1 分钟（每步跑一次 install.sh，`--no-build` 时是秒级）。
+"""

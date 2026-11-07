@@ -1,10 +1,15 @@
 mod dom;
 mod error;
 mod geom;
+pub mod home;
+mod ink;
 mod input;
+mod labels;
 mod layout;
 mod normalize;
 mod output;
+mod path;
+mod plan;
 mod raster;
 mod style;
 mod transform;
@@ -12,9 +17,17 @@ mod warnings;
 
 use std::path::PathBuf;
 
+use plan::{prepare, PreparedInput};
+
 pub use error::{Result, SvgGridError};
 pub use layout::Margins;
-pub use raster::{render_svg_to_avif, render_svg_to_png, render_svg_to_png_with_dpi};
+pub use plan::{plan_grid, GridPlan, GridRequest, PlannedInput};
+pub use raster::{
+    data_root_font_dir, default_font_dir, font_families, load_font_database, render_svg_to_avif,
+    render_svg_to_avif_with_fonts, render_svg_to_png, render_svg_to_png_with_dpi,
+    render_svg_to_png_with_dpi_with_fonts, render_svg_to_png_with_fonts, DEFAULT_FONT_FAMILY,
+    FONT_DIR_ENV,
+};
 
 #[derive(Debug, Clone)]
 pub enum SvgInput {
@@ -47,6 +60,13 @@ pub struct PlotGridSpec {
     pub align: AlignMode,
     pub labels: Option<LabelSpec>,
     pub normalize: Option<InputNormalize>,
+    /// Families the font library (`fontlib/`, or `--font-dir`) actually holds, as
+    /// `--list-fonts` prints them.
+    ///
+    /// Only the caller can know the library, so it is passed in: it is what W8
+    /// compares `--label-fontfamily` against. `None` = no library was consulted
+    /// (a library-level call that never rasterises), so W8 is not judged.
+    pub font_families: Option<Vec<String>>,
 }
 
 #[derive(Debug, Clone)]
@@ -84,13 +104,13 @@ impl LabelSize {
 }
 
 /// Cap height of a capital letter as a fraction of the font size (DejaVu Serif
-/// ≈0.73 em; rounded up for safety).
-const LABEL_CAP_HEIGHT_RATIO: f32 = 0.75;
+/// ≈0.73 em; rounded up for safety). Shared with the W6 ink estimate.
+pub(crate) const LABEL_CAP_HEIGHT_RATIO: f32 = 0.75;
 /// Extra clear space kept around the letter's ink, as a fraction of the size.
 const LABEL_BAND_PAD_RATIO: f32 = 0.05;
 /// Ink width of one capital letter as a fraction of the size (upper bound across
-/// the serif capitals; `A` alone is ≈0.74).
-const LABEL_INK_WIDTH_RATIO: f32 = 0.75;
+/// the serif capitals; `A` alone is ≈0.74). Shared with the W6 ink estimate.
+pub(crate) const LABEL_INK_WIDTH_RATIO: f32 = 0.75;
 
 /// Top margin needed above a panel row so its default-placed letter is not
 /// clipped: the glyph rises `≈cap height` above its baseline, and the default
@@ -113,66 +133,21 @@ pub struct LabelSpec {
     pub colour: String,
 }
 
-/// A parsed input SVG together with the geometry the composer needs from it.
-struct PreparedInput {
-    root: dom::Element,
-    panel: geom::Rect,
-    canvas: geom::Rect,
-}
-
 pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
-    if spec.inputs.is_empty() {
-        return Err(SvgGridError::InvalidInput(
-            "plot_grid requires at least one input SVG".to_string(),
-        ));
-    }
-
-    // Every input is parsed up front: the layout now reads each panel's canvas
-    // aspect ratio to derive natural column widths and row heights.
-    let mut prepared: Vec<Option<PreparedInput>> = Vec::with_capacity(spec.inputs.len());
-    let mut aspects: Vec<Option<f32>> = Vec::with_capacity(spec.inputs.len());
-    for input in &spec.inputs {
-        let input_path = match input {
-            SvgInput::Path(path) => path,
-            SvgInput::Spacer => {
-                prepared.push(None);
-                aspects.push(None);
-                continue;
-            }
-        };
-        let svg = input::read_svg(input_path)?;
-        let mut root = dom::parse(&svg)?;
-        if let Some(normalize) = &spec.normalize {
-            normalize::normalize_svg(&mut root, normalize.max_side)?;
-        }
-        let panel = geom::find_panel_box(&root)?;
-        let canvas = geom::find_canvas_box(&root)?;
-        if canvas.width <= 0.0 || canvas.height <= 0.0 {
-            return Err(SvgGridError::InvalidInput(
-                "input SVG canvas must have positive width and height".to_string(),
-            ));
-        }
-        aspects.push(Some(canvas.width / canvas.height));
-        prepared.push(Some(PreparedInput {
-            root,
-            panel,
-            canvas,
-        }));
-    }
-    let drawn: Vec<bool> = prepared.iter().map(Option::is_some).collect();
-
-    let grid = layout::compute_grid(layout::GridSpec {
-        count: spec.inputs.len(),
-        nrow: spec.nrow,
-        ncol: spec.ncol,
+    let (prepared, grid) = prepare(&GridRequest {
+        inputs: spec.inputs.clone(),
         width: spec.width,
         height: spec.height,
+        nrow: spec.nrow,
+        ncol: spec.ncol,
+        rel_widths: spec.rel_widths.clone(),
+        rel_heights: spec.rel_heights.clone(),
         margin: spec.margin,
         gap: spec.gap,
-        rel_widths: &spec.rel_widths,
-        rel_heights: &spec.rel_heights,
-        aspects: &aspects,
+        normalize: spec.normalize.clone(),
     })?;
+    let drawn: Vec<bool> = prepared.iter().map(Option::is_some).collect();
+
     // The resolved grid size IS the output canvas (root width/height/viewBox, and
     // thus the PNG pixel count): `--width`/`--height` are never a "logical" size
     // that differs from the output.
@@ -192,6 +167,18 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
         canvas_height,
         &mut warnings,
     );
+
+    // Attributes the composer could not rewrite but deliberately kept verbatim
+    // while transforming the inputs (W7: a malformed `<path d>` or a non-finite
+    // numeric attribute). Gathered across every input so the warning speaks once
+    // per call, and flushed with W1–W6 after the output is written.
+    let mut passthroughs = warnings::Passthroughs::default();
+
+    // `url(#…)` references the composed output cannot resolve (W9): a paint server
+    // or a clip path that a stage above dropped. Nothing fails and nothing moves —
+    // the shapes are just painted with nothing — so this is the one mechanical
+    // check that keeps that silent ink loss from shipping (round-data/R16).
+    let mut dangling = Vec::new();
 
     let mut output = dom::Element {
         name: "svg".to_string(),
@@ -251,7 +238,10 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
         };
         let cell = grid.cells[index];
         let target_panel = geom::scale_panel_to_cell(panel, canvas, cell)?;
-        transform::transform_svg(&mut root, panel, target_panel)?;
+        transform::transform_svg(&mut root, panel, target_panel, index, &mut passthroughs)?;
+        // W9 is checked on the input's own subtree, before the ids are namespaced,
+        // so the message names the id exactly as the source file spells it.
+        dangling.extend(warnings::dangling_references(&root, index));
         namespace_ids(&mut root, &format!("svg-grid-cell{index}-"));
 
         root.name = "g".to_string();
@@ -261,11 +251,24 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
         root.remove_attr("viewBox");
         root.remove_attr("xmlns");
         if let Some(labels) = &spec.labels {
-            if let Some(label) = build_label(index, cell, spec.width, labels) {
+            if let Some(label) = labels::build(index, cell, spec.width, labels) {
                 root.children.push(dom::Node::Element(label));
             }
         }
         output.children.push(dom::Node::Element(root));
+    }
+
+    // W7: attributes kept verbatim (malformed `<path d>`, non-finite numbers).
+    // One aggregated message for the whole call; added to the same collector as
+    // W1–W6 so it is flushed in the same place, after the output is written.
+    if let Some(message) = warnings::describe_passthrough(passthroughs.offenders()) {
+        warnings.note(warnings::NOTE_PASSTHROUGH);
+        warnings.add(message);
+    }
+    // W9: `url(#…)` references nothing in the output defines.
+    if let Some(message) = warnings::describe_dangling_reference(&dangling) {
+        warnings.note(warnings::NOTE_DANGLING);
+        warnings.add(message);
     }
 
     let svg = dom::serialize(&output)?;
@@ -280,11 +283,13 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
 
 pub fn auto_labels(count: usize, uppercase: bool) -> Vec<String> {
     (0..count)
-        .map(|index| alphabet_label(index, uppercase))
+        .map(|index| labels::alphabet_label(index, uppercase))
         .collect()
 }
 
-pub(crate) fn format_number(value: f32) -> String {
+/// The number format of every coordinate in the composed SVG, and therefore of every
+/// number `plot-grid --plan` prints — the plan shows the digits the figure contains.
+pub fn format_number(value: f32) -> String {
     if value.fract().abs() < 0.0001 {
         format!("{}", value.round() as i64)
     } else {
@@ -315,11 +320,12 @@ fn collect_warnings(
         let Some(cell) = cells.get(index) else {
             continue;
         };
-        scales.push(warnings::InputScale {
-            index,
-            sx: cell.width / item.canvas.width,
-            sy: cell.height / item.canvas.height,
-        });
+        // The one definition of the layout scale (`geom::cell_scale`), so W1 and
+        // `--plan` report the number the composition actually applies.
+        let Ok((sx, sy)) = geom::cell_scale(*cell, item.canvas) else {
+            continue;
+        };
+        scales.push(warnings::InputScale { index, sx, sy });
         stretches.push(warnings::CellStretch {
             index,
             cell_aspect: cell.width / cell.height,
@@ -327,10 +333,30 @@ fn collect_warnings(
         });
     }
     if let Some(message) = warnings::describe_scale(&scales) {
+        warnings.note(warnings::NOTE_FONT_SIZE);
         warnings.add(message);
     }
     if let Some(message) = warnings::describe_stretch(&stretches) {
+        warnings.note(warnings::NOTE_FONT_SIZE);
         warnings.add(message);
+    }
+
+    // (2b) Content ink that leaves the input's OWN canvas box. This is read from
+    // the (possibly normalized) input and its matching canvas box, so the two
+    // quantities always come from the same stage. It does not depend on
+    // `--labels`, so it runs before the label-only early return below.
+    for (index, item) in prepared.iter().enumerate() {
+        let Some(item) = item else { continue };
+        let Some(ink) = ink::ink_bbox(&item.root) else {
+            continue; // nothing measurable is drawn
+        };
+        if let Some(message) = warnings::describe_content_outside_canvas(index, ink, item.canvas) {
+            warnings.note(warnings::NOTE_CANVAS_INK);
+            if message.contains(warnings::DUST_HINT) {
+                warnings.note(warnings::NOTE_INK_DUST);
+            }
+            warnings.add(message);
+        }
     }
 
     let Some(labels) = &spec.labels else { return };
@@ -361,6 +387,18 @@ fn collect_warnings(
         warnings.add(message);
     }
 
+    // (4b) W8: the requested family is not in the font library, so the letters are
+    // rendered with whatever the renderer falls back to. Silent when the caller has
+    // no library to compare against (`font_families` is `None`).
+    if let Some(available) = &spec.font_families {
+        if labels.labels.iter().any(|label| !label.is_empty()) {
+            if let Some(message) = warnings::describe_missing_font(&labels.font_family, available) {
+                warnings.note(warnings::NOTE_FONT_FALLBACK);
+                warnings.add(message);
+            }
+        }
+    }
+
     // (5) Letters whose ink would be clipped: an explicit `--plot-margin` is
     // respected, so a too-small one is warned about here. With the automatic
     // reservation the band is grown to fit the letters, so this stays silent.
@@ -379,6 +417,7 @@ fn collect_warnings(
         if let Some(message) =
             warnings::describe_clipped_label(label, index, ink, canvas_width, canvas_height)
         {
+            warnings.note(warnings::NOTE_LABEL_CLIP);
             warnings.add(message);
         }
     }
@@ -393,11 +432,11 @@ fn label_ink_box(
     labels: &LabelSpec,
     size: f32,
 ) -> geom::Rect {
-    let x = cell.x + label_value(&labels.x, index, 0.0) * cell.width
-        - label_value(&labels.hjust, index, 0.0) * size;
+    let x = cell.x + labels::value(&labels.x, index, 0.0) * cell.width
+        - labels::value(&labels.hjust, index, 0.0) * size;
     let y = cell.y
-        + (1.0 - label_value(&labels.y, index, 1.0)) * cell.height
-        + label_value(&labels.vjust, index, -0.25) * size;
+        + (1.0 - labels::value(&labels.y, index, 1.0)) * cell.height
+        + labels::value(&labels.vjust, index, -0.25) * size;
     let characters = label.chars().count().max(1) as f32;
     geom::Rect {
         x,
@@ -415,72 +454,6 @@ fn contains_data_svg_grid_label(element: &dom::Element) -> bool {
             dom::Node::Element(child) => contains_data_svg_grid_label(child),
             dom::Node::Text(_) => false,
         })
-}
-
-fn build_label(
-    index: usize,
-    cell: geom::Rect,
-    canvas_width: f32,
-    labels: &LabelSpec,
-) -> Option<dom::Element> {
-    let label = labels.labels.get(index)?;
-    if label.is_empty() {
-        return None;
-    }
-    let size = labels.size.resolve(canvas_width);
-    // Defaults keep the letter just outside the panel's top-left corner: `hjust=0`
-    // aligns its start with the panel's left edge, `vjust=-0.25` lifts its baseline
-    // above the panel's top edge (the panel's box starts at `cell.y`).
-    let x = cell.x + label_value(&labels.x, index, 0.0) * cell.width
-        - label_value(&labels.hjust, index, 0.0) * size;
-    let y = cell.y
-        + (1.0 - label_value(&labels.y, index, 1.0)) * cell.height
-        + label_value(&labels.vjust, index, -0.25) * size;
-    let mut attrs = vec![
-        ("data-svg-grid-label".to_string(), index.to_string()),
-        ("data-scale".to_string(), "position".to_string()),
-        ("x".to_string(), format_number(x)),
-        ("y".to_string(), format_number(y)),
-        ("font-family".to_string(), labels.font_family.clone()),
-        ("font-size".to_string(), format_number(size)),
-        ("fill".to_string(), labels.colour.clone()),
-    ];
-    apply_font_face(&mut attrs, &labels.font_face);
-    Some(dom::Element {
-        name: "text".to_string(),
-        attrs,
-        children: vec![dom::Node::Text(label.clone())],
-    })
-}
-
-fn label_value(values: &[f32], index: usize, fallback: f32) -> f32 {
-    values
-        .get(index)
-        .copied()
-        .or_else(|| values.first().copied())
-        .unwrap_or(fallback)
-}
-
-fn apply_font_face(attrs: &mut Vec<(String, String)>, font_face: &str) {
-    let normalized = font_face.replace(['_', '-', '.'], "").to_lowercase();
-    if normalized.contains("bold") {
-        attrs.push(("font-weight".to_string(), "bold".to_string()));
-    }
-    if normalized.contains("italic") {
-        attrs.push(("font-style".to_string(), "italic".to_string()));
-    }
-}
-
-fn alphabet_label(index: usize, uppercase: bool) -> String {
-    let mut number = index + 1;
-    let mut chars = Vec::new();
-    while number > 0 {
-        number -= 1;
-        let base = if uppercase { b'A' } else { b'a' };
-        chars.push((base + (number % 26) as u8) as char);
-        number /= 26;
-    }
-    chars.iter().rev().collect()
 }
 
 fn namespace_ids(element: &mut dom::Element, prefix: &str) {

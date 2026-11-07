@@ -372,3 +372,47 @@ fn missing_output_argument_is_an_error() {
     assert_eq!(result.status.code(), Some(1));
     let _ = fs::remove_file(input);
 }
+
+/// Diagnostics are prefixed with the name of the program that wrote them. For the
+/// standalone binary that is `svg_grid_convert` (its `[[bin]]` name) — `svg_grid
+/// convert` passes its own name instead, so the line always names a command the
+/// reader can type (round R19).
+#[test]
+fn diagnostics_are_prefixed_with_the_standalone_name() {
+    let result = Command::new(bin()).arg("--bogus").output().unwrap();
+    assert_eq!(result.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.starts_with("svg_grid_convert: "),
+        "stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("unknown argument: --bogus"),
+        "stderr:\n{stderr}"
+    );
+    assert!(
+        stderr.contains("usage: svg_grid_convert --input"),
+        "the usage block names the same program:\n{stderr}"
+    );
+
+    // A converter refusal uses the same prefix (not just the parser errors).
+    let input = write_fixture(
+        "cli_prefix_refusal.svg",
+        r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<svg x='0' y='0' width='10' height='10' viewBox='0 0 10 10'><circle cx='1' cy='1' r='1'/></svg>
+</svg>"#,
+    );
+    let refused = Command::new(bin())
+        .args(["--input"])
+        .arg(&input)
+        .arg("--check")
+        .output()
+        .unwrap();
+    assert_eq!(refused.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        stderr.starts_with("svg_grid_convert: "),
+        "stderr:\n{stderr}"
+    );
+    let _ = fs::remove_file(input);
+}

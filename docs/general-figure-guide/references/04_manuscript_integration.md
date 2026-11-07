@@ -17,7 +17,7 @@
 |---|---|---|
 | `.png` | 两者 | 供 agent 与用户**快速预览**；供正文 markdown 嵌入（渲染器对 svg 支持不一致） |
 | `.svgz` | **成品** | gzip 压缩的 SVG = 成品矢量原件：体积远小于未压缩 SVG，且 `svg_grid` 能直接读（按扩展名解压） |
-| `.svg` | **散图** | 供**组图与再排版**——矢量可任意缩放，文字/线条/标记**不变形**；`svg_grid_convert` 直接吃 `.svg` |
+| `.svg` | **散图** | 供**组图与再排版**——矢量可任意缩放，文字/线条/标记**不变形**；`svg_grid convert` 直接吃 `.svg` |
 
 - 组图时**按 svg 载入 panel**：默认用 **`svg_grid`**（`references/02a_svg_grid_assembly.md`）；仅当回退到 cowplot 时才用 `magick::image_read_svg()` / `rsvg` 读成 ggplot/grob（要检查输出非空白，见 `references/02b_cowplot_assembly.md`）。
 - **需要未压缩 `.svg`**（交投稿系统或外部工具）时，把组图命令里的 `--output-svgz` 换成 `--output` 重跑一次即可——组图确定性、可随时重建，`Figure/` 里不必同时堆两份矢量。

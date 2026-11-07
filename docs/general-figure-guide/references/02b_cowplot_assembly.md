@@ -5,8 +5,8 @@
 
 ## 0. 什么时候才走这条
 
-- `svg_grid_convert` 对面板 **fail-closed**（非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带缩放/旋转的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、非轴对齐矩形的 clip 子轮廓、视口不与用户空间 1:1 的带单位长度，或未验证的第三方导出如 Inkscape/Illustrator），且无法改用 `svglite`/matplotlib/**RDKit 矢量后端**重出；
-- `svg_grid` / `svg_grid_convert` **不可用**（没编译、环境不支持、离线构建失败）；
+- `svg_grid convert`（转换器）对面板 **fail-closed**（非 `<svg>` 根、嵌套 `<svg>`、`<symbol>`、解析不到的 `<use>`、祖先带缩放/旋转的 `<text>`、非轴对齐的 `<image>`/`<rect>`/`<circle>`、非轴对齐矩形的 clip 子轮廓、视口不与用户空间 1:1 的带单位长度，或未验证的第三方导出如 Inkscape/Illustrator），且无法改用 `svglite`/matplotlib/**RDKit 矢量后端**重出；
+- `svg_grid`（含 `convert` 子命令）**不可用**（没编译、环境不支持、离线构建失败）；
 - 面板**拿不到独立 `.svg`**，只能以会话内对象（ggplot/grob）组合。
 
 **回退的代价**（决定回退前先认下）：这条路的**文件级**读图依赖 `magick`，本机实测过它**静默产出 0.00% 墨量的全白图**（仅告警、退出码 0）——用它读图组图**必须**检查输出非空白（见 §3）。
@@ -83,7 +83,7 @@ read_png_as_plot <- function(path) {
 ```
 
 > 注意：这条路要求 R 环境有 **`magick`** 包（cowplot 画位图依赖它）。缺包时 `draw_image` 会静默不画，输出空白图——务必检查输出非空白。
-> 若安装不了 `magick`，可改用 Python + PIL 做等价拼接（见 `references/05_checklist.md` 的替代实现）。
+> 若安装不了 `magick`，可改用 Python + PIL 做等价拼接，或回到首选路线 `references/02a_svg_grid_assembly.md`（`svg_grid`）。
 
 ## 4. 字体
 

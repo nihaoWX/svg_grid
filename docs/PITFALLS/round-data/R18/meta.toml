@@ -1,0 +1,52 @@
+# R18 的 round-data —— 只会交付**一个二进制**：`convert` 成为 `svg_grid` 的子命令
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R18-只交付一个二进制.md`。
+id = "R18"
+verdict = "新领土"
+
+family     = [
+  "安装要装两个二进制：`svg_grid` + `svg_grid_convert`，而后者只是前者的一个流水线步骤 —— 用户在 PATH 里要维护两个名字",
+  "两个二进制各自是副本 ⇒ 「新的 svg_grid + 旧的 svg_grid_convert」这类版本漂移不会报错，只会静静给出旧的转换结果",
+  "`doctor` 依赖外部 `svg_grid_convert`：同目录/PATH 找不到就退 3，装机版少了它默认回归入口就废了（R17b 修过一次症状，根因是这一步本不该跨进程）",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。
+closures   = [
+  { finding = "R18-F1", tier = "代码" },   # 主 crate 依赖 convert 库；新增 `svg_grid convert` 子命令（薄壳）
+  { finding = "R18-F2", tier = "代码" },   # doctor 改为进程内调用 convert 库；删掉「找外部二进制 / exit 3」整套
+  { finding = "R18-F3", tier = "代码" },   # install.sh 只装一个二进制，并清掉旧装留下的 svg_grid_convert
+  { finding = "R18-F4", tier = "检查" },   # 逐字节等价 + 装机版 doctor 全量 + 不依赖外部二进制 + 回归
+]
+
+# 本轮动了 CLI 面（新子命令）、doctor 的第一段、install.sh，故回归全部旧轮。
+run_before = ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14", "R15", "R16", "R17"]
+
+# 本轮改了两处旧证据的期望：
+#   R15 —— install.sh 的报告不再是「装两个二进制」，断言相应改；
+#   R17 —— doctor 的 `convert:` 行现在说明「进程内」，不再是某个可执行文件路径。
+touched    = ["R15", "R17"]
+
+note = """
+为什么认定同类：三条都属「交付面/依赖面」的问题 —— 多一个二进制（升级时两个副本各自漂移）/ 多一次跨进程
+  （doctor 找不到就废）/ 多一个必须在 PATH 里维护的名字。同族于 R14（编译期路径把构建环境烧进二进制）：
+  都是「运行时依赖了一个不该依赖的外部事实」。
+根因与修法：已证。① `convert/` 仍是独立 crate（结构清楚），但被主 crate 当**库依赖**用；
+  `src/cli/convert.rs` 只是「解析 → 调库 → 映射退出码」的薄壳；② `doctor` 的第一段改成进程内调用；
+  ③ `install.sh` 只装 `svg_grid`，并把旧装留下的 `svg_grid_convert` 从 `<prefix>` 里清掉（报告里说一句，不静默）。
+证据（本机实测）：
+  · 装机 `~/.local/bin` 里**只有** `svg_grid`；`command -v svg_grid_convert` 找不到。
+  · `svg_grid convert` 与旧 `convert/target/debug/svg_grid_convert` 在 58 张语料 × 4 种模式
+    （--output/--check/--report/--force）+ 13 例错误面/幂等/半成品/不兼容分支上**产物逐字节相同**。
+  · 装机版 `doctor`（cwd=/tmp、干净环境）全量 **57 pass / 0 fail / 1 skip**；
+    `PATH` 只含 `~/.local/bin` 或只含一个空目录时仍 rc=0（第一段是库调用）。
+  · 语料目录不存在时仍退出 3（配置错这一档没被抹平）。
+已知遗留（下一轮处理，不在本轮放宽）：convert 库的 stderr 前缀仍硬编码 `svg_grid_convert:`——
+  作为子命令调用时那个名字已不存在，应改成随调用方传（`svg_grid convert:`）；本轮为保证与旧二进制
+  **逐字节等价**而未动它，已在 PROGRESS 的 Known Issues 里记下。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R18 && python3 test.py   # rc=0 = 全过
+前置：`cargo build --offline`（主 crate）、`bash install.sh`（装一个二进制 + 语料 + 字体）。
+约 20–25 分钟：④ 回归里 R15/R16/R17 各自还会重跑更早的轮次。
+"""

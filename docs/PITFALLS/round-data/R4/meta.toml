@@ -1,0 +1,32 @@
+# R4 的 round-data —— 两族**复发**的可跑证据（族谱见账本 R4 条目的 related）
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R4"
+verdict = "复发"
+family = ["内容越出自身画布（旋转 ylabel / 图例 / 刻度标签）", "死白带判据误报"]
+closures = [
+  { finding = "R4-F1",  tier = "检查" },
+  { finding = "R4-F3",  tier = "规则" },
+  { finding = "R4-F4",  tier = "检查" },
+  { finding = "R4-F6",  tier = "规则" },
+  { finding = "R4-F7",  tier = "检查" },
+  { finding = "R4-F8",  tier = "规则" },
+  { finding = "R4-F9",  tier = "检查" },
+  { finding = "R4-F10", tier = "检查" },
+  { finding = "R4-F11", tier = "检查" },
+  { finding = "R4-F12", tier = "代码" },
+  { finding = "R4-F13", tier = "代码" }
+]
+run_before = []          # 更早的 R1–R3 没有 test.py（决定十四：存量不回溯）⇒ 无可跑的前置；下轮改 W6 或判据时按 query 的路由行跑本目录 test.py
+touched = []
+note = """
+为什么认定同类：族一（内容越界）在 R3-F8 之后又被报 3 次——F2 是同族换到左缘刻度标签、G3 自称"重复确认 F2/R3"、A1 是上游面板把 ylabel 画到 x<0；四篇报告独立点名同一条工具侧修法。族二（死白带误报）是 R3-F10 的第 2 次（G2）。两族上一轮都只用"往文档加一条说明"收尾 ⇒ 复发。
+根因与建议修法：已证。族一 = 没有任何"内容越界"的程序化检查（既有 W5 只管面板字母）；族二 = 判据散在三处（05_checklist 片段 + 两个 tests 脚本）且把页边距、行内的字母带当成死带。修法 = 族一新增 W6（一律报、非致命；**元素级 transform 纳入墨盒**——旧版忽略 transform，对旋转 ylabel 完全无效），族二把判据修正后落成**唯一脚本**。
+怎么修才不弄坏前面：动 src/ink.rs、src/warnings.rs、scripts/check_deliverable.py 或两份指南的 01/02a/05 之前，先跑本目录 test.py——它盯的正是「旋转 ylabel 越界必须出声、挪回画布内必须静默」「通栏+右图例不误报、真死带仍报」「三张真实成品两条检查全过」。
+（本目录无 data/：fixture 在临时目录自合成＝把断言做小。另记一条：check_deliverable 的检查 2「内容未触边」对**位图输入恒真**（见账本 R4-F13）——**2026-09-28 R6 已按用户裁决删掉它**，其 bbox 并进「外框 2 px 墨迹 = 0」，脚本现为**两条检查**；R6 的 meta 已声明 `touched=["R4"]`。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R4 && python3 test.py
+# rc=0 = 全过。族一需要已构建的二进制 tools/svg_grid/target/{debug,release}/svg_grid
+#   （缺则先 `cd tools/svg_grid && cargo build --offline`，否则该族显式 SKIP 并说明原因）。
+# 族二需要 ~/.venv 里的 numpy + Pillow。秒级、离线、不写仓库。
+"""

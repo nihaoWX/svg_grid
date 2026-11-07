@@ -1,0 +1,49 @@
+# R14 的 round-data —— CLI 缺陷批次：零值 panic / 越界 assert / 错误拍平 / 坏 `--help` / 编译期字体路径
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+id = "R14"
+verdict    = "缺陷"
+
+family     = [
+  "用户输入变成 panic（rc=101）",
+  "错误被拍平成一串 String，退出码不分档",
+  "帮助文本坏掉（-h/--help 被当成取值的 flag）",
+  "编译期绝对路径烧进二进制（字体目录）",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。六族都用"检查"（本轮的可跑证据）。
+closures   = [
+  { finding = "R14-F1", tier = "检查" },   # --ncol/--nrow 0 ⇒ 2（校验提前，不再 div_ceil(0)）
+  { finding = "R14-F2", tier = "检查" },   # --avif-quality 越界 ⇒ 2（解析期校验；不再拿用户输入做 assert!）
+  { finding = "R14-F3", tier = "检查" },   # 有类型错误 + 退出码分档 0/1/2/3
+  { finding = "R14-F4", tier = "检查" },   # --help/-h/--version ⇒ stdout + 0；未知 flag/缺 --output ⇒ 2
+  { finding = "R14-F5", tier = "代码" },   # 解析器搬进 src/cli.rs + 单测（不依赖 cwd）
+  { finding = "R14-F6", tier = "检查" },   # 字体目录运行时解析：--font-dir > $SVG_GRID_FONT_DIR > 数据根
+  { finding = "R14-F7", tier = "检查" },   # 体积债：src/transform.rs 拆成 src/transform/{mod,lengths,primitives,paths}.rs
+]
+
+# 本轮改的位置都在 CLI/字体/布局上 ⇒ 动手前先跑这些旧轮的证据（全绿才动）。
+run_before = ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13"]
+
+# 本轮**有意**改写了哪些旧轮的断言期望（原因见 note；`record` 由用户做）。
+touched    = ["R13", "R9"]
+
+note = """
+为什么认定同类：六族同一根因——用户的输入与运行环境被当成"内部不变量"（div_ceil(0)、assert!(quality)、
+  `env!("CARGO_MANIFEST_DIR")`、String 错误），所以每处的失败都表现为 panic(101)/一律 1/读错目录。
+根因与建议修法：已证。① 校验前移到解析期并返回 `Result`；② 保留类型化错误 `SvgGridError` 与 `CliError`，
+  退出码 0/1/2/3 由错误自己给出（`error.exit_code()`）；③ -h/--help/--version 在取值之前特判；
+  ④ 字体目录改运行时解析，`fontlib/setup.sh [--dir]` 默认写数据根。
+怎么修才不弄坏前面：动 `src/cli*`、`src/raster.rs`、`src/layout.rs`、`src/transform*` 前先跑 R4–R11、R13；
+  本轮跑过并全绿（见 run_before）。R13 的证据期望改了两处：字体库路径（仓库 `fontlib/` → 运行时解析到
+  `$SVG_GRID_FONT_DIR`/`$HOME/svg_grid/fontlib`）与 SKIP 文案——因为本轮把默认目录从编译期 checkout
+  改成了数据根，旧期望指向的目录不再是被读的那个。R9 不需要改断言：它的"共 N 份"是从 glob 现算的标签
+  （新增 `ARCHITECTURE/cli.md` 后 N=17），`≤ 20000 B` 的断言继续成立（本轮顺手把 02a 指南压回 19988 B）。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R14 && python3 test.py   # rc=0 = 全过；失败打出族名
+需要：target/debug/svg_grid（cargo build --offline 已构建）+ 一个有字体的字体库
+（默认取 $SVG_GRID_FONT_DIR / $HOME/svg_grid/fontlib / 仓库 fontlib 中第一个非空的，副本进临时目录）。
+缺二进制或缺字体库 ⇒ 相关断言 SKIP 并打印原因（不是静默跳过）。无 data/：fixture 与字体库副本都在临时目录自造。
+"""

@@ -64,6 +64,7 @@ fn scale_element(element: &mut Element, factor: f32) {
     scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
     scale_view_box(element, factor);
     scale_points(element, factor);
+    scale_path(element, factor);
     scale_rotate_transform(element, factor);
 
     for child in &mut element.children {
@@ -183,6 +184,27 @@ fn scale_points(element: &mut Element, factor: f32) {
         ));
     }
     element.set_attr("points", out.join(" "));
+}
+
+/// Scale every coordinate of a `<path d>` by the same uniform factor as the
+/// other primitives, so its geometry keeps pace with the rescaled `viewBox`. A
+/// uniform factor means arcs stay arcs (see `crate::path`); an unparseable `d`
+/// is left untouched, exactly like `scale_points`.
+fn scale_path(element: &mut Element, factor: f32) {
+    let Some(d) = element.attr("d").map(str::to_string) else {
+        return;
+    };
+    let map = crate::path::AxisMap {
+        x_scale: factor,
+        y_scale: factor,
+        x_offset: 0.0,
+        y_offset: 0.0,
+        x_length: factor,
+        y_length: factor,
+    };
+    if let Ok(rewritten) = crate::path::rewrite(&d, &map) {
+        element.set_attr("d", rewritten);
+    }
 }
 
 fn scale_rotate_transform(element: &mut Element, factor: f32) {

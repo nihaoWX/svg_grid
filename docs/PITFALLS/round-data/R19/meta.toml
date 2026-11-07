@@ -1,0 +1,83 @@
+# R19 的 round-data —— **自检只有一个测试目标**（`tests/selftest/`）+ convert 的 stderr 前缀随调用方
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R19-自检一个目标.md`。
+id = "R19"
+verdict = "新领土"
+
+family     = [
+  "测试被按「给谁测」切成两个目标（`tests/compose_tests/` 60 条 + `tests/doctor_tests/` 13 条）：用户裁决「测试功能本身也是主库的能力，自检」——语义上是一件事，却要跑两次 `cargo test` 目标、维护两套 `common`/`support` helper",
+  "同一个自检被切成两个概念后，目录名会教人把 `doctor` 当「工具」而不是「自检的运行期入口」（`ARCHITECTURE/testing.md` 明说不许这样切割）",
+  "随 R18 出现的文案缺陷：做成单二进制后 `svg_grid_convert` 这个名字**已经不存在**，但 `svg_grid convert …` 的 stderr 前缀仍硬编码 `svg_grid_convert:`（R18 为保证与旧二进制逐字节等价而故意没动，记在 PROGRESS 的 Known Issues 与 R18 的 note 里）——报错让用户去跑一个装不上、`command -v` 也找不到的命令",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。
+closures   = [
+  { finding = "R19-F1", tier = "代码" },   # tests/{compose_tests,doctor_tests} → tests/selftest/（按主题分模块，单一目标）
+  { finding = "R19-F2", tier = "代码" },   # convert/src/cli.rs：prog: &str 贯穿（STANDALONE 默认），run/run_in/usage 一并参数化
+  { finding = "R19-F3", tier = "检查" },   # test.py：目录树/用例数/体积/前缀/回归 五族；用例数写死 190
+]
+
+# 本轮动了测试目标的形状（旧轮 R8 的模块树断言直接指向 `tests/compose_tests`）与 convert 的诊断文案
+# （R18 的 ① 逐字节对照把它钉住了），故回归旧轮。
+run_before = ["R8", "R9", "R14", "R15", "R16", "R17", "R18"]
+
+# 本轮**有意**改写了旧证据钉住的文案：`svg_grid convert` 的 stderr/stdout 前缀由
+# `svg_grid_convert:` 变成 `svg_grid convert:`（用户裁决：那个名字已不存在）。
+# 因此 R18 的 ① 里「逐字节相同 / 前缀」三类断言按定义不再成立 —— 见 note 的「与 R18 的冲突」。
+touched    = ["R18"]
+
+note = """
+为什么认定同类：三条是同一件事的三个面 —— 自检被按「命令」切成两个测试目标（一个是"compose 的测试"、
+  一个是"doctor 的测试"），而 doctor 本来就是自检的运行期入口；切成两套之后，迁移/改名时两边会各自漂移，
+  R18 留下的前缀缺陷正是这种漂移的产物：单二进制之后 `svg_grid_convert` 已不存在，但文案还硬编码着它。
+  同族于 R17（自检没有入口：58 张语料只能手写脚本驱动）与 R18（交付面漂移：两个二进制各自是副本）：
+  都是「同一件事被切成两半，两半各自演进」。
+根因与修法：已证。① 两套测试按**主题**合并成一个目标 `tests/selftest/`（`main.rs` 只做 `mod` 声明）：
+  `selftest/common/{mod,harness}.rs`（共享 helper）、`selftest/compose/{plot_grid,normalize,path,lenient,raster}.rs`、
+  `selftest/{labels,layout,transform,warnings,refs,fonts}/mod.rs`、`selftest/doctor/{convert_cmd,corpus}.rs`；
+  测试体逐行照搬，只改 `mod`/路径/`use`，**断言一字未改**（唯一例外是本轮裁决要改的前缀断言）。
+  ② `convert/src/cli.rs`：`run_args_as(prog, args)` / `run_args_code_as(prog, args)` / `run(prog, …)` /
+  `run_in(prog, …)` / `usage(prog)`；`STANDALONE = "svg_grid_convert"` 是 `run_args`/`main` 的默认，
+  `svg_grid convert` 传 `SUBCOMMAND = "svg_grid convert"`（`src/cli/convert.rs`），`doctor` 的第一段也传它，
+  于是 doctor 的告警分类改为认得 `svg_grid convert: warning:`。
+证据（本机实测）：
+  · 迁移前 `cargo test --offline`：lib 60 + bin 57 + compose_tests 60 + doctor_tests 13 = **190**；
+    迁移后 lib 60 + bin 57 + **selftest 73** = **190** —— 一条没丢（73 = 60 + 13）。
+  · `tests/` 下只剩 `selftest/`（外加 `fixtures/` 与 `fig2_mixed`、`mpl_dialect`、`poppler_dialect`、
+    `rdkit_dialect`、`s22_repro`、`shape_paint` 这些历史资产目录）；`compose_tests/`、`doctor_tests/` 已删。
+  · 所有 `tests/**/*.rs` ≤ 20000 B（最大 `selftest/transform/mod.rs` 16759 B）；无 `include!(`；
+    每个非 `mod.rs`/`main.rs` 的 .rs 都被上层 `mod` 声明；`selftest/main.rs` 只有 `mod` 声明。
+  · `svg_grid convert --bogus` ⇒ rc=1、stderr 以 `svg_grid convert: ` 开头、usage 行是 `usage: svg_grid convert --input …`；
+    告警行 `svg_grid convert: warning: …`；独立 `convert/target/debug/svg_grid_convert` 仍以 `svg_grid_convert: ` 开头、
+    usage 行仍是 `usage: svg_grid_convert --input …`。doctor 端到端仍把 `<style>` 图计成 `warnings=1` + `V1`
+    （证明它的分类器认得新前缀，不是"只是没炸"）。
+与 R18 的冲突（照实记，不静默）：R18 的 ① 要求 `svg_grid convert` 与独立二进制在 58 张语料 × 4 模式 +
+  13 例错误面上 **stdout/stderr 逐字节相同**，并在错误面里断言前缀就是 `svg_grid_convert:`。本轮的裁决必然
+  让这三类断言翻面（前缀按定义不同了）。R18 的 `test.py` 不在本轮的允许改动范围内（只允许 `round-data/R19`），
+  所以实测 R18 红了**恰好 3 条**，全是这三类：
+  · `全量 58 条 × 4 种模式（--output/--check/--report/--force）逐字节相同`
+  · `错误面与幂等/半成品/不兼容分支逐字节相同（13 例）`
+  · `解析错仍是**退出 1**（convert 自己的一档，不并进 svg_grid 的 2/3）+ 保留 `svg_grid_convert:` 前缀`
+  R18 其余全部绿：装机版 doctor 全量 57/0/1、`PATH` 只剩空目录仍 rc=0、语料缺 ⇒ rc=3、以及 ④ 回归
+  **R4–R17 逐轮 rc=0**（R4 1.2s / R5 0.1s / R6 1.3s / R7 2.6s / R8 5.2s / R9 11.6s / R10 0.5s / R11 0.6s /
+  R13 21.8s / R14 47.0s / R15 92.6s / R16 191.4s / R17 399.5s，合计 775.2s）。
+  本轮的 test.py ⑤ 把 R18 红掉的断言**逐条列出**，并且只容忍这三类，其余断言（② 装机版 doctor 全量、
+  ③ 不依赖外部二进制、④ 回归 R4–R17）一条都不许红 —— 实测成立。
+  → 建议下一轮（或允许改旧证据时）把 R18 的 `same()` 改成"把前缀归一成 `<PROG>:` 再比"，
+    那是当年"逐字节等价"要证明的东西的等价形式（行为相同，只有自称的名字不同）。
+R8 的模块树断言同理：它写死 `tests/compose_tests`，目录搬走后那两条（`mod` 声明齐全 / 门面 ≤ 4500 B）
+  变成 `if tdir.is_dir()` 里的空转；本轮的 test.py ③ 把同样两条按 `tests/selftest/` 重新钉住，所以门禁没有丢
+  （R8 本身实测仍 rc=0，5.2s）。"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R19 && python3 test.py   # rc=0 = 全过；失败逐条打出族名
+前置：`cargo build --offline`（主 crate，②④ 要 `target/debug/svg_grid`）、`cargo build --offline`
+  （`convert/`，④ 要 `convert/target/debug/svg_grid_convert` 作对照组）；⑤ 另需装好的二进制（`install.sh`）
+  与字体目录（`$SVG_GRID_FONT_DIR`，缺省 `$HOME/svg_grid/fontlib`）。
+无参数。临时产物在临时目录；离线、只读（除 `cargo test` 的 `target/`）。
+实测约 15 分钟（843s），几乎全花在 ⑤：本轮按裁决只起 R8/R9/R14 三个进程（5.7s / 10.5s / 47.0s）+ R18
+  一个进程（780.1s），而 **R18 的 ④ 内部会逐轮跑 R4–R17（含 R15/R16/R17，它们各自还会重跑更早的轮）**，
+  所以覆盖是完整的，只是没有再从 R19 里重复起进程。
+  R18 的那几条前缀/逐字节断言会红（见 meta 的「与 R18 的冲突」），本脚本只容忍这三类并逐条列出。
+"""

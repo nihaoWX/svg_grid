@@ -1,0 +1,26 @@
+# R11 的 round-data —— DECISIONS 并入 ARCHITECTURE、HARNESS 变两件套
+# 字段含义的唯一来源：tools/pitfalls-manager/references/02_consume.md §4.3（本文件不复述）
+id = "R11"
+verdict = "复发"          # R11-F1 的 related 指向更早的 R9-F3（HARNESS 分工）
+family = ["HARNESS 边界（哪份文件记什么）"]
+closures = [
+  { finding = "R11-F1", tier = "代码" },   # 删 DECISIONS.md + 决定并入 ARCHITECTURE.md §已定型的决定（R9 的旧断言已显式改写）
+  { finding = "R11-F2", tier = "检查" }    # 全仓不再有指向已删文件的活引用（可机械检查）
+]
+run_before = ["R9"]       # 动 HARNESS 文件之前先跑 R9（它的第 1 条断言就盯"两件套 + 不设 DECISIONS.md"）
+touched = ["R9"]          # 有意改写 R9 的期望值：原「DECISIONS.md 是日志、上界 25 KB」→ 新「不设 DECISIONS.md」
+note = """
+为什么认定同类：`R11-F1` 的 related 指向 `R9-F3`（HARNESS 分工）。R9 把三件套的分工理顺，R11 直接**去掉其中一件**
+——同一族（这条边界由 agent 守不住，就把它删掉，而不是再加纪律去守）。
+根因与建议修法：已证。用户 2026-10-06 把 `DECISIONS` 移出根 `AGENTS.md`（五处：定义 / 创建 / Orchestrator 维护 /
+Executor 必读 / research 版本控制）：它与 `ARCHITECTURE` 本质重复，且 agent 会把两者的内容混记。
+处置：内容并入 `ARCHITECTURE.md` `# 已定型的决定`（表：决定 / 为什么 / 细则在，逐轮过程不进），删文件；
+R9 的旧断言按纪律**显式改写**成新期望（不是放宽：新增"不设 `DECISIONS.md`"与"`ARCHITECTURE.md` 含该节"两条）。
+怎么修才不弄坏前面：先跑 R9 的 test.py（已含新期望）与 R10；本 test.py 另盯"两件套成立 + 关键取舍没丢 +
+全仓无活引用残留"。牵连的旧族：R9（文档纪律 / 体积口径）。
+（本目录无 data/：材料都在仓库里。）
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R11 && python3 test.py
+# rc=0 = 全过。秒级、离线、只读。
+"""

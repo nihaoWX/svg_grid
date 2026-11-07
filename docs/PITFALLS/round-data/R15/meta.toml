@@ -1,0 +1,46 @@
+# R15 的 round-data —— 安装：`install.sh` 编译 / 装二进制 / 装字体，可测且幂等
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+id = "R15"
+verdict    = "新领土"
+
+family     = [
+  "没有安装这一步：二进制只在 target/（被 gitignore），PATH 里没有 svg_grid",
+  "装完读不到字体：数据根为空 ⇒ 渲染不出字（运行时字体目录解析找不到东西）",
+  "安装不可测 / 不幂等：--dry-run 会落盘、重跑会重复复制/报错",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。两个"代码"是本轮新增的脚本，其余用可跑证据钉住。
+closures   = [
+  { finding = "R15-F1", tier = "代码" },   # install.sh：cargo build --release --offline 两个 crate + 两个二进制进 <prefix>
+  { finding = "R15-F2", tier = "代码" },   # 字体步骤复用 fontlib/setup.sh --dir 数据根（从本机复制，不下载）
+  { finding = "R15-F3", tier = "检查" },   # --dry-run 零写入；--no-build/--no-fonts；重复跑 already up-to-date
+  { finding = "R15-F4", tier = "检查" },   # 报告契约：全英、一行一事实、失败一句 + Fix + 非零
+  { finding = "R15-F5", tier = "检查" },   # release 二进制里无本 checkout 路径（装到别处仍读 $HOME 数据根）
+]
+
+# 本轮共用 fontlib/setup.sh（R14 定下的共享层），故动手前先跑全部旧轮证据（全绿才动）。
+run_before = ["R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14"]
+
+# 本轮没有改写任何旧轮的断言期望。
+touched    = []
+
+note = """
+为什么认定同类：本轮是新领域（"安装"此前不存在），不是复发；三族是同一件事的三个面：
+  装不上（没有安装脚本）/ 装上但渲染不出字（字体数据根）/ 装了不可信（不可测、不幂等）。
+根因与建议修法：已证。① 新增 install.sh：`cargo build --release --offline`（主 crate + convert/），
+  `cp` 两个二进制进 <prefix>（默认 ~/.local/bin）并 chmod；② 字体步骤调用
+  `fontlib/setup.sh --dir $HOME/svg_grid/fontlib`，于是"开发时跑的"与"装完跑的"读同一个目录；
+  ③ `--dry-run` 只读（不 mkdir、不 cp、不 cargo），`--no-build` / `--no-fonts` 可拆步验证。
+怎么修才不弄坏前面：只新增脚本与证据，未改 src/、未改 ARCHITECTURE/；共用了 fontlib/setup.sh，
+  故 R4–R14 全跑（见 run_before）；旧断言一条未改（touched 为空）。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R15 && python3 test.py   # rc=0 = 全过；失败打出族名
+无 data/：panel fixture 与临时 prefix 都在临时目录自造。测试会**真跑一次 install.sh**（默认 prefix +
+  数据根），因此会刷新 $HOME/.local/bin/svg_grid 与 $HOME/svg_grid/fontlib——这正是本轮要证明的事，可重复跑。
+约 3 分钟：R15 自身断言秒级，回归 R4–R14 占绝大部分（R14 约 70 s、R13 约 33 s）。
+缺 Arial / Times New Roman（fc-match 解析不出）⇒ 依赖该字体的断言 SKIP 并打印原因（不静默跳过）；
+  --help / --dry-run / 报告 / strings 断言照跑。
+"""

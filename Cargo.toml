@@ -7,7 +7,17 @@ edition = "2021"
 flate2 = "1.1"
 quick-xml = "0.39"
 ravif = { version = "0.13.0", default-features = false }
-resvg = { version = "0.47.0", default-features = false, features = ["text", "system-fonts", "raster-images"] }
-
-[dev-dependencies]
+resvg = { version = "0.47.0", default-features = false, features = ["text", "raster-images"] }
+# `load_fonts_dir` lives behind fontdb's `fs` feature; without it the font library
+# could not be read at all. fontdb's `fontconfig` (enabled by resvg's `system-fonts`)
+# is deliberately NOT enabled: this tool never looks at the host's fonts.
+fontdb = { version = "0.23", default-features = false, features = ["fs"] }
+# `doctor` counts the non-white pixels of the PNG it just produced (a fully white
+# raster means the run painted nothing), so it decodes PNG itself.
 png = "0.18"
+# The dialect converter. It stays a crate of its own (its own tests, its own
+# binary in the workspace) but the shipped `svg_grid` binary links it as a
+# library: `svg_grid convert …` is a thin shell over it and `doctor` calls it
+# in-process, so there is exactly ONE installed binary and no second executable
+# to look up on PATH.
+svg_grid_convert = { path = "convert" }

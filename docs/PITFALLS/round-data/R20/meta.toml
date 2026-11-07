@@ -1,0 +1,97 @@
+# R20 的 round-data —— general-figure-guide 补第一条主干：**原生出图优先**
+#
+# 每个字段的唯一来源是本骨架；这里只填本轮的值。
+# 报告（只记现象与复现）见同目录上一级：`docs/PITFALLS/svg_grid-建议-R20-优先用原生出图.md`。
+id = "R20"
+verdict = "新领土"
+
+family     = [
+  "用户裁决：「一旦使用这个 skill，agent 就会忽略那些分析原本的出图功能转而自己从 0 搭建图……现在的改法就是：**优先用对应分析包的原生出图功能，在此基础上做视觉优化**，我只是想避免 agent 自己再造轮子」。这份 skill 通篇只讲「怎么组」（画布/字母/字号/配色/图例/命名/图注），**默认面板已经在磁盘上**——于是 agent 得到的行为是「没有面板 ⇒ 自己画一个」，而不是「用产生这个结果的那个包去出图」。典型：单细胞 UMAP（`sc.pl.umap` / `Seurat::DimPlot` 就在手边，却自己拉坐标、自己散点、自己配色）。",
+  "缺的是**主干**：`SKILL.md` 是「规则条目集合」（三条核心原则 + 快速规则表 + 文档索引 + 反面清单），没有 `# CORE WORKFLOW`，也没有「panel 从哪来」这一步。规则再多也不会改变默认行为——规则彼此并列、没有先后，agent 只能自己发明顺序，而它发明的顺序是「先画图型」。",
+  "同族于 R17（自检没有入口：能力齐、入口缺）与 R19（同一件事被切成两半）：本轮是「规则齐、流程缺」，都是**能力/规则并不缺，缺的是把它们串起来的那条主干**。",
+]
+
+# 档位：规则 | 检查 | 默认 | 代码 | wontfix。
+closures   = [
+  { finding = "R20-F1", tier = "规则" },   # references/00_native_plots.md（新增）：判据 + 分析→原生函数对照表 + 例外 + `# native:` 留痕 + 出图端最小代码
+  { finding = "R20-F2", tier = "规则" },   # SKILL.md：# CORE WORKFLOW 5 步主干 + 章节与步骤同名同序 + 命令示例穿插 + 快速规则表/文档索引/反面清单各补一条 + description 改口径
+  { finding = "R20-F3", tier = "规则" },   # references/02a_svg_grid_assembly.md：开头 1 行指针（等量删重复句，未越 20 000 B）
+  { finding = "R20-F4", tier = "检查" },   # references/05_checklist.md §A0：三条可机械判定的「来源」项（`# native:` 逐条对账 / 与 panel 数对齐 / 视觉改动可列举）
+  { finding = "R20-F5", tier = "检查" },   # 本轮 test.py 六族
+]
+
+# 本轮只改文档，**没有**动库行为、命令行、诊断文案、测试目标形状，也没有改任何旧轮的判据对象。
+# 按报告要求只起 R8/R10/R19 三个进程（理由见 note 的「为什么只跑这三轮」）。
+run_before = ["R8", "R10", "R19"]
+
+# 旧证据里没有任何一条断言本轮改动的内容（R9 的 20 000 B 体积口径、变更叙述词黑名单、02a 的
+# `ARCHITECTURE/warnings.md` 指针；R10/R13 的 `diff -r` 两副本一致）——它们在本轮**照旧成立**，
+# 且 05 把 R9 的三条口径重新钉了一遍，故 touched 为空。
+touched    = []
+
+note = """
+为什么认定同类：三条是同一件事的三个面 —— ① agent 手搓图型（行为）；② `SKILL.md` 没有主干（结构）；
+  ③ 规则并列无先后（成因）。②③ 解释了 ①：指南把「怎么组」写得很细，却从没说「panel 从哪来」，
+  于是 agent 在「磁盘上没有 panel」时唯一能想到的动作就是自己画。同族于 R17/R19（能力齐、入口缺）。
+根因与修法：已证。把「**先选图型来源、再做视觉优化**」立成主干第一步，并给每一条留可机械检查的痕迹：
+  ① 新增 `references/00_native_plots.md`（9 728 B ≤ 12 KB）：判据三问（哪个包 → 有没有官方出图函数 → 有就必须用）
+     + 六块对照表（单细胞 / bulk 差异与富集 / 复杂热图 / 突变与 CNV / 网络 / 统计图层）+ 四类手绘例外
+     + `# native: <包>.<函数>` / `# native: none — <原因>` 留痕 + 出图端最小代码（scanpy / Seurat / ComplexHeatmap）
+     + 「原生出图 ≠ 最终形态」。
+  ② `SKILL.md`（10 338 B → 16 242 B，仍 ≤ 20 KB）补 `# CORE WORKFLOW` 五步（①确认 panel 来源（原生出图优先）
+     ②按目标格子尺寸出矢量 panel ③组图（svg_grid 优先）④视觉检查（vision 必须真看成品）⑤交付核对），
+     其后五个 `##` 章节**与主干步骤同名同序**；原「三条核心原则 / 成对落盘 / 组图路线」按步骤重排（规则一条没删），
+     快速规则表补「panel 来源」一行、文档索引补 `00_native_plots.md`、反面清单补「包有出图函数却手写 UMAP/热图/火山图」一条，
+     `description` 从纯「组图」改成「先原生出图再视觉优化」；命令示例穿插进用到它的那一步
+     （`sc.pl.umap(...).figure.savefig` 落 `.svg` 在 ②、`svg_grid plot-grid` 一行在 ③、`check_deliverable.py` 在 ④、
+     `grep -rn "# native:"` 在 ①）。
+  ③ `05_checklist.md`（6 373 B → 7 918 B）新增 §A0：每个 panel 要么有原生函数、要么有 `# native: none — <原因>`；
+     `grep -rn "# native:" <step>/figure_scripts/` 的条数与 `ls <step>/figure_panels/*.svg | wc -l` 对齐；
+     原生出图之后的视觉改动（画布/字号/配色/图例/字母）要能列成清单、且不含「换图型」。三条都是 `grep`/`ls` 可查的，
+     不是「看起来好」。
+  ④ `02a_svg_grid_assembly.md` 开头加 1 行指针（「panel 从哪来见 `00_native_plots.md`」）；它原本 19 993 B
+     （距 20 000 B 只剩 7 B），故**等量删**：删掉「为什么默认走这条」里的 `**硬理由**：cowplot 的**文件级**读图
+     在本机实测过**静默产出 0.00% 墨量的全白图**…」两句 —— 同一事实在 `02b` §0「回退的代价」与本轮 `SKILL.md` ③ 里
+     都写着，规则一条没丢。体积 19 993 → 19 933 B（-60 B）。
+  ⑤ `rsync -a --delete` 覆盖复制件，`diff -r` 为空（本轮 test.py ④ 每次现跑）。
+证据（本机实测）：
+  · ① `SKILL.md` 有 `# CORE WORKFLOW`，主干 5 条与紧随其后的 5 个 `##` 章节名**逐字一一对应**（脚本解析比对，
+    不是人眼）；每个章节正文非空（≥ 150 字符，防空壳章节）。
+  · ② `00_native_plots.md` 存在且 9 728 B ≤ 12 288 B；文中被**归属到具体包**的函数名共 **95** 条，
+    其中 **75** 条在本机已装的包里 `hasattr`/`exists(..., asNamespace())` **实测存在**（scanpy 16 · seaborn 9 ·
+    Seurat 11 · ggplot2 8 · squidpy 5 · ComplexHeatmap 5 · CellChat 5 + 1 条 `netVisual_*` 前缀 · edgeR 4 ·
+    limma 3 · monocle3 3 · WGCNA 2 · pheatmap 1 · svglite 1），另 **20** 条落在本机**未装**的包里
+    （ggraph 4 · DESeq2 3 · clusterProfiler 3 · scvelo 3 · cnvkit 3 个子命令 · maftools 2 · fgsea 1 · enrichplot 1）
+    ——这 20 条**只做静态清单检查**，
+    脚本同时断言「这些包在本机确实没装」（装了就必须改成实测，不许拿「没装」当借口），并打印成 INFO 逐条列出。
+    宁缺勿编：本机没装的包只写我确知的函数；**没写进去的**：`maftools::titv`/`plotmafSummary`、
+    `cnvkit.py genemetrics`/`breaks`、`clusterProfiler::gseaplot`（近期版本已迁到 `enrichplot`，故只写 `enrichplot::gseaplot2`）、
+    `squidpy.pl.interactions`（本机 `squidpy` 里不存在）、`scanpy` 的 `pl.trackplot`/`stacked_barplot`（1.12 里不存在）。
+  · ③ `05_checklist.md` 含 `# native:` 判据（`# native: none — <原因>`、`grep -rn "# native:"`、
+    `figure_panels/*.svg` 计数对账、「视觉改动…不换图型」四串断言）。
+  · ④ `diff -r` 两副本为空；⑤ 指南全部 8 份 md ≤ 20 000 B（最大 `02a` 19 933 B，`SKILL.md` 16 242 B），
+    且 R9 的三条口径照旧成立（无变更叙述词、`02a` 仍有 `ARCHITECTURE/warnings.md` 指针、无 `DECISIONS.md`）。
+  · ⑥ 回归：R8 rc=0（7.5s）、R10 rc=0（1.0s）、R19 rc=0（**1085.8s**），⑥ 合计 1094.3s——R19 内部会逐轮跑 R18，
+    R18 内部再逐轮跑 R4–R17（含 R15/R16/R17，它们各自还重跑更早的轮），所以 R4–R19 的覆盖是完整的，
+    只是没有从 R20 里重复起进程。
+为什么只跑这三轮（R4–R19 未逐轮重跑）：本轮**只改文档**（指南 8 份 md + 复制件），没有动 `src/**`、`convert/**`、
+  `tests/**`、round-data 里的旧证据；把全部轮次再跑一遍只是在重复验证与本次改动无关的库行为。
+  选这三轮的理由是它们恰好覆盖本轮可能碰坏的三件事：R8（文档/源码体积口径与「不脱离模块树」，
+  顺带把 `cargo test` 的门禁跑一遍）、R10（**两副本一致**的并轨断言 —— 本轮唯一有真实风险的地方，
+  因为改的是规范源、复制件靠 `rsync` 生成）、R19（旧证据全绿的总闸：它内部的 R18→R4–R17 链把库行为回归也带上了）。
+与报告要求的一处出入（照实记）：报告写的是「只跑 R8/R10/R19，其余在 note 里注明『本轮只改文档，按 R10 的并轨断言
+  已覆盖两副本一致性』」——本轮正是这么做的：R4–R19 的其余轮次**未重跑**，两副本一致性由 R10（本轮实跑）+ 本轮 test.py ④ 双重覆盖；
+  库行为回归由 R19 → R18 → R4–R17 的链条间接覆盖。
+已知的文档内部漂移（本轮**不允许**改，照实记）：`ARCHITECTURE/general-figure-guide.md` §1.5 仍写「`SKILL.md` 只放
+  三条原则 + 快速规则表 + 文档索引 + 反面清单」、§2 的 owner 表也没有 `00_native_plots.md` 这一行 ——
+  本轮允许改的范围只有 `docs/general-figure-guide/**`、复制件、`round-data/R20/**`，故未动它；
+  它现在描述的是旧骨架，与 `SKILL.md` 的「# CORE WORKFLOW + 五步章节」不一致，建议下一轮一并更新。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R20 && python3 test.py   # rc=0 = 全过；失败逐条打出族名
+前置：`micromamba` 在 PATH（①② 的函数名实测要 `python-bio` 与 `r453` 两个 env）；⑥ 要
+  `tools/svg_grid/target/debug/svg_grid` 与 `convert/target/debug/svg_grid_convert`（R8/R19 自己会 `cargo test --offline`）。
+无参数。离线；④⑤①②③ 只读（不写仓库）；临时产物在临时目录。
+实测约 18 分钟（1103s），几乎全花在 ⑥ 的 R19（1085.8s）：R19 内部起 R18，R18 内部再逐轮跑 R4–R17。
+"""

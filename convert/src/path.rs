@@ -1,11 +1,7 @@
 //! `<path d="...">` parsing and flattening to straight-line subpaths.
 //!
-//! The composer only rewrites points (`polyline`/`polygon`), so every path is
-//! turned into one element per `M`/`m` subpath: `polyline` when the subpath is
-//! stroked-only, `polygon` when it is filled. Straight commands (`M L H V Z`)
-//! convert exactly; Bézier curves (`C S Q T`) are flattened by recursive
-//! subdivision until the control points are within `tolerance` of the chord;
-//! elliptical arcs (`A`) are sampled from the centre parameterisation.
+//! Twin implementation of the composer's `src/path.rs` — the user declined a
+//! shared crate, so both keep a copy. Change both together; keep `DEFAULT_TOLERANCE` equal.
 
 use crate::affine::Affine;
 

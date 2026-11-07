@@ -1,0 +1,122 @@
+# R26 的 round-data —— 收掉 `svg_grid` 最后两条未决项
+#
+# A：14 个从未进过 `--help` 的下划线别名（`--font_dir` / `--label_colour` …）—— 关门。
+# B：「按目标格子尺寸出图」仍要调用方手算格宽、手填 `--normalize-input-max-side` —— 工具自己算，加 `--plan`。
+id = "R26"
+verdict = "新领土"
+
+family = [
+  "A：`src/cli/parse.rs` 的 `FLAGS` 是一张「正名 + 别名」表，同一语义有两种写法（`--font-dir` 与 `--font_dir`、`--label-colour` 与 `--label_colour` …）。下划线那 14 个**从没进过 `--help`**，属于「看不见的兼容层」：抄到的写法能跑，抄不到的报未知，而 `--help` 只列了一半。用户偏好最小面 —— 同一语义只留一种写法。",
+  "B：`02a` 的流水线要求调用方自己算「每个 panel 的格宽/格高 / 归一化目标」，再跨调用回填（`--width` + `--normalize-input-max-side` + 行拼 + 外层拼）。工具内部其实已经把 `sx/sy` 算出来了（`layout::compute_grid` / `geom::scale_panel_to_cell`），却**不输出** —— 于是每个调用方都要复制一遍 `avail = W − 2·margin − (n−1)·gap` 这套算术，还要自己判断 `s=1` 是否成立。",
+  "同族于 R7（入口薄、参数面只有一套）与 R14/R24（错误与数字要能自证）—— 本轮解决的是同一件事的两个面：**参数面要能自证**（`--help` 就是全部，没有第二套写法）与**数字要能自证**（格子尺寸由工具算，不由调用方反推）。",
+]
+
+closures = [
+  { finding = "R26-F1", tier = "代码" },   # src/cli/parse.rs：别名列清空 + canonical() 只读第一列 + `--plan` + `--plan`⊕输出 flag ⇒ usage(2)；src/cli/tests.rs：反向单测 3 条（14 个别名 / 别名列必须空 / --plan 只读）
+  { finding = "R26-F2", tier = "代码" },   # src/plan.rs（新模块）：GridRequest/GridPlan/PlannedInput/prepare/plan_grid；src/geom.rs：cell_scale()；src/lib.rs：plot_grid 改走 prepare；src/cli/execute.rs：--plan 分支 + 打印；src/cli/help.rs
+  { finding = "R26-F3", tier = "检查" },   # ARCHITECTURE/cli.md（规则 + --plan 契约）、layout.md（格子尺寸由工具算）、02a 流水线（19933 → 19747 B）+ rsync
+  { finding = "R26-F4", tier = "检查" },   # 本证据四族（① 别名 ② --plan ③ 指南 ④ 回归）
+]
+
+# 本轮改的是「参数面」与「新增只读子命令」，故回归「协议/transform/doctor/加载器/退出码/告警」这些会读
+# `--help`、读 flag 面、读产出几何、卡文件体积的旧轮。
+run_before = ["R4", "R5", "R7", "R8", "R9", "R13", "R14", "R16", "R17"]
+
+# 旧证据没有一条断言过这些别名（`grep -rnE -- "--(font_dir|label_colour|plot_margin|…)" docs/PITFALLS/round-data/`
+# 只命中本轮的 test.py）——没有断言被改。
+touched = []
+
+grep_usage = """
+`--help` 之外，仓库里提到下划线写法的只有四处，全部在**允许改的范围**之外或已随本轮更新：
+  · `tools/svg_grid/src/cli/tests.rs` —— 单测（已改成本轮的反向断言：14 个别名必须 `unknown flag`）
+  · `docs/single_cell/svg_plot_grid.md:635-641`（**根仓 docs/**，不在本轮可改范围）—— 一份 2026-09 的设计笔记，
+    仍写着 `--label_x / --label-x`、`--label_fontfamily / --label-fontfamily` 这类「两种都行」。
+    **本轮没改它**（自述 "This note records the current design"，且越界）：它会与现行解析器不一致，列出来备后续处理。
+  · `tools/svg_grid/PROGRESS.md:105` —— 未决项清单本身（只读，按约定不碰）
+  · `tools/svg_grid/ARCHITECTURE/cli.md:18` —— 本轮新写的规则句（用这两个举例说明「已删除」）
+真实使用点：**0**。故选择「删别名」，不在 `--help` 里为别名留位置。
+"""
+
+plan_sample = """
+$ svg_grid plot-grid --input E.svg --input F.svg --plan --width 4961 --ncol 2 --plot-margin 0
+canvas 4961x1984.400
+#0 E.svg  canvas 100x80  cell 2480.500x1984.400  s=24.805x24.805  Δ+0.00%
+note: #0 is not at its cell size (s=24.805); re-emit it at the cell size first:
+svg_grid plot-grid --input E.svg --output E.cell.svg --width 2480.500 --ncol 1 --plot-margin 0 --normalize-input-max-side 2480.500
+#1 F.svg  canvas 100x80  cell 2480.500x1984.400  s=24.805x24.805  Δ+0.00%
+note: #1 is not at its cell size (s=24.805); re-emit it at the cell size first:
+svg_grid plot-grid --input F.svg --output F.cell.svg --width 2480.500 --ncol 1 --plot-margin 0 --normalize-input-max-side 2480.500
+
+（缩过的面板再进 plan：`#0 E.cell.svg  canvas 2480.500x1984.400  cell 2480.500x1984.400  s=1x1` +
+`note: … no normalization needed.`）
+
+口径：`Δ = (sx/sy − 1)`（非等比的那部分，`0.00%` = 不变形）；「要不要先归一化」用 W1 的
+`SCALE_TOLERANCE`（0.5%），「有没有被拉伸」用 W2 的 `ASPECT_TOLERANCE`（1%）—— 与告警**同一组常数**。
+"""
+
+note = """
+为什么认定同类：R7 说「入口要薄、参数面只有一套」；本轮把「一套」落到实处（第二套写法删掉，且解析器只读
+  正名列）。R14/R24 说「错误/数字要能自证」；本轮让**布局数字**自证（`--plan` 打出格子尺寸与 `s`，
+  调用方不再反推）。
+根因与修法：已证。
+  ① 别名：14 个下划线写法（评估点名的全部）与 4 个同类 kebab 变体（`--label-font-size` / `--label-font-family`
+     / `--label-font-face` / `--label-color`）一并删除 —— 它们同样是「`--help` 里看不见的第二套拼法」。
+     注册表的形状取舍见下面「边界」第 1 条：注册表保持 `&[(&str, &[&str])]`，但**别名列对 29 个 flag 全为空**，
+     且 `canonical()` **只读第一列** —— 于是「停了别名」不是靠"没人写"，而是解析器里根本没有那条路径。
+     未登记写法一律 `unknown flag "<x>" (run `svg_grid --help` for usage)`、rc=2（老形状不变）。
+     单测：`aliases_are_accepted` → `underscore_aliases_are_unknown_flags`（14 个逐个断言 + kebab 仍可用）、
+     新增 `no_flag_has_an_alias`、新增 `plan_is_read_only_and_rejects_every_output_flag`。
+  ② `--plan`：新增模块 `src/plan.rs`，把 `plot_grid` 的前半段（读入 → `--normalize-input-max-side` →
+     `compute_grid`）抽成 `prepare(&GridRequest)`；**`plot_grid` 与 `plan_grid` 都只走它**。
+     `sx/sy` 抽成 `geom::cell_scale()` 这唯一定义（`scale_panel_to_cell`、W1、`--plan` 三处共用）。
+     打印在 `src/cli/execute.rs::print_plan`，数字用与 SVG 相同的 `format_number`（`lib.rs` 里由
+     `pub(crate)` 提为 `pub`）。`--plan` 在**解析期**就拒绝任何输出 flag（rc=2），「零写入」是解析层的性质，
+     不靠执行时小心翼翼：不解析输出路径、不读字体库 —— 与 `--list-fonts` 同类，是纯查询。
+     新增 selftest `compose::plot_grid::plan_reports_the_geometry_the_composition_applies`：
+     同一组参数下 plan 的 `cell`/`s` 必须解释得了真产出 SVG 里被缩放的坐标（10 × 1.5 = 15、50 × 1.5 = 75）。
+  ③ 指南：`02a` 的「流水线」加了一步 `--plan`，「正规做法」由「手算格宽 + 归一化公式」改为「先跑 `--plan`，
+     照抄它的 note 命令」；手算公式块与逐格归一化的占位符命令**整段删除**（净 −186 B，19933 → 19747 B）。
+     规则一条没删：`s=1`、同行同宽同高、`k = s`、`--plot-margin 0`、字母加在哪层全部保留，且现在可断言
+     （「交付前 5 件事」① 直接写「`--plan` 直接读出」）。
+证据（本机实测，`round-data/R26/test.py`）：
+  · 14 个下划线写法全部 rc=2 + `unknown flag "<x>"`；kebab 写法全部仍可用；`--help` 与解析器**双向**一一对应
+    （解析器 29 个 flag 全在帮助里；帮助里除 convert/doctor/全局的 10 个之外，没有解析器不认识的 flag）。
+  · `--plan` 零写入：跑前跑后的 **`git status --porcelain --untracked-files=all`** 与 `tools/svg_grid/`
+    （除 target）全部文件的 (size, mtime_ns) 完全一致；临时目录文件集/mtime 也一致；stderr 0 字节。
+    输出 = `canvas <W>x<H>` 一行 + 每个输入一行 `#i path canvas WxH cell WxH s=… Δ…%` + 每个输入一条 `note:`
+    （需要时下一行是**可照抄**的 `svg_grid plot-grid …`）。
+  · 判定口径与运行时一致：同参数下 `--plan` 的 `cell`/`s` 与**真跑产出的 SVG** 反解一致
+    （面板里放一个原点处 10×10 的 `data-scale="xy"` 方块；`s = 输出宽度/10`、格宽 = 相邻两格 `x` 之差、
+    格高 = 单行画布高）。实测 plan `1.5` == 反解 `1.500000`；plan 格宽 `150` == 反解 `150`；
+    plan 画布 `300x120` == SVG `width="300" height="120"`。
+  · 照抄 note 的命令真能收敛：跑完后该面板再进 `--plan` 报 `s=1x1` 且 note 改口「no normalization needed」。
+  · 退出码：`--ncol 0` rc=2；输入文件不存在 rc=1 且 stderr 点名该路径；`--plan --output` rc=2 且消息点名两者。
+  · 断言：**70 条全过、0 SKIP**，总用时 964 s（④ 的九轮逐条 rc=0，用时见 `how_to_run`）。
+  · crate 测试：`cargo test` 74（bin）+ 59（convert）+ 74（selftest）全绿；
+    `cargo fmt --check` 与 `cargo clippy --all-targets -- -D warnings` 干净。
+边界（照实说）：
+  1. **`FLAGS` 仍是二元组**：第一次全量跑时 R14 红在它那条「帮助文本覆盖全部 flag」——它用
+     `\\(\\s*"(--flag)"` 扫 `src/cli/parse.rs` 的注册表；我把注册表改成 `&[&str]` 后它扫出 0 个。
+     本轮可改范围不含 `round-data/R14/**`，所以改成「正名列 + 永远为空的别名列」，解析器只读正名列，
+     并用 `no_flag_has_an_alias` 锁住空列。行为上等价于"没有别名"，但**结构上多加了一列** —— 若将来允许改 R14，
+     这一列应当删掉、注册表还原成一维列表。
+  2. **`src/lib.rs` 是被 R8 逼着拆的**：加完 `--plan` 的类型后它到 25075 B，超了 R8 的 20000 B 铁律；
+     于是把布局那一半搬进新模块 `src/plan.rs`（8160 B），`lib.rs` 回到 17877 B。
+  3. `docs/single_cell/svg_plot_grid.md`（根仓 docs）仍写着下划线别名可用 —— 越界，未改，见 `grep_usage`。
+  4. `--plan` 的 `#<i>` 是**输入序号**（含空位）：空位也占一行 `#<i> (blank cell)  cell WxH`，
+     因为调用方对的是自己给的 `--input` 序列。
+  5. `--plan` 只回答「几何」：不打印 `--labels` 的字母落点、也不跑 W1–W9；告警仍是真跑时的事。
+  6. note 给的归一化命令按「单输入、单列、margin 0」出图，产物画布正好等于该格。若同层还用 `--rel-*`
+     把格子拉伸（`Δ ≠ 0`），note 会额外说明「omit --rel-* so the cell matches the panel」——那条命令只能消掉
+     `s ≠ 1`，消不掉拉伸（拉伸是版式选择，不是缩放问题）。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R26 && python3 test.py   # rc=0 = 全过
+前置：`cd tools/svg_grid && cargo build`（要 `target/debug/svg_grid`）。
+无参数；④ 会重跑 R4/R5/R7/R8/R9/R13/R14/R16/R17（R16 内含 R4–R15、R17 内含 R4–R16）。
+本机实测：**70 条断言全过、0 SKIP，总用时 964 s**（逐轮 rc=0 / 用时：R4 2s、R5 0s、R7 4s、R8 8s、
+R9 15s、R13 32s、R14 66s、R16 283s、R17 554s）。本轮给了 1700 s 总预算，超预算的轮次会打印
+`SKIP … 未跑/超时` 而不是静默略过。
+只读：临时产物只在系统临时目录，且 ② 用 `git status` + 文件 mtime 快照证明它一个字节都没写。
+"""

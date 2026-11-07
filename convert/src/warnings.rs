@@ -19,16 +19,20 @@ pub(crate) fn collect_warnings(root: &Element) -> Vec<String> {
 
     let mut warnings = Vec::new();
     if style_geometry > 0 {
+        let elements = if style_geometry == 1 {
+            "1 element puts".to_string()
+        } else {
+            format!("{style_geometry} elements put")
+        };
         warnings.push(format!(
-            "{style_geometry} element(s) put geometry in a CSS `style=\"...\"` attribute (e.g. `width`, \
-             `r`); the composer rescales the length properties it understands (`font-size`, \
-             `stroke-width`, `stroke-dasharray`) from `style`, but such geometry may still not be rescaled"
+            "{elements} geometry in a `style=` attribute (x/y/width/height/r), so it is not \
+             rescaled. Fix: write it as an SVG attribute"
         ));
     }
     if has_style_block {
         warnings.push(
-            "document contains a <style> CSS block; the composer does not parse CSS, so geometry/typography \
-             declared there is not rescaled"
+            "<style> CSS block is not parsed, so lengths/font-size there are not rescaled \
+             (harmless when it only sets stroke-linejoin/-linecap). Fix: write them as attributes"
                 .to_string(),
         );
     }
@@ -81,6 +85,24 @@ mod tests {
             "warnings: {:?}",
             done.warnings
         );
+    }
+
+    /// One printed converter warning is ≤ 200 characters, prefix included
+    /// (`ARCHITECTURE/warnings.md` §1 rule 1). The in-process prefix is the longer
+    /// of the two spellings (`svg_grid convert: warning: `).
+    #[test]
+    fn every_converter_warning_fits_the_200_character_cap() {
+        const PREFIX: &str = "svg_grid convert: warning: ";
+        let svg = "<svg width='100' height='80' viewBox='0 0 100 80' \
+                   xmlns='http://www.w3.org/2000/svg'>\
+                   <style>.a { stroke-linejoin: round }</style>\
+                   <rect x='1' y='1' width='10' height='10' style='width: 5;'/></svg>";
+        let done = crate::test_support::converted(svg);
+        assert_eq!(done.warnings.len(), 2, "{:?}", done.warnings);
+        for warning in &done.warnings {
+            let total = PREFIX.chars().count() + warning.chars().count();
+            assert!(total <= 200, "{total} ch: {warning}");
+        }
     }
 
     #[test]
