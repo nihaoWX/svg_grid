@@ -176,12 +176,9 @@
 
 # Next Steps
 
-1. **（待用户确认后动手）按 `INSTRUCTIONS.md` 的四条缺口排优先级**：
-   ① `plot-grid` 自动 convert（`plan.rs:144` 前接 `svg_grid_convert::convert`，成本最低）；
-   ② 字形孔修复（`path_form.rs` 的 N≥3 分支改出 `<path>` + 补回归用例）；
-   ③ 格子尺寸只由网格决定（行高不随该行实际图数变，`layout.rs` 的 `row_aspect_sums`）；
-   ④ `--labels` 中间步重号（W3 升硬错误或自动剥离）。
-   ②③ 是**产物正确性**问题，建议先于 ①④。
+1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
+   （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
+   建议顺序 **D1 字形孔 → D2 格子尺寸 → D3 默认网格 → D6 校验/`--verbose` → D4 自动 convert → D5 labels**。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
    `git -C <repo> show <commit>:<path>`。
