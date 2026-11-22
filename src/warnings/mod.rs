@@ -3,13 +3,14 @@
 //! The composer must never *silently* produce a result that looks right but is
 //! quietly wrong — that is the failure mode this tool exists to avoid. When the
 //! layout rescales an input, stretches a cell away from its panel's aspect
-//! ratio, re-letters an already-lettered composite, or receives inconsistent
-//! labels, the run still succeeds (exit code 0) and the output file is still
-//! written byte-for-byte as before; with `--verbose`, a warning is printed to
-//! stderr so an agent driving the tool can notice and fix the invocation. Without
-//! that flag the diagnostics are suppressed entirely: stderr is reserved for
-//! errors (a usage error, a duplicate label list, a missing font), so a successful
-//! run is byte-for-byte silent even when the layout had something to report.
+//! ratio, or receives inconsistent labels, the run still succeeds (exit code 0)
+//! and the output file is still written byte-for-byte as before; with
+//! `--verbose`, a warning is printed to stderr so an agent driving the tool can
+//! notice and fix the invocation. Without that flag the diagnostics are
+//! suppressed entirely: stderr is reserved for errors (a usage error, re-lettering
+//! an already-lettered composite, a mismatched label list, a missing font), so a
+//! successful run is byte-for-byte silent even when the layout had something to
+//! report.
 //!
 //! Every message answers three questions: *what happened*, *why it matters*, and
 //! *what to do about it* — but the *why* is never repeated from line to line. A
@@ -33,12 +34,12 @@
 //! calling `crate::warnings::…` unchanged.
 //!
 //! * [`scale`] — W1 ([`describe_scale`]) and W2 ([`describe_stretch`]).
-//! * [`labels`] — W3 ([`describe_existing_labels`]), W4a
+//! * [`labels`] — W3 ([`describe_existing_labels`], a hard error), W4a
 //!   ([`describe_label_count`]), W4b ([`describe_label_duplicates`]) and W5
-//!   ([`describe_clipped_label`]).
+//!   ([`describe_clipped_label`] / [`describe_moved_label`]).
 //! * [`content`] — W6 ([`describe_content_outside_canvas`]).
 //! * [`passthrough`] — W7 ([`Passthroughs`] / [`describe_passthrough`]).
-//! * [`fonts`] — W8 ([`describe_missing_font`]).
+//! * [`fonts`] — W8 ([`describe_missing_font_error`], a hard error).
 //! * [`refs`] — W9 ([`dangling_references`] / [`describe_dangling_reference`]).
 
 mod content;
@@ -133,15 +134,10 @@ pub const NOTE_PASSTHROUGH: &str = "a browser is lenient about a malformed or no
      it is passed through rather than rejected; it was not remapped, though, so its ink may land in \
      the wrong place.";
 
-/// Cause behind W8: why a font fallback is not merely cosmetic.
-pub const NOTE_FONT_FALLBACK: &str =
-    "a missing family changes glyph widths and line breaks, so the \
-     letters no longer match the figure the layout was measured against.";
-
 /// Cause behind W5: what a clipped letter looks like in the output.
 pub const NOTE_LABEL_CLIP: &str =
-    "a letter whose ink leaves the canvas is cut at the edge; the band \
-     reserved when --plot-margin is omitted is always large enough for it.";
+    "a letter is kept inside the canvas: a too-small --plot-margin moves \
+     its baseline inward, and omitting --plot-margin reserves a band that fits it.";
 
 /// Cause behind W9: what a dangling `url(#…)` costs, and which `<defs>` elements
 /// can define the id.

@@ -22,9 +22,7 @@ pub(crate) fn build(
     let size = labels.size.resolve(canvas_width);
     let x = cell.x + value(&labels.x, index, 0.0) * cell.width
         - value(&labels.hjust, index, 0.0) * size;
-    let y = cell.y
-        + (1.0 - value(&labels.y, index, 1.0)) * cell.height
-        + value(&labels.vjust, index, -0.25) * size;
+    let y = baseline(cell, index, labels, size);
     let mut attrs = vec![
         ("data-svg-grid-label".to_string(), index.to_string()),
         ("data-scale".to_string(), "position".to_string()),
@@ -40,6 +38,24 @@ pub(crate) fn build(
         attrs,
         children: vec![dom::Node::Text(label.clone())],
     })
+}
+
+/// Baseline `y` before any canvas clamp: the default `vjust = -0.25` lifts the
+/// letter above the cell's top edge, which is what reserves the label band.
+pub(crate) fn raw_baseline(cell: geom::Rect, index: usize, labels: &LabelSpec, size: f32) -> f32 {
+    cell.y
+        + (1.0 - value(&labels.y, index, 1.0)) * cell.height
+        + value(&labels.vjust, index, -0.25) * size
+}
+
+/// Baseline `y` actually written to the SVG.
+///
+/// A caller can pin `--plot-margin 0`, which leaves no room for the default
+/// above-the-panel baseline. Letters are never allowed to leave the canvas: the
+/// baseline is pushed down until the cap height fits, so the glyph lands just
+/// inside the cell's top edge instead of being clipped away.
+pub(crate) fn baseline(cell: geom::Rect, index: usize, labels: &LabelSpec, size: f32) -> f32 {
+    raw_baseline(cell, index, labels, size).max(crate::LABEL_CAP_HEIGHT_RATIO * size)
 }
 
 /// Per-letter override, falling back to the first value and then to `fallback`.

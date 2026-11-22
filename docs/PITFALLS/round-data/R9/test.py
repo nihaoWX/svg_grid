@@ -9,7 +9,7 @@
 2. **两份副本逐字节一致**（`diff -r` 为空）。
 3. **指南只写现状**：不出现变更叙述词（"已支持/已修复/不再需要/早期脚本/已现场实测收口"），
    且 `02a` 里给出指向 `ARCHITECTURE/warnings.md` 的指针（告警清单不在指南里重复）。
-4. **每条告警自带修法**：W1–W7 各由一个合成 fixture 触发，各自 stderr 必须含 `Fix:`；
+4. **每条告警自带修法**：W1–W7 各由一个合成 fixture 触发，各自 stderr 必须含 `Fix:`（W3 自 D5 起是 rc=2 硬错误，仍须带 Fix:）；
    负向对照（干净输入）必须 stderr 0 字节。
 
 外加：逐个跑既有五套证据（R4–R8）。
@@ -107,13 +107,13 @@ def main():
             ("W1 输入被缩放", run([w1], tmp / "o1.svg", ["--plot-margin", "0"]), "scaled by the layout"),
             ("W2 格子被拉伸", run([clean], tmp / "o2.svg", ["--plot-margin", "0", "--height", "200"]), "are stretched"),
             ("W3 重复加字母", run([lettered], tmp / "o3.svg", ["--plot-margin", "0", "--labels", "C"]),
-             "already contain panel letters"),
+             "already carry letters"),
             ("W4a 字母个数不符", run([clean], tmp / "o4.svg", ["--plot-margin", "0", "--labels", "A,B"]),
              "entries but the grid has"),
             ("W4b 字母重复", run([w4b_1, w4b_2], tmp / "o5.svg", ["--plot-margin", "0", "--labels", "A,A"]),
              "repeats some letters"),
-            ("W5 字母会被裁", run([clean], tmp / "o6.svg", ["--plot-margin", "0", "--labels", "A"]),
-             "may be clipped by the canvas"),
+            ("W5 字母内移", run([clean], tmp / "o6.svg", ["--plot-margin", "0", "--labels", "A"]),
+             "was moved inside the canvas"),
             ("W6 内容越出画布", run([w6], tmp / "o7.svg", ["--plot-margin", "0"]), "draws ink outside its own canvas"),
             ("W7 无法重写", run([w7], tmp / "o8.svg", ["--plot-margin", "0"]), "could not be rewritten"),
         ]

@@ -7,7 +7,7 @@
    （连"顺手读系统字体"的路也断掉）。
 2. **默认族 = Arial**：不给 `--label-fontfamily` 时，字母 `<text>` 上写的是 `font-family="Arial"`；
    `--list-fonts` 至少列出 Arial（库里实际可用的族）。
-3. **缺族出声（W8）**：请求库里没有的族 ⇒ **非致命警告**（含 `Fix:`）且 rc=0、产物照常生成。
+3. **缺族出声（W8）**：请求库里没有的族 ⇒ **硬错误**（含 `Fix:`）、rc=3，且不写产物（D5 起）。
 4. **空库 fail-closed**：`--font-dir` 指向空目录且**真的要字体**（要 PNG 或要加字母）⇒ 非零退出；
    纯矢量且不画字母 ⇒ 不拦。**正常路径 stderr 0 字节**。
 
@@ -84,10 +84,10 @@ def main():
         bad = tmp / "w8.svg"
         p = run(["--input", str(panel), "--output", str(bad), "--labels", "A", "--width", "200",
                  "--label-fontfamily", "NoSuchFont_xyz"])
-        check(p.returncode == 0 and "not in the font library" in p.stderr and "Fix:" in p.stderr,
-              "W8 缺族 ⇒ 非致命警告（含 Fix:）、rc=0、产物照常生成",
+        check(p.returncode == 3 and "not in the font library" in p.stderr and "Fix:" in p.stderr,
+              "W8 缺族 ⇒ 硬错误（含 Fix:）、rc=3、不写产物",
               f"rc={p.returncode} stderr={p.stderr[:400]}")
-        check(bad.exists(), "W8 缺族时产物仍然生成")
+        check(not bad.exists(), "W8 缺族时不写产物")
 
         empty = tmp / "emptyfonts"
         empty.mkdir(exist_ok=True)

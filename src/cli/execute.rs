@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use svg_grid::{
     auto_label_top_band, auto_labels, default_font_dir, font_families, format_number,
-    plan_grid_with_diagnostics, plot_grid_with_diagnostics, render_svg_to_avif_with_fonts,
+    plan_grid_with_labels, plot_grid_with_diagnostics, render_svg_to_avif_with_fonts,
     render_svg_to_png_with_dpi_with_fonts, AlignMode, GridPlan, GridRequest, LabelSize, LabelSpec,
     PlannedInput, PlotGridSpec, SvgInput,
 };
@@ -47,6 +47,17 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
         LabelSizeValue::Auto => LabelSize::Auto,
         LabelSizeValue::Fixed(size) => LabelSize::Fixed(size),
     };
+    let label_spec = label_list.map(|labels| LabelSpec {
+        labels,
+        x: args.label_x.clone(),
+        y: args.label_y.clone(),
+        hjust: args.label_hjust.clone(),
+        vjust: args.label_vjust.clone(),
+        size: label_size,
+        font_family: args.label_fontfamily.clone(),
+        font_face: args.label_fontface.clone(),
+        colour: args.label_colour.clone(),
+    });
 
     // Reserve the letter band automatically, unless the caller pinned --plot-margin
     // (in which case it is respected, and a too-small one only warns).
@@ -75,7 +86,11 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
     // contract (`ARCHITECTURE/cli.md` §`--plan`): no output path is resolved, the
     // font library is never consulted, no file is opened for writing.
     if args.plan {
-        print_plan(&plan_grid_with_diagnostics(request, args.verbose)?);
+        print_plan(&plan_grid_with_labels(
+            request,
+            label_spec.as_ref(),
+            args.verbose,
+        )?);
         return Ok(());
     }
 
@@ -110,18 +125,6 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
     // `--verbose` gates the library's non-fatal diagnostics; capture it before the
     // argument struct is consumed below.
     let verbose = args.verbose;
-
-    let label_spec = label_list.map(|labels| LabelSpec {
-        labels,
-        x: args.label_x.clone(),
-        y: args.label_y.clone(),
-        hjust: args.label_hjust.clone(),
-        vjust: args.label_vjust.clone(),
-        size: label_size,
-        font_family: args.label_fontfamily.clone(),
-        font_face: args.label_fontface.clone(),
-        colour: args.label_colour.clone(),
-    });
 
     plot_grid_with_diagnostics(
         PlotGridSpec {

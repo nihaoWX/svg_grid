@@ -49,7 +49,12 @@ fn every_warning_fits_the_200_character_cap() {
     let messages = [
         describe_scale(&wide_scales).unwrap(),
         describe_stretch(&wide_stretch).unwrap(),
-        describe_existing_labels(&(0..8).collect::<Vec<_>>()).unwrap(),
+        describe_existing_labels(
+            &(0..8)
+                .map(|index| (index, "A".to_string()))
+                .collect::<Vec<_>>(),
+        )
+        .unwrap(),
         describe_label_count(1, 8).unwrap(),
         describe_label_duplicates(&(0..8).map(|_| "A".to_string()).collect::<Vec<_>>()).unwrap(),
         describe_clipped_label("A", 0, outside, 4000.0, 3000.0).unwrap(),
@@ -57,7 +62,6 @@ fn every_warning_fits_the_200_character_cap() {
             .unwrap(),
         describe_passthrough(passthroughs.offenders()).unwrap(),
         describe_dangling_reference(&many_refs).unwrap(),
-        describe_missing_font("NoSuchFont_xyz", &["Arial".to_string()]).unwrap(),
     ];
     for message in messages {
         assert!(
@@ -92,7 +96,6 @@ fn every_cause_note_fits_the_cap() {
         NOTE_CANVAS_INK,
         NOTE_INK_DUST,
         NOTE_PASSTHROUGH,
-        NOTE_FONT_FALLBACK,
         NOTE_LABEL_CLIP,
         NOTE_DANGLING,
     ] {
@@ -110,7 +113,6 @@ fn no_cause_note_repeats_a_warning_phrase() {
         NOTE_CANVAS_INK,
         NOTE_INK_DUST,
         NOTE_PASSTHROUGH,
-        NOTE_FONT_FALLBACK,
         NOTE_LABEL_CLIP,
         NOTE_DANGLING,
     ];

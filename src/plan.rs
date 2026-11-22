@@ -18,7 +18,7 @@ use crate::input;
 use crate::layout;
 use crate::normalize;
 use crate::warnings;
-use crate::{InputNormalize, Margins, SvgInput};
+use crate::{InputNormalize, LabelSpec, Margins, SvgInput};
 
 /// A parsed input SVG together with the geometry the composer needs from it.
 pub(crate) struct PreparedInput {
@@ -212,7 +212,7 @@ pub(crate) fn prepare(
 /// same cell arithmetic — and only reports the result, so the numbers it prints are
 /// the numbers the real run applies.
 pub fn plan_grid(request: GridRequest) -> Result<GridPlan> {
-    plan_grid_with_diagnostics(request, false)
+    plan_grid_checked(request, None, false)
 }
 
 /// [`plan_grid`] with the same explicit diagnostics switch as
@@ -220,7 +220,30 @@ pub fn plan_grid(request: GridRequest) -> Result<GridPlan> {
 /// `verbose` is true, the converter warnings from an in-memory auto-conversion
 /// are printed to stderr. The **stdout** `--plan` contract is untouched.
 pub fn plan_grid_with_diagnostics(request: GridRequest, verbose: bool) -> Result<GridPlan> {
+    plan_grid_checked(request, None, verbose)
+}
+
+/// [`plan_grid`] that also validates the label request (D5 W3): `--plan` must
+/// fail exactly like the real run when it would re-letter an already-lettered
+/// composite. The plan itself is built only after the labels pass, so a failing
+/// call prints no plan.
+pub fn plan_grid_with_labels(
+    request: GridRequest,
+    labels: Option<&LabelSpec>,
+    verbose: bool,
+) -> Result<GridPlan> {
+    plan_grid_checked(request, labels, verbose)
+}
+
+fn plan_grid_checked(
+    request: GridRequest,
+    labels: Option<&LabelSpec>,
+    verbose: bool,
+) -> Result<GridPlan> {
     let (prepared, grid) = prepare(&request)?;
+    if let Some(labels) = labels {
+        crate::validate_label_conflicts(&prepared, labels)?;
+    }
     let mut warnings = warnings::Warnings::default();
     collect_auto_conversion_diagnostics(&request.inputs, &prepared, &mut warnings);
     let mut inputs = Vec::with_capacity(request.inputs.len());

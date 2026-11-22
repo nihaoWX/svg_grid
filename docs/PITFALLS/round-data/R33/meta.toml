@@ -1,0 +1,23 @@
+id = "R33"
+date = "2026-11-23"
+verdict = "新领土"
+family = ["--labels 的 NULL 槽位规则", "W3 重复加字母升硬错", "W8 缺字体族升硬错", "plot-margin 0 字母被裁"]
+closures = [
+  { finding = "R33-F1", tier = "代码" },
+  { finding = "R33-F2", tier = "代码" },
+  { finding = "R33-F3", tier = "代码" },
+  { finding = "R33-F4", tier = "代码" },
+  { finding = "R33-F5", tier = "代码" },
+]
+run_before = ["R32"]
+touched = []
+note = """
+为什么认定新问题：D5 的四个现象在旧代码里分别来自“按输入下标取字母 + lib 循环先跳过 spacer”“W3/W8 在写盘后才告警”“baseline 不夹取”，都不是 D2–D4 的连带修法能覆盖的。
+根因与修法：`src/labels.rs` 拆出 `raw_baseline` / `baseline`，`baseline = raw.max(0.75*size)`；`src/lib.rs` 的 spacer 分支在 `continue` 前画显式字母，`validate_label_conflicts`（新 `src/label_conflicts.rs`）在开输出前把 W3 变 `InvalidInput`（rc=2），W8 用 `describe_missing_font_error` 变 `Fonts`（rc=3）；`src/plan.rs:plan_grid_with_labels` 让 `--plan` 走同一 W3 校验；`src/cli/execute.rs` 把 `LabelSpec` 构造移到 `--plan` 分支之前。
+怎么修才不弄坏前面：AUTO 的 `parse_labels` 本来就跳过 NULL，未改；没有 `--labels` 的图完全不经过新校验；`--plan` 不读字体，缺族时仍 rc=0；W5 仍只在 `--verbose` 出现；`--labels ,C` 对已带字母输入仍放行。
+连带面（体积回退）：D5 让 `src/lib.rs` 到 20182 B、`tests/selftest/warnings/mod.rs` 到 20781 B，违反 R8 的 20000 B 底线。把 label 校验拆到 `src/label_conflicts.rs`，把 ink 相关测试拆到 `tests/selftest/warnings/ink.rs`（`mod ink;`，不用 include!），现最大 `src/layout.rs` 19069 B，R8 rc=0。
+旧证据适配：R9 的 W3 文案改 `already carry letters`、W5 改 `was moved inside the canvas`；R13 的 W8 从“警告 rc=0 产生产物”改为“rc=3 不写产物”。R8/R10/R14 仍绿，R28–R32 全 PASS。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R33 && python3 test.py  # rc=0 = 19 PASS
+"""

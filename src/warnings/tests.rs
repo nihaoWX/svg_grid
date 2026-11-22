@@ -112,14 +112,15 @@ fn stretch_warning_is_silent_when_aspects_match_or_are_close() {
 }
 
 #[test]
-fn existing_label_warning_only_when_an_input_is_lettered() {
+fn existing_label_error_names_the_input_and_letter() {
     assert!(describe_existing_labels(&[]).is_none());
-    let one = describe_existing_labels(&[0]).unwrap();
-    assert!(one.contains("already contain panel letters"), "{one}");
+    let one = describe_existing_labels(&[(0, "B".to_string())]).unwrap();
+    assert!(one.contains("already carry letters"), "{one}");
     assert!(one.contains("data-svg-grid-label"), "{one}");
     assert!(one.contains("input #0"), "{one}");
+    assert!(one.contains("\"B\""), "{one}");
     assert_no_count_wrapper(&one);
-    let message = describe_existing_labels(&[0, 3]).unwrap();
+    let message = describe_existing_labels(&[(0, "B".to_string()), (3, "C".to_string())]).unwrap();
     assert!(
         message.contains("#0") && message.contains("#3"),
         "{message}"
@@ -449,20 +450,4 @@ fn dangling_references_are_collected_per_attribute_and_deduplicated() {
     )
     .unwrap();
     assert!(dangling_references(&clean, 0).is_empty());
-}
-
-#[test]
-fn missing_font_warning_fits_the_cap_and_says_where_it_lands() {
-    let available = vec!["Arial".to_string()];
-    let message = describe_missing_font("NoSuchFont_xyz", &available).unwrap();
-    assert!(message.contains("not in the font library"), "{message}");
-    assert!(message.contains("Fix:"), "{message}");
-    assert!(message.contains("--list-fonts"), "{message}");
-    assert!(
-        line(&message) <= MAX_LINE,
-        "{} ch: {message}",
-        line(&message)
-    );
-    // A family the library holds is never reported.
-    assert!(describe_missing_font("Arial", &available).is_none());
 }

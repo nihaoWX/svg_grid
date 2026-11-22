@@ -4,6 +4,7 @@ mod geom;
 pub mod home;
 mod ink;
 mod input;
+mod label_conflicts;
 mod labels;
 mod layout;
 mod normalize;
@@ -20,8 +21,12 @@ use std::path::PathBuf;
 use plan::{collect_auto_conversion_diagnostics, prepare, PreparedInput};
 
 pub use error::{Result, SvgGridError};
+pub(crate) use label_conflicts::validate_label_conflicts;
 pub use layout::Margins;
-pub use plan::{plan_grid, plan_grid_with_diagnostics, GridPlan, GridRequest, PlannedInput};
+pub use plan::{
+    plan_grid, plan_grid_with_diagnostics, plan_grid_with_labels, GridPlan, GridRequest,
+    PlannedInput,
+};
 pub use raster::{
     data_root_font_dir, default_font_dir, font_families, load_font_database, render_svg_to_avif,
     render_svg_to_avif_with_fonts, render_svg_to_png, render_svg_to_png_with_dpi,
@@ -159,6 +164,22 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
     })?;
     let drawn: Vec<bool> = prepared.iter().map(Option::is_some).collect();
 
+    // W3 is a hard error now, and so is W8: both are "necessary information" in
+    // `INSTRUCTIONS.md`. They are checked before any output path is opened, so a
+    // failing call leaves no file behind.
+    if let Some(labels) = &spec.labels {
+        validate_label_conflicts(&prepared, labels)?;
+        if let Some(available) = &spec.font_families {
+            if labels.labels.iter().any(|label| !label.is_empty()) {
+                if let Some(message) =
+                    warnings::describe_missing_font_error(&labels.font_family, available)
+                {
+                    return Err(SvgGridError::Fonts(message));
+                }
+            }
+        }
+    }
+
     // The resolved grid size IS the output canvas (root width/height/viewBox, and
     // thus the PNG pixel count): `--width`/`--height` are never a "logical" size
     // that differs from the output.
@@ -241,6 +262,7 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
     }));
 
     for (index, input) in prepared.into_iter().enumerate() {
+        let cell = grid.cells[index];
         let Some(PreparedInput {
             mut root,
             panel,
@@ -248,10 +270,16 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
             auto_converted: _,
         }) = input
         else {
-            // A spacer draws nothing; the white background is already there.
+            // A spacer draws nothing, but an explicit `--labels` entry for this
+            // slot is still honoured: `NULL` occupies a cell, so its letter is
+            // drawn at the empty cell's top-left (INSTRUCTIONS.md `--labels`).
+            if let Some(labels) = &spec.labels {
+                if let Some(label) = labels::build(index, cell, spec.width, labels) {
+                    output.children.push(dom::Node::Element(label));
+                }
+            }
             continue;
         };
-        let cell = grid.cells[index];
         let target_panel = geom::scale_panel_to_cell(panel, canvas, cell)?;
         transform::transform_svg(&mut root, panel, target_panel, index, &mut passthroughs)?;
         // W9 is checked on the input's own subtree, before the ids are namespaced,
@@ -379,19 +407,9 @@ fn collect_warnings(
         return; // `--labels none`: nothing is drawn and nothing can be mislabelled
     }
 
-    // (3) A composite input that already carries letters is being lettered again.
-    let relettered: Vec<usize> = prepared
-        .iter()
-        .enumerate()
-        .filter_map(|(index, item)| {
-            let item = item.as_ref()?;
-            let label = labels.labels.get(index)?;
-            (!label.is_empty() && contains_data_svg_grid_label(&item.root)).then_some(index)
-        })
-        .collect();
-    if let Some(message) = warnings::describe_existing_labels(&relettered) {
-        warnings.add(message);
-    }
+    // (3) W3 and W8 are hard errors since D5: they were validated before the
+    // output was opened, so only the remaining non-fatal label diagnostics live
+    // here.
 
     // (4) Duplicate letters and a label count that does not match the input count
     // (empty slots included).
@@ -400,18 +418,6 @@ fn collect_warnings(
     }
     if let Some(message) = warnings::describe_label_duplicates(&labels.labels) {
         warnings.add(message);
-    }
-
-    // (4b) W8: the requested family is not in the font library, so the letters are
-    // rendered with whatever the renderer falls back to. Silent when the caller has
-    // no library to compare against (`font_families` is `None`).
-    if let Some(available) = &spec.font_families {
-        if labels.labels.iter().any(|label| !label.is_empty()) {
-            if let Some(message) = warnings::describe_missing_font(&labels.font_family, available) {
-                warnings.note(warnings::NOTE_FONT_FALLBACK);
-                warnings.add(message);
-            }
-        }
     }
 
     // (5) Letters whose ink would be clipped: an explicit `--plot-margin` is
@@ -427,6 +433,12 @@ fn collect_warnings(
         };
         if label.is_empty() {
             continue;
+        }
+        let raw = labels::raw_baseline(*cell, index, labels, size);
+        let placed = labels::baseline(*cell, index, labels, size);
+        if let Some(message) = warnings::describe_moved_label(label, index, raw, placed) {
+            warnings.note(warnings::NOTE_LABEL_CLIP);
+            warnings.add(message);
         }
         let ink = label_ink_box(label, *cell, index, labels, size);
         if let Some(message) =
@@ -449,9 +461,7 @@ fn label_ink_box(
 ) -> geom::Rect {
     let x = cell.x + labels::value(&labels.x, index, 0.0) * cell.width
         - labels::value(&labels.hjust, index, 0.0) * size;
-    let y = cell.y
-        + (1.0 - labels::value(&labels.y, index, 1.0)) * cell.height
-        + labels::value(&labels.vjust, index, -0.25) * size;
+    let y = labels::baseline(cell, index, labels, size);
     let characters = label.chars().count().max(1) as f32;
     geom::Rect {
         x,
@@ -459,16 +469,6 @@ fn label_ink_box(
         width: LABEL_INK_WIDTH_RATIO * size * characters,
         height: (LABEL_CAP_HEIGHT_RATIO + LABEL_BAND_PAD_RATIO) * size,
     }
-}
-
-/// Whether an input subtree already contains a `data-svg-grid-label` marker, i.e.
-/// it is (part of) a figure that a previous `plot_grid` call already lettered.
-fn contains_data_svg_grid_label(element: &dom::Element) -> bool {
-    element.attr("data-svg-grid-label").is_some()
-        || element.children.iter().any(|child| match child {
-            dom::Node::Element(child) => contains_data_svg_grid_label(child),
-            dom::Node::Text(_) => false,
-        })
 }
 
 fn namespace_ids(element: &mut dom::Element, prefix: &str) {

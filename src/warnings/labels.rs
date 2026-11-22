@@ -1,6 +1,6 @@
-//! The panel-letter warnings: W3 (re-lettering an already-lettered composite),
-//! W4a (a `--labels` count mismatch), W4b (duplicate letters) and W5 (a panel
-//! letter clipped by the canvas).
+//! The panel-letter diagnostics: W3 (re-lettering an already-lettered composite,
+//! now a hard error), W4a (a `--labels` count mismatch), W4b (duplicate letters)
+//! and W5 (a panel letter clipped by, or moved inside, the canvas).
 //!
 //! W5's *why* is the shared cause note [`super::NOTE_LABEL_CLIP`]; its own line
 //! only names the cell, the ink box and the fix.
@@ -9,30 +9,48 @@ use crate::geom::Rect;
 
 use super::{assemble, fit};
 
-/// Warn when an input already carries panel letters but this call would letter it
-/// again (the classic nesting mistake: passing `--labels` while assembling a
-/// composite/row block).
+/// Build the W3 hard error when an input already carries panel letters but this
+/// call would letter it again (the classic nesting mistake: passing `--labels`
+/// while assembling a composite/row block).
 ///
-/// The subject is deliberately `panels in input #N`, so the sentence reads the
-/// same for one offender and for many and never needs a `1 input(s)` wrapper.
-pub fn describe_existing_labels(indexes: &[usize]) -> Option<String> {
-    if indexes.is_empty() {
+/// W3 used to be a warning; since D5 it is a hard `rc=2` error (`INSTRUCTIONS.md`
+/// lists re-lettering under "必要信息"): the letters would be doubled and only the
+/// layer that owns the panel can place them correctly.
+pub fn describe_existing_labels(offenders: &[(usize, String)]) -> Option<String> {
+    if offenders.is_empty() {
         return None;
     }
-    let detailed: Vec<String> = indexes
+    let detailed: Vec<String> = offenders
         .iter()
-        .map(|index| format!("input #{index}"))
+        .map(|(index, letter)| format!("input #{index} (letter {letter:?})"))
         .collect();
-    let plain: Vec<String> = indexes.iter().map(|index| format!("#{index}")).collect();
+    let plain: Vec<String> = offenders
+        .iter()
+        .map(|(index, letter)| format!("#{index} ({letter:?})"))
+        .collect();
     Some(assemble(
         "panels in ",
         &detailed,
         &plain,
         &[
-            " already contain panel letters (data-svg-grid-label) but --labels was given again. \
-             Fix: pass --labels only in the call that owns the panels as direct inputs.",
+            " already carry letters (data-svg-grid-label); lettering them again would \
+             duplicate them. Fix: use --labels only where these panels are direct inputs.",
         ],
     ))
+}
+
+/// Build the W5 diagnostic for a letter that had to be moved down into the
+/// canvas because an explicit `--plot-margin` left no room above its cell.
+pub fn describe_moved_label(label: &str, index: usize, from: f32, to: f32) -> Option<String> {
+    if to <= from + 0.0001 {
+        return None;
+    }
+    let head = format!("panel letter {label:?} (cell {index}) was moved inside the canvas: ");
+    let body = format!(
+        "its baseline {from:.3} is above the canvas, so it was clamped to {to:.3}. \
+         Fix: omit --plot-margin so the label band is reserved, or enlarge its top."
+    );
+    Some(fit(&[format!("{head}{body}")]))
 }
 
 /// Warn when the number of explicit `--labels` entries does not match the number

@@ -90,7 +90,10 @@ fn auto_label_size_and_position_default_outside_the_panel() {
         rel_widths: vec![],
         rel_heights: vec![],
         gap: 0.0,
-        margin: Margins::zero(),
+        margin: Margins {
+            top: 40.0,
+            ..Margins::zero()
+        },
         align: AlignMode::Panels,
         labels: Some(LabelSpec {
             labels: vec!["A".to_string()],
@@ -111,8 +114,9 @@ fn auto_label_size_and_position_default_outside_the_panel() {
     let svg = fs::read_to_string(&output).unwrap();
     // size = 0.02 / 0.74 * 1000 = 27.027 (auto = canvas width * 2.7 %).
     assert!(svg.contains(r#"font-size="27.027""#), "{svg}");
-    // x = panel left edge (0); baseline lifted 0.25 * size = 6.757 above cell top.
-    assert!(svg.contains(r#"x="0" y="-6.757""#), "{svg}");
+    // x = panel left edge (0); cell top is the 40 px margin, and the baseline is
+    // lifted 0.25 * size = 6.757 above it (still inside the canvas).
+    assert!(svg.contains(r#"x="0" y="33.243""#), "{svg}");
 
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
@@ -257,9 +261,188 @@ fn cli_reserves_label_band_and_warns_on_tight_margin() {
     );
     let stderr = String::from_utf8_lossy(&tight.stderr);
     assert!(
-        stderr.contains("warning") && stderr.contains("clipped"),
-        "a too-small margin must warn: {stderr}"
+        stderr.contains("warning") && stderr.contains("moved inside the canvas"),
+        "a too-small margin must warn that the letter moved inward: {stderr}"
     );
 
     let _ = fs::remove_file(&input_path);
+}
+
+/// The text of every `data-svg-grid-label` element, indexed by its slot.
+fn label_texts(svg: &str) -> Vec<Option<String>> {
+    let mut labels = Vec::new();
+    for index in 0..8 {
+        let needle = format!(r#"<text data-svg-grid-label="{index}""#);
+        let Some(start) = svg.find(&needle) else {
+            labels.push(None);
+            continue;
+        };
+        let mut tail = &svg[start..];
+        if let Some(gt) = tail.find('>') {
+            tail = &tail[gt + 1..];
+        }
+        let text = tail.split("</text>").next().unwrap_or_default().to_string();
+        labels.push(Some(text));
+    }
+    labels
+}
+
+#[test]
+fn auto_labels_skip_null_and_explicit_labels_can_fill_the_empty_cell() {
+    let panels = write_panels(&["auto_null_a", "auto_null_b", "auto_null_c", "auto_null_d"]);
+    let out = temp_path("labels_null_out.svg");
+
+    let mut args: Vec<String> = Vec::new();
+    for input in [&panels[0], &panels[1]] {
+        args.push("--input".to_string());
+        args.push(input.to_string_lossy().into_owned());
+    }
+    args.push("--input".to_string());
+    args.push("NULL".to_string());
+    for input in [&panels[2], &panels[3]] {
+        args.push("--input".to_string());
+        args.push(input.to_string_lossy().into_owned());
+    }
+    args.extend(
+        [
+            "--output",
+            out.to_str().unwrap(),
+            "--width",
+            "500",
+            "--height",
+            "300",
+            "--ncol",
+            "2",
+            "--labels",
+        ]
+        .iter()
+        .map(|value| value.to_string()),
+    );
+
+    // Bare --labels: NULL does not consume a letter.
+    let auto = run_plot_grid(&args);
+    assert!(
+        auto.status.success(),
+        "{}",
+        String::from_utf8_lossy(&auto.stderr)
+    );
+    let svg = fs::read_to_string(&out).unwrap();
+    assert_eq!(
+        label_texts(&svg),
+        vec![
+            Some("A".to_string()),
+            Some("B".to_string()),
+            None,
+            Some("C".to_string()),
+            Some("D".to_string()),
+            None,
+            None,
+            None,
+        ],
+        "{svg}"
+    );
+
+    // Explicit list: slot 2 is NULL, but the letter X is still drawn in its cell.
+    let mut explicit = args.clone();
+    explicit.pop(); // the bare --labels flag
+    explicit.extend(
+        ["--labels", "A,B,X,,E"]
+            .iter()
+            .map(|value| value.to_string()),
+    );
+    let explicit = run_plot_grid(&explicit);
+    assert!(
+        explicit.status.success(),
+        "{}",
+        String::from_utf8_lossy(&explicit.stderr)
+    );
+    let svg = fs::read_to_string(&out).unwrap();
+    assert_eq!(
+        label_texts(&svg),
+        vec![
+            Some("A".to_string()),
+            Some("B".to_string()),
+            Some("X".to_string()),
+            None,
+            Some("E".to_string()),
+            None,
+            None,
+            None,
+        ],
+        "{svg}"
+    );
+    // The empty explicit slot skipped D's cell; no letter is attached to it.
+    assert!(!svg.contains(r#"data-svg-grid-label="3""#), "{svg}");
+
+    for path in [out].iter().chain(panels.iter()) {
+        let _ = fs::remove_file(path);
+    }
+}
+
+#[test]
+fn margin_zero_moves_every_letter_inside_the_canvas() {
+    let panels = write_panels(&[
+        "margin_zero_a",
+        "margin_zero_b",
+        "margin_zero_c",
+        "margin_zero_d",
+        "margin_zero_e",
+    ]);
+    let out = temp_path("labels_margin_zero_out.svg");
+    let mut args: Vec<String> = Vec::new();
+    for input in &panels {
+        args.push("--input".to_string());
+        args.push(input.to_string_lossy().into_owned());
+    }
+    args.extend(
+        [
+            "--output",
+            out.to_str().unwrap(),
+            "--width",
+            "500",
+            "--height",
+            "160",
+            "--ncol",
+            "5",
+            "--plot-margin",
+            "0",
+            "--labels",
+            "--verbose",
+        ]
+        .iter()
+        .map(|value| value.to_string()),
+    );
+
+    let result = run_plot_grid(&args);
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let svg = fs::read_to_string(&out).unwrap();
+    for index in 0..5 {
+        let needle = format!(r#"<text data-svg-grid-label="{index}""#);
+        let start = svg.find(&needle).expect("every letter must be drawn");
+        let tag = &svg[start..start + svg[start..].find('>').unwrap()];
+        let y: f32 = tag
+            .split(r#"y=""#)
+            .nth(1)
+            .and_then(|rest| rest.split('"').next())
+            .and_then(|value| value.parse().ok())
+            .expect("label y must parse");
+        assert!(
+            y >= 0.0,
+            "letter {index} must be inside the canvas: y={y}\n{svg}"
+        );
+    }
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("was moved inside the canvas"),
+        "the moved letter must be explained: {stderr}"
+    );
+
+    let _ = fs::remove_file(out);
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
 }

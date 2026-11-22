@@ -122,7 +122,7 @@ fn list_fonts_prints_the_deduplicated_sorted_library() {
 }
 
 #[test]
-fn warns_when_the_label_family_is_not_in_the_library() {
+fn a_missing_label_family_is_a_hard_font_error() {
     if !fonts_available() {
         return;
     }
@@ -145,14 +145,15 @@ fn warns_when_the_label_family_is_not_in_the_library() {
             "A",
             "--label-fontfamily",
             "NoSuchFont_xyz",
-            "--verbose",
         ],
     );
 
-    // W8 is non-fatal: exit code 0 and the figure is still written.
-    assert!(
-        result.status.success(),
-        "W8 must not fail the run: {}",
+    // W8 is "necessary information" since D5: a missing family fails every output
+    // (SVG included) with the existing font-error tier and writes no file.
+    assert_eq!(
+        result.status.code(),
+        Some(3),
+        "a missing label family must be a font error: {}",
         String::from_utf8_lossy(&result.stderr)
     );
     let stderr = String::from_utf8_lossy(&result.stderr);
@@ -160,25 +161,19 @@ fn warns_when_the_label_family_is_not_in_the_library() {
         stderr.contains(r#""NoSuchFont_xyz""#) && stderr.contains("is not in the font library"),
         "the missing family must be named: {stderr}"
     );
-    // The consequence is the shared cause note (printed once per run), not part
-    // of every W8 line.
     assert!(
-        stderr.contains("glyph widths and line breaks"),
-        "the consequence must be stated: {stderr}"
+        stderr.contains("available:") && stderr.contains("Arial"),
+        "the available families must be listed: {stderr}"
     );
-    assert!(stderr.contains("Fix:"), "W8 must carry a fix: {stderr}");
     assert!(
-        stderr.contains("non-fatal warning(s)"),
-        "W8 uses the shared footer: {stderr}"
+        stderr.contains("--list-fonts") && stderr.contains("fontlib/"),
+        "the error must say how to fix it: {stderr}"
     );
-    // The SVG carries the requested family verbatim (vector output keeps the name).
-    let svg = fs::read_to_string(&out).unwrap();
     assert!(
-        svg.contains(r#"font-family="NoSuchFont_xyz""#),
-        "the requested family is written to the SVG as given: {svg}"
+        !std::path::Path::new(&out).exists(),
+        "a failed font lookup must not leave an output file"
     );
 
-    let _ = fs::remove_file(out);
     for panel in panels {
         let _ = fs::remove_file(panel);
     }

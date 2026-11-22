@@ -16,11 +16,6 @@ pub const GENERIC_FAMILIES: &[&str] = &[
     "system-ui",
 ];
 
-/// The family the renderer substitutes for the generic `serif` at the end of every
-/// requested list (`fontdb`'s default; see `fontdb::Database::new`). This is where
-/// a missing name ends up when the library holds that family.
-const SERIF_FALLBACK: &str = "Times New Roman";
-
 /// The names of a CSS `font-family` list, in order, with quotes stripped.
 pub fn parse_family_list(value: &str) -> Vec<String> {
     value
@@ -43,48 +38,24 @@ fn has(available: &[String], name: &str) -> bool {
         .any(|family| family.eq_ignore_ascii_case(name))
 }
 
-/// Build the W8 warning when the first **non-generic** family in `requested` is not
-/// in `available` (the families the font library actually holds).
-///
-/// Returns `None` when the request is satisfied, when every name in it is generic
-/// (then the library's own aliases decide and nothing was asked for by name), and
-/// when the caller had no library to compare against.
-///
-/// The line names the missing family, where the letters actually land and the
-/// fix; *why* a fallback is not cosmetic is the shared note
-/// [`super::NOTE_FONT_FALLBACK`], printed once per run.
-pub fn describe_missing_font(requested: &str, available: &[String]) -> Option<String> {
+/// The hard-error form of W8 (D5): a missing label family
+/// is "necessary information", so every output — SVG included — fails with the
+/// font-error exit tier instead of silently falling back.
+pub fn describe_missing_font_error(requested: &str, available: &[String]) -> Option<String> {
     let names = parse_family_list(requested);
     let position = names.iter().position(|name| !is_generic(name))?;
     let missing = &names[position];
     if has(available, missing) {
         return None;
     }
-
-    // Where the text actually lands: the next requested name the library has,
-    // otherwise the renderer's trailing `serif` fallback.
-    let requested_fallback = names[position + 1..]
-        .iter()
-        .find(|name| !is_generic(name) && has(available, name));
-    let lands_on = match requested_fallback {
-        Some(name) => format!("{name:?}"),
-        None if has(available, SERIF_FALLBACK) => format!("{SERIF_FALLBACK:?}"),
-        None => "whatever face it finds first".to_string(),
-    };
-
-    Some(super::fit(&[
-        format!(
-            "--label-fontfamily {missing:?} is not in the font library: the letters fall back to \
-             {lands_on}. Fix: use a family from --list-fonts, or add it to fontlib/ \
-             (fontlib/setup.sh copies Arial / Times New Roman)."
-        ),
-        format!(
-            "--label-fontfamily {missing:?} is not in the font library: the letters fall back to \
-             {lands_on}. Fix: use a family from --list-fonts or add it to fontlib/."
-        ),
-        format!(
-            "--label-fontfamily {missing:?} is not in the font library: the letters fall back to \
-             {lands_on}. Fix: see --list-fonts."
-        ),
-    ]))
+    let shown: Vec<&str> = available.iter().take(6).map(String::as_str).collect();
+    let mut listed = shown.join(", ");
+    if available.len() > shown.len() {
+        listed.push_str(", …");
+    }
+    Some(super::fit(&[format!(
+        "--label-fontfamily {missing:?} is not in the font library (available: {listed}). \
+         Fix: use a family from --list-fonts, or add it to fontlib/ (fontlib/setup.sh \
+         copies Arial / Times New Roman)."
+    )]))
 }
