@@ -8,8 +8,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use svg_grid::{
-    auto_label_top_band, auto_labels, default_font_dir, font_families, format_number, plan_grid,
-    plot_grid_with_diagnostics, render_svg_to_avif_with_fonts,
+    auto_label_top_band, auto_labels, default_font_dir, font_families, format_number,
+    plan_grid_with_diagnostics, plot_grid_with_diagnostics, render_svg_to_avif_with_fonts,
     render_svg_to_png_with_dpi_with_fonts, AlignMode, GridPlan, GridRequest, LabelSize, LabelSpec,
     PlannedInput, PlotGridSpec, SvgInput,
 };
@@ -75,7 +75,7 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
     // contract (`ARCHITECTURE/cli.md` §`--plan`): no output path is resolved, the
     // font library is never consulted, no file is opened for writing.
     if args.plan {
-        print_plan(&plan_grid(request)?);
+        print_plan(&plan_grid_with_diagnostics(request, args.verbose)?);
         return Ok(());
     }
 

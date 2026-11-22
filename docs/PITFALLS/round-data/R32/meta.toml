@@ -1,0 +1,20 @@
+id = "R32"
+date = "2026-11-23"
+verdict = "新领土"
+family = ["未打标签输入被 plot-grid 直接拒绝"]
+closures = [
+  { finding = "R32-F1", tier = "代码" },
+  { finding = "R32-F2", tier = "代码" },
+  { finding = "R32-F3", tier = "代码" },
+]
+run_before = ["R31"]
+touched = []
+note = """
+为什么认定新问题：`prepare` 对所有输入无条件 `find_panel_box`，但 `convert` 已是纯字符串库函数；D1/D6 都没有把“转换”接进组合路径。用户期望 #11 明确要求自动转换且不改原图，旧行为 rc=2。
+根因与修法：`src/plan.rs:155-174` 先探测 panel box；缺失时调用 `svg_grid_convert::convert(source, false)`，只重新解析内存字符串，已有 box 的输入跳过。`src/geom.rs:31` 新增 `find_panel_box_opt`，公开错误文案不变。失败路径点名输入、列前 3 条 finding（≤200 字符）并给修复建议；`--plan` 共用 `prepare`，同样 rc=2 且不写文件。
+怎么修才不弄坏前面：已打标签输入不进入转换分支，与 D4 前二进制 `bddf2b7` 对 `tagged/A_heatmap.svg` 的输出逐字节相同（SHA `ca2f6503…`）；默认 stderr 仍 0 字节，转换告警只在 `--verbose` 下经 D6 的 `Warnings::emit(verbose)` 发射；`--plan` 的 stdout `note:` 契约未动；未新增依赖。
+连带面：新增 `tests/selftest/autoconvert/mod.rs` 9 条测试；`src/cli/execute.rs` 的 plan 分支传 verbose；`src/lib.rs` 组合路径接入诊断收集；`src/warnings/mod.rs` 新增 note。ARCHITECTURE/PROGRESS/INSTRUCTIONS 未动，由 Arranger 统一同步。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R32 && python3 test.py  # rc=0 = 38 PASS
+"""

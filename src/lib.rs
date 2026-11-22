@@ -17,11 +17,11 @@ mod warnings;
 
 use std::path::PathBuf;
 
-use plan::{prepare, PreparedInput};
+use plan::{collect_auto_conversion_diagnostics, prepare, PreparedInput};
 
 pub use error::{Result, SvgGridError};
 pub use layout::Margins;
-pub use plan::{plan_grid, GridPlan, GridRequest, PlannedInput};
+pub use plan::{plan_grid, plan_grid_with_diagnostics, GridPlan, GridRequest, PlannedInput};
 pub use raster::{
     data_root_font_dir, default_font_dir, font_families, load_font_database, render_svg_to_avif,
     render_svg_to_avif_with_fonts, render_svg_to_png, render_svg_to_png_with_dpi,
@@ -169,6 +169,9 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
     // must still exit 0 and write its output, but must tell the caller on stderr.
     // Gathered before the inputs are consumed and flushed after writing.
     let mut warnings = warnings::Warnings::default();
+    // In-memory auto-conversion of untagged inputs happened inside `prepare`; its
+    // converter warnings join the same `--verbose` channel as W1–W9.
+    collect_auto_conversion_diagnostics(&spec.inputs, &prepared, &mut warnings);
     collect_warnings(
         &spec,
         &prepared,
@@ -242,6 +245,7 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
             mut root,
             panel,
             canvas,
+            auto_converted: _,
         }) = input
         else {
             // A spacer draws nothing; the white background is already there.

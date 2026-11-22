@@ -149,6 +149,11 @@ pub const NOTE_DANGLING: &str = "a dropped paint server (<linearGradient>, <radi
      <pattern>) or <clipPath> paints its shapes with nothing, so the ink is gone while the figure \
      still looks complete.";
 
+/// Why an untagged input is converted on the fly: the conversion is an in-memory
+/// copy, so the panel the caller pointed at is never opened for writing.
+pub const NOTE_AUTO_CONVERTED: &str = "an input without a `<rect data-panel-box=\"main\">` is \
+     converted in memory before composition; the source SVG is only ever read, never rewritten.";
+
 /// Warnings and cause notes collected during a single `plot_grid` call. Emitting
 /// them together keeps a run with many offenders to a handful of lines instead of
 /// one line per offender.

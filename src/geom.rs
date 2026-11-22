@@ -16,11 +16,20 @@ pub fn parse_f32(value: &str, attr: &str) -> Result<f32> {
 }
 
 pub fn find_panel_box(root: &Element) -> Result<Rect> {
-    find_panel_box_element(root)?.ok_or_else(|| {
+    find_panel_box_opt(root)?.ok_or_else(|| {
         SvgGridError::InvalidInput(
             "input SVG must contain a <rect data-panel-box=\"main\" .../> element".to_string(),
         )
     })
+}
+
+/// The panel box when the document has one, `None` when it does not.
+///
+/// [`find_panel_box`] keeps its public error text for callers that require a box;
+/// the auto-conversion path uses this to *test* for one without matching on an
+/// error string. Both share the same recursive lookup.
+pub(crate) fn find_panel_box_opt(root: &Element) -> Result<Option<Rect>> {
+    find_panel_box_element(root)
 }
 
 pub fn find_canvas_box(root: &Element) -> Result<Rect> {

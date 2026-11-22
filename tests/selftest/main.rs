@@ -15,6 +15,7 @@
 //! protocol panels and the `plot-grid` CLI wrappers, `common::harness` holds the
 //! subprocess harness (`svg_grid doctor` / `svg_grid convert` runs).
 
+mod autoconvert;
 mod common;
 mod compose;
 mod doctor;
