@@ -2,13 +2,13 @@
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
-  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）与 D2（末行格子尺寸）
-  已修复并评审通过（R27/R28/R29）；其余见 `# Known Issues`，按 D3→D6→D4→D5 在修。**
+  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）、D2（末行格子尺寸）、
+  D3（默认网格）已修复并评审通过（R27/R28/R29/R30）；其余见 `# Known Issues`，按 D6→D4→D5 在修。**
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 207 项**（74 lib + 59 convert-lib + 74 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
+  `textLength` 一起缩）。**测试 217 项**（81 lib + 59 main + 77 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **九条非致命告警 W1–W9**（只走 stderr，**退出码与产物字节都不变**，有测试锁定；正常路径 stderr 0 字节）：
   契约与清单见 `ARCHITECTURE/warnings.md`。
@@ -37,6 +37,11 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-22 **D3 默认网格（R30）**：不给 `--ncol/--nrow` 时 `cols=ceil(sqrt(count))`、`rows=ceil(count/cols)`
+  （count 含显式 NULL：1→1×1、2→1×2、3/4→2×2、5/6→2×3、7–9→3×3、10–12→3×4、13–16→4×4、17→4×5），
+  末行不满合法、末槽不生成 cell。5 图默认 `1000×533.333`、格全 `333.333×266.667`；15 图默认 `1000×800`、格 `250×200`。
+  默认输出与显式近方形网格逐字节相同；1/2 图默认与旧 `--ncol 1`/`--ncol 2` 逐字节相同。
+  新增 4 条测试；根 217 tests / convert 100 / doctor 57/0/1。提交 `e09c33b`→`dc9a900`（删报告），证据 `docs/PITFALLS/round-data/R30/`。
 - 2026-11-22 **D2 末行格子尺寸（R29）**：`src/layout.rs` 行高信号改为 `available_w / Σ(全网格列权重)`
   （列权重 = `--rel-widths` 或该列第一张非 NULL 面板的纵横比），删除按"本行实际图数"求和的 `row_aspect_sums`；
   短末行与满行同尺寸（5 图 `--ncol 2` ⇒ `1000×1200`、全 `500×400`），满行形状几何逐字节不变
@@ -86,24 +91,22 @@
 
 # In Progress
 
-- **D3 默认网格**（2026-11-22，Generator 执行中）：不给 `--ncol/--nrow` 时 `cols=ceil(sqrt(count))`、
-  `rows=ceil(count/cols)`（1→1×1、2→2×1、3→2×2、5→3×2、15→4×4、16→4×4），末行不满合法、末槽不生成 cell。
-  完成后依次 D6 校验/`--verbose` → D4 自动 convert → D5 labels → 消费 `defs mask/marker` 报告。
+- **D6 网格校验 + `--verbose` 默认静音**（2026-11-22，待派 Generator）：① 显式 `ncol/nrow` 时按
+  `(rows-1)*cols < count ≤ rows*cols` 校验（不许整行全空、不许装不下；5 图给 4×2、5/6 图给 3×3 都要报错，
+  5 图 `--ncol 2` 合法）；② W1–W9 与聚合 `note:` 默认不再打 stderr，`--verbose` 才展开，
+  `convert` 子命令同样受控；`--plan` 的 stdout `note:` 不受影响。
+- 完成后依次 D4 自动 convert → D5 labels → 消费 `defs mask/marker` 报告。
 - 无其他进行中工作。
 
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
 
-## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1/D2 已修，其余按 D3→D6→D4→D5 顺序在修）
+## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1/D2/D3 已修，其余按 D6→D4→D5 顺序在修）
 
-1. **【D3/D6】默认网格与"声明"规则都没实现**（违反用户期望 #10）：
-   - **默认网格**：不给 `ncol`/`nrow` 时 `cols=ceil(sqrt(n))`、`rows=ceil(n/cols)`（15 图 → 4×4，5 图 → 3×2），
-     末格按 NULL 处理；现在 `(None, None) => (1, count)`（`src/layout.rs:69-74`）⇒ 5 图默认是一行 `1×5`。
-   - **空位声明**：显式 `ncol`/`nrow` 时只要没有"整行全空"就合法（末行不满可以，末槽不生成 cell）；
-     整行全空（如 5 输入给 3×3）报错。默认模式末格自动按 NULL 处理。
-2. **【D6】`rows×cols` 上界没校验**：现在只查"装不下"（`src/layout.rs:75-77`）；用户要求多出整整一行也报错
-   （5/6 个输入给 9 格）。判据等价于 `(rows-1)*cols < count ≤ rows*cols`（不许整行全空）。
+1. **【D6】"整行全空"没校验**：现在只查"装不下"（`src/layout.rs:75-77`）；用户要求多出整整一行也报错
+   （5 输入给 `--nrow 4`（2 列）或 3×3、6 输入给 3×3）。判据等价于 `(rows-1)*cols < count ≤ rows*cols`；
+   末行不满合法（5 输入 2×3），末槽不生成 cell。
 3. **【D6】`--verbose` 未实现**：默认只输出必要信息（报错），W1–W9 与聚合 `note:` 静音；`--verbose` 才展开
    （`convert` 子命令同样受控）。现在告警一律打 stderr（`src/warnings/mod.rs` 的 `emit`）。
 4. **【D4】`plot-grid` 不会自动 convert**（违反用户期望 #11）：未打标签的输入直接 `rc=2`：
@@ -122,6 +125,12 @@
    报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：D1–D6 之后立即处理。
 
 ## 其他未决项
+
+- **`--labels` + 显式 `--plot-margin 0` 会把首行字母裁掉**（pre-existing，D5 时一并处理）：字母 baseline 在
+  cell 顶上方 0.25em（`src/labels.rs:29`），margin 0 时 `y=-6.757` 落在画布外、被静默裁掉；不给
+  `--plot-margin` 的自动字母带正常（5 图默认 y=21.622）。
+- **`--rel-widths` 部分为 0 会静默产出 0 宽格子**（pre-existing，低优先）：如 `0,1` 时首列 cell 宽 0、面板不可见，
+  与 `rel_*` 其余 fail-closed 行为不一致。
 
 - **嵌套组图会累积"与目标网格的偏差"**（不是变形：每步 `Δ=0.00%`）。实测 A4 目标 1000×1414 的
   最小步骤链拼出 1532.48（**+8.4%**），其中 GH 行 1.445 倍行高（底行 3 格只放 2 个 ⇒ 每格 1.5 格宽）。
@@ -175,8 +184,8 @@
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
    （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1（字形孔）与 D2（末行格子尺寸）已完成**（`1e05ce1`/`1da48f0`/`66fba3c`+`cf76029`，R27/R28/R29，评审 PASS）；
-   从 **D3 默认网格** 接着往下：D3 → D6 校验/`--verbose` → D4 自动 convert → D5 labels。
+   **D1（字形孔）、D2（末行格子尺寸）、D3（默认网格）已完成**（`1e05ce1`/`1da48f0`/`66fba3c`+`cf76029`/`e09c33b`，
+   R27/R28/R29/R30，评审 PASS）；从 **D6 校验 + `--verbose`** 接着往下：D6 → D4 自动 convert → D5 labels。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
    `git -C <repo> show <commit>:<path>`。
