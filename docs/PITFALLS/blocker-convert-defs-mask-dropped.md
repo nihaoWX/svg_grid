@@ -106,3 +106,23 @@ mask/marker，`convert` 会 rc=1。两者必须一起改：`bake` 对 mask/marke
    内容只在 `maskContentUnits="userSpaceOnUse"`（默认）时缩放；`marker` 的内容与
    `markerWidth/Height/refX/refY` 只在 `markerUnits="userSpaceOnUse"` 时缩放，默认 `strokeWidth` 一律不动。
 4. `convert` 侧 `bake` 递归进 mask/marker（IDENTITY），`self_check` 相应收窄。
+
+## 追加实测（2026-11-23，R35 派单前；`<filter>` 同样被丢，且后果更重）
+
+`REFERENCE_TARGETS` 是**按元素名**的白名单，所以同一机制还命中 `<filter>`：`<defs><filter id="f">`
+被整块删掉，`filter="url(#f)"` 悬空。
+
+- resvg 对悬空 `filter` 引用的处理是**整个图形不画**（不是"忽略滤镜照常画"）：
+  `/tmp/r35probe/filt8.svg`（一个 dilate 滤镜矩形 + 一个普通矩形）源图黑墨 **15,616 px**，
+  `convert` 产物 **6,400 px** —— 带滤镜的那个矩形**完全消失**。
+- 把 `<filter>` 手工塞回产物（`filt6.restored.svg`）⇒ 黑墨回到 **12,321 px**，与源图一致，
+  证明差异就是被删的 defs。
+- cairosvg 忽略滤镜，所以这条在 cairosvg 下看不出来（两个文件都 6,400 px）——**渲染器相关**，
+  但 resvg 是真实下游，属于静默丢墨。
+- `plot-grid` 的 W9 能抓到（`--verbose` 下 `input #0 <rect filter> -> url(#f)`），但 `convert`
+  自己 rc=0、stderr 0 字节，且 W9 默认静音。
+
+⇒ R35 的修法**不能**是往 `REFERENCE_TARGETS` 里补名字（补了 `filter` 还会有下一个）：
+按"文档里被 `url(#id)` / `href="#id"` 引用的 defs 子项"保留，剪完对悬空引用 fail-closed。
+`<filter>` 的内容不需要合成期缩放（`filterUnits` 默认 `objectBoundingBox`，且滤镜参数不是
+用户空间坐标），所以它只吃第 1、2 步，不吃第 3 步。
