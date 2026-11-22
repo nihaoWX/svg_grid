@@ -60,3 +60,49 @@ PY
 `marker-end="url(#a)"` 悬空；cairosvg 渲染该产物直接抛
 `AttributeError: 'NoneType' object has no attribute 'get'`（`path.py:54 draw_markers`），即箭头丢失且下游渲染器可能崩。
 
+## 追加实测（2026-11-23，D5 之后；`prune_defs` 之外还有两层）
+
+把 `<mask>`/`<marker>` 手工留在产物里（绕过 `prune_defs`）再走 `plot-grid`，暴露两个**独立的**
+合成期缺陷——所以修法不能只是往 `REFERENCE_TARGETS` 里加两个名字。
+
+### A. `<mask maskUnits="userSpaceOnUse">` 的区域不跟着缩放
+
+输入（100×60 画布，遮罩区域 50×30 只留左上四分之一）：
+
+```xml
+<defs><mask id="m" maskUnits="userSpaceOnUse" x="0" y="0" width="50" height="30">
+  <rect x="0" y="0" width="50" height="30" fill="white"/></mask></defs>
+<rect x="0" y="0" width="100" height="60" fill="black" mask="url(#m)"/>
+```
+
+`plot-grid --width 400 --ncol 1` 后：内容被搬到 `x=24 y=24`，但 `<mask>` 的
+`x/y/width/height` 仍是 `0/0/50/30` ⇒ 遮罩区域与图形错位，黑墨 **23,996 → 2,492 px**（几乎全被遮掉）。
+`src/transform/mod.rs` 的 `rewrite_primitive` 只处理 `linearGradient`/`radialGradient`/`pattern`，
+没有 `mask` 分支；`maskUnits` 默认是 `objectBoundingBox`（分数），只有 `userSpaceOnUse` 才该缩放。
+
+### B. `<marker>` 的内容被当成用户空间坐标平移
+
+`markerUnits` 默认 `strokeWidth`：marker 内容坐标的单位是**引用元素的 stroke-width**，不是用户空间。
+`src/transform/mod.rs:83-88` 无条件递归所有子节点 ⇒ marker 内容被加上格偏移：
+
+- 输入 `M 0,0 L 6,3 L 0,6`（`markerUnits` 默认）⇒ 产物 `M 24 24 L 30 27 L 24 30`（多了 24,24）。
+- 黑墨 3,520 → 3,712 px（箭头相对顶点偏移）。
+- `markerUnits="userSpaceOnUse"` 时才该跟着变换。
+
+### C. `convert` 的 `self_check` 会拒绝保留下来的 mask/marker 内容
+
+`convert/src/self_check.rs:49-96` 的 `in_mask_or_marker` 把 mask/marker 内的 `<path>` 一律判残渣
+（R28 的 deliberate fail-closed），而 `convert/src/translate/bake.rs:70-82` 只对 `defs`/`pattern`
+递归、对 `mask`/`marker` 走 `_ =>` 原样保留（不翻译）。⇒ 一旦 `prune_defs` 开始保留带 `<path>` 的
+mask/marker，`convert` 会 rc=1。两者必须一起改：`bake` 对 mask/marker 也按 `Affine::IDENTITY` 递归，
+`self_check` 的 mask/marker 例外收窄到"非 canonical 展平 path"。
+
+### 结论（给 R34 的口径）
+
+1. `prune_defs` 改为**按引用保留**（`url(#id)` / `href="#id"` / `mask=` / `marker-*=` / `clip-path=` /
+   `fill=` / `stroke=` 里出现的 id），`<style>` 恒留；未被引用的仍丢弃。
+2. 剪完之后**悬空引用 fail-closed**（rc≠0、点名属性与 id），不再静默丢遮罩/箭头。
+3. 合成期按单位处理：`mask` 的 `x/y/width/height` 只在 `maskUnits="userSpaceOnUse"` 时缩放，
+   内容只在 `maskContentUnits="userSpaceOnUse"`（默认）时缩放；`marker` 的内容与
+   `markerWidth/Height/refX/refY` 只在 `markerUnits="userSpaceOnUse"` 时缩放，默认 `strokeWidth` 一律不动。
+4. `convert` 侧 `bake` 递归进 mask/marker（IDENTITY），`self_check` 相应收窄。
