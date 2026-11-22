@@ -70,17 +70,13 @@ pub(crate) fn path_shapes(
     } else {
         // Filled *and* stroked with several subpaths: the fill is one region but
         // the stroke follows each subpath, and a single primitive cannot paint
-        // both (it would stroke the bridges). Split into a fill-only `<polygon>`
-        // and one stroke-only shape per subpath. Each paint is removed
-        // *thoroughly*: the declaration is dropped from the inline `style` and the
-        // opposite paint is forced with a presentation attribute, which overrides
-        // both the source's own declaration and anything inherited.
-        let fill_style = remaining_style
-            .as_deref()
-            .and_then(|style| style_without(style, "stroke"));
-        let mut fill_shape = fill_region_shape(element, &None, &fill_style, &subpaths);
-        fill_shape.remove_attr("stroke-width");
-        fill_shape.set_attr("stroke", "none");
+        // both (it would stroke the bridges). Split into a fill-only shape and one
+        // stroke-only shape per subpath. The fill half drops the whole stroke paint
+        // group (`drop_stroke_paint`), the stroke halves force `fill="none"`, and
+        // each halves' leftover declarations are removed from the inline `style`;
+        // a forced presentation attribute overrides anything inherited.
+        let mut fill_shape = fill_region_shape(element, &None, &remaining_style, &subpaths);
+        drop_stroke_paint(&mut fill_shape);
         shapes.push(fill_shape);
 
         let stroke_style = remaining_style
@@ -217,6 +213,28 @@ fn join_closed_points(subpaths: &[Subpath]) -> String {
         }
     }
     join_points(points.iter())
+}
+
+/// Remove **every** stroke paint declaration from a shape: `stroke` and all
+/// `stroke-*` presentation attributes, both as attributes and inside the inline
+/// `style`, then force `stroke="none"` so nothing inherited can paint it. The
+/// fill half of a split `<path>` must not stroke the bridges between subpaths.
+fn drop_stroke_paint(shape: &mut Element) {
+    shape
+        .attrs
+        .retain(|(name, _)| name != "stroke" && !name.starts_with("stroke-"));
+    if let Some(style) = shape.attr("style").map(str::to_string) {
+        let kept: Vec<(String, String)> = parse_style(&style)
+            .into_iter()
+            .filter(|(name, _)| name != "stroke" && !name.starts_with("stroke-"))
+            .collect();
+        if kept.is_empty() {
+            shape.remove_attr("style");
+        } else {
+            shape.set_attr("style", crate::translate::style::serialize_style(&kept));
+        }
+    }
+    shape.set_attr("stroke", "none");
 }
 
 /// A fresh shape carrying the path's non-`d` presentation (including `fill-rule`,

@@ -265,7 +265,7 @@ pub(crate) fn count_primitives(root: &Element) -> Vec<(String, usize)> {
 fn walk_count(element: &Element, counts: &mut Vec<(String, usize)>) {
     if matches!(
         element.name.as_str(),
-        "text" | "circle" | "rect" | "line" | "polyline" | "polygon" | "use"
+        "text" | "circle" | "rect" | "line" | "polyline" | "polygon" | "path" | "use"
     ) {
         if let Some(entry) = counts.iter_mut().find(|(name, _)| name == &element.name) {
             entry.1 += 1;
@@ -294,6 +294,28 @@ mod tests {
         assert!(done
             .svg
             .contains("<rect x=\"1\" y=\"1\" width=\"10\" height=\"10\"/>"));
+    }
+
+    #[test]
+    fn primitive_report_counts_flattened_paths() {
+        // The `shapes` stage now emits one flattened `<path>` for a fill region
+        // with three or more subpaths; `--report` must count it, not report only
+        // the polygons around it.
+        let done = converted(
+            r#"<svg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
+<path d='M 0 0 L 60 0 L 60 40 L 0 40 Z M 10 10 L 30 10 L 30 30 L 10 30 Z M 40 10 L 50 10 L 50 30 L 40 30 Z' fill='#123456'/></svg>"#,
+        );
+        assert!(done.svg.contains("<path"), "{}", done.svg);
+        let count = |name: &str| {
+            done.report
+                .primitives
+                .iter()
+                .find(|(key, _)| key == name)
+                .map(|(_, count)| *count)
+                .unwrap_or(0)
+        };
+        assert_eq!(count("path"), 1, "{:?}", done.report.primitives);
+        assert_eq!(count("polygon"), 0, "{:?}", done.report.primitives);
     }
 
     #[test]

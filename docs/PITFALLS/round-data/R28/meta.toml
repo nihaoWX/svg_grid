@@ -1,0 +1,26 @@
+# R28 —— D1 评审遗留三项（自我检查的 provenance、拆分填充去净 stroke paint、--report 计 <path>）
+id = "R28"
+verdict = "复发"          # F1 与 R27-F2 同一位置（convert/src/self_check.rs:is_flattened_fill_path）
+family = ["转换产物白名单按字面形状放行，无法区分「产物」与「未翻译残渣」"]
+
+closures = [
+  { finding = "R28-F1", tier = "检查" },   # self_check.rs：mask/marker 容器排除 + 只认 shapes 的确切序列化；test.py ①
+  { finding = "R28-F2", tier = "代码" },   # path_form.rs：drop_stroke_paint；test.py ②
+  { finding = "R28-F3", tier = "代码" },   # tag.rs：walk_count 计 path；test.py ③
+]
+
+# R27 没有 round-data（当时未建；§4.3 存量不回溯），故无可跑的旧证据。
+run_before = []
+touched = []
+
+note = """
+为什么认定同类：R27-F2 的白名单只看 `d` 的字面形状（M/L/Z、无 transform），本轮复现出 mask 内未翻译的同形 path 也被放行——同一位置、同一条判据的漏洞。
+根因与建议修法：已证——provenance 不能按容器一刀切：matplotlib 的 hatch 填充 path 在 `<defs><pattern>` 内、由 shapes 原地改写，排除 defs/pattern 会让 bars_grouped 失败（doctor 56/1）。故只排除 shapes 不翻译的 mask/marker，并要求 `d` 等于 `joined_closed_path_data` 的确切序列化（单位空格 + `fmt_num` 逗号坐标）。
+怎么修才不弄坏前面：T1 的展平填充、T2 的 N=2 polygon 路径未动；doctor 58 fixtures 57/0/1、两个 crate 测试全绿，见报告。
+"""
+
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R28 && python3 test.py   # rc=0 = 全过
+前置：`cd tools/svg_grid && cargo build --release`（或 PATH 上有 svg_grid）。
+无参数；秒级；只往系统临时目录写产物。
+"""

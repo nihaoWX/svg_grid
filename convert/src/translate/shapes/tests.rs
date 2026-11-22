@@ -305,7 +305,7 @@ fn fill_and_stroke_three_subpaths_split_fill_path_from_strokes() {
     // `<path>` (the strokes must not paint the bridges), and each subpath keeps
     // its own stroke-only shape.
     let source = r#"<svg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'>
-<path d='M 10 10 L 30 10 L 30 30 L 10 30 Z M 60 60 L 90 60 L 90 90 L 60 90 Z M 10 60 L 25 60 L 25 75 L 10 75 Z' fill='#ff0000' stroke='#000000' stroke-width='2' fill-rule='evenodd'/></svg>"#;
+<path d='M 10 10 L 30 10 L 30 30 L 10 30 Z M 60 60 L 90 60 L 90 90 L 60 90 Z M 10 60 L 25 60 L 25 75 L 10 75 Z' fill='#ff0000' stroke='#000000' stroke-width='2' stroke-linecap='round' stroke-linejoin='bevel' stroke-dasharray='1 2' style='stroke-opacity: 0.5' fill-rule='evenodd'/></svg>"#;
     let done = converted(source);
     let paths = paths_in(&done.svg);
     let shapes = shapes_in(&done.svg);
@@ -319,6 +319,21 @@ fn fill_and_stroke_three_subpaths_split_fill_path_from_strokes() {
     let fill = &paths[0];
     assert_eq!(fill.attr("stroke"), Some("none"), "{}", done.svg);
     assert_eq!(fill.attr("fill"), Some("#ff0000"), "{}", done.svg);
+    // The fill half must carry no stroke paint at all (attributes *or* style):
+    // `stroke="none"` already hides it, but a leftover `stroke-*` declaration
+    // would keep the split ambiguous for anything that re-reads the shape.
+    for (name, _) in &fill.attrs {
+        assert!(
+            !name.starts_with("stroke-"),
+            "fill path kept a stroke paint attribute {name}: {}",
+            done.svg
+        );
+    }
+    let fill_style = fill.attr("style").unwrap_or("");
+    assert!(
+        !fill_style.contains("stroke"),
+        "fill path kept stroke paint in style: {fill_style}"
+    );
     assert_eq!(fill.attr("fill-rule"), Some("evenodd"), "{}", done.svg);
     let d = fill.attr("d").expect("the fill path has d");
     assert_eq!(d.matches('M').count(), 3, "{d}");
