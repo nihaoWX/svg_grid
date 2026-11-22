@@ -334,6 +334,77 @@ fn a_wholly_unavailable_chain_is_a_hard_font_error() {
     }
 }
 
+/// A pathologically long chain must still produce a single line inside the cap:
+/// the echo is clamped, and when even that is not enough the message degrades
+/// further instead of spilling over 200 characters.
+#[test]
+fn a_pathologically_long_chain_still_fits_the_error_cap() {
+    if !fonts_available() {
+        return;
+    }
+    let panels = write_panels(&["fonts_chain_long"]);
+    for (name, chain) in [
+        ("fonts_chain_long_81", "X".repeat(81)),
+        ("fonts_chain_long_200", "X".repeat(200)),
+        (
+            "fonts_chain_long_many",
+            (0..200)
+                .map(|i| format!("N{i}"))
+                .collect::<Vec<_>>()
+                .join(","),
+        ),
+    ] {
+        let (result, out) = run_cli(
+            &format!("{name}_out.svg"),
+            &panels,
+            &[
+                "--width",
+                "100",
+                "--height",
+                "80",
+                "--ncol",
+                "1",
+                "--plot-margin",
+                "0",
+                "--vjust",
+                "1",
+                "--labels",
+                "A",
+                "--label-fontfamily",
+                &chain,
+            ],
+        );
+        assert_eq!(
+            result.status.code(),
+            Some(3),
+            "a dead chain must be a font error: {}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        for line in stderr.lines() {
+            assert!(
+                line.chars().count() <= 200,
+                "every stderr line must stay within 200 chars ({}): {line}",
+                line.chars().count()
+            );
+        }
+        assert!(
+            stderr.contains("is not in the font library")
+                && stderr.contains("available:")
+                && stderr.contains("--list-fonts"),
+            "the message must stay actionable: {stderr}"
+        );
+        assert!(
+            !std::path::Path::new(&out).exists(),
+            "a failed font lookup must not leave an output file"
+        );
+    }
+
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
 #[test]
 fn empty_font_dir_fails_closed_when_a_png_is_requested() {
     let panels = write_panels(&["fonts_empty_png"]);

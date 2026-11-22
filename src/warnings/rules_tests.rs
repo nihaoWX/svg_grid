@@ -133,6 +133,72 @@ fn a_font_chain_is_satisfied_by_any_usable_family() {
     assert!(message.contains("available: none"), "{message}");
 }
 
+/// The cap holds for pathological inputs too: a long single name, a library whose
+/// own family names are long, and a chain so long that even the clamped echo has
+/// to give way. Each case must still name the chain, the library and the fix.
+#[test]
+fn a_pathological_font_chain_still_fits_the_error_cap() {
+    let prefix = "svg_grid: font library error: ".len();
+    let short_library = vec!["Arial".to_string(), "Times New Roman".to_string()];
+    let long_library: Vec<String> = ["L", "M", "N", "O", "P", "Q"]
+        .iter()
+        .map(|letter| letter.repeat(100))
+        .collect();
+    let long_chain = (0..200)
+        .map(|index| format!("N{index}"))
+        .collect::<Vec<_>>()
+        .join(",");
+
+    for (chain, library) in [
+        ("X".repeat(200), &short_library),
+        ("X".repeat(81), &short_library),
+        ("NoSuchFont_xyz".to_string(), &long_library),
+        (long_chain.clone(), &short_library),
+        (long_chain, &long_library),
+    ] {
+        let message = describe_missing_font_error(&chain, library)
+            .unwrap_or_else(|| panic!("a dead chain must fail: {} ch", chain.len()));
+        let total = prefix + message.chars().count();
+        assert!(
+            total <= MAX_LINE,
+            "{total} ch (cap {MAX_LINE}) for a {}-char chain: {message}",
+            chain.len()
+        );
+        assert!(
+            message.contains("is not in the font library"),
+            "the doctor's W8 phrase must survive: {message}"
+        );
+        assert!(
+            message.contains("available:"),
+            "the library must be listed: {message}"
+        );
+        assert!(
+            message.contains("--list-fonts"),
+            "the fix must be actionable: {message}"
+        );
+    }
+
+    // The echo is clamped, not thrown away: a long single name keeps a
+    // recognisable prefix instead of collapsing to `"…"`.
+    let message = describe_missing_font_error(&"X".repeat(81), &short_library).unwrap();
+    assert!(
+        message.matches('X').count() >= 20,
+        "the chain echo must keep a recognisable prefix: {message}"
+    );
+
+    // A long library name is shortened rather than dropped, and the chain echo
+    // keeps enough room to stay recognisable.
+    let message = describe_missing_font_error("NoSuchFont_xyz", &long_library).unwrap();
+    assert!(
+        message.contains("NoSuchFont_xyz"),
+        "the chain must survive a long library: {message}"
+    );
+    assert!(
+        message.contains('…'),
+        "a long family name must be shortened: {message}"
+    );
+}
+
 /// Rule 2: a shared cause is one note line per run, and a clean run prints none.
 #[test]
 fn a_shared_cause_is_printed_once_and_a_clean_run_prints_nothing() {

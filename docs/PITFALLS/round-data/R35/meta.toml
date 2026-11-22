@@ -1,0 +1,20 @@
+id = "R35"
+date = "2026-11-23"
+verdict = "新领土"
+family = ["clamp_quoted off-by-one 导致硬错误行 201 字符", "available: 列表从不截断", "兜底分支无长度校验"]
+closures = [
+  { finding = "R35-F1", tier = "代码" },
+  { finding = "R35-F2", tier = "代码" },
+  { finding = "R35-F3", tier = "代码" },
+]
+run_before = ["R34"]
+touched = []
+note = """
+为什么认定新问题：D5b 把 W8 压到 ≤200 时只按「短链」验证，`clamp_quoted` 的包装宽度算错 1（`keep = budget - 4`，实际包装 5 个字符），且 FINAL 兜底分支没有长度校验；`available:` 列表也从未截断。这是 D5b 新引入的边界缺陷，不是 D2–D5 的连带面。
+根因与修法：`src/warnings/fonts.rs` 重写 `describe_missing_font_error` 的装配阶梯——`clamp_quoted` 改 `keep = budget - 5` 并在返回前复核（超了退 `"…"`）；新增 `with_clamped_chain`（预算不足返回 `None` 让调用方继续降级，拼好后再 `fits()` 复核）与 `list_families_within`（按剩余预算截断单个族名，保留前缀 + `…`）；`CHAIN_ECHO = 24` 给链回显预留位置，避免长库把链挤成 `"…"`；最终兜底仍有一条不含链回显的最短形式，保证任何输入 body ≤170。
+怎么修才不弄坏前面：短链文案长度不变（194/195/195）；`is not in the font library`、`available:`、`--list-fonts` 三个片段在所有分支都保留（doctor 的 W8 码词与 R13/R33/R34 证据继续命中）；回退链语义未动（任一名字可用即 rc=0），`font-family` 仍原样写出。
+变异测试：`keep = budget - 5` 改回 `-4` ⇒ `rules_tests.rs:184` 红；`list_families_within` 直接返回 `None` ⇒ `rules_tests.rs:171` 红。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R35 && python3 test.py  # rc=0 = 53 PASS
+"""
