@@ -119,7 +119,8 @@ svg_grid plot-grid --input tagged/A.svg --input tagged/B.svg --output row1.svg -
 3. 面板**拿不到独立 `.svg`**，只能以会话内对象（ggplot/grob）组合。
 
 回退路线**必须**检查输出非空白——cowplot 在本机实测过静默产出全白图。
-`plot-grid` 跑完**先看 stderr**（告警一律非致命、只说"发生了什么/为什么/怎么修"）。
+`plot-grid` 跑完**先看 stderr**，但**必须加 `--verbose`**——默认成功路径 stderr 是空的，W1–W9 与
+`note:` 只有加这个 flag 才展开（一律非致命、只说"发生了什么/为什么/怎么修"）。
 
 **组什么图（原则 2、3）**：
 
@@ -192,7 +193,7 @@ svg_grid plot-grid --input tagged/A.svg --input tagged/B.svg --output row1.svg -
 |---|---|
 | `references/00_native_plots.md` | **panel 从哪来**：分析→原生出图函数对照表（单细胞/bulk/热图/突变/网络/统计图层）、手绘例外的判据、`# native:` 留痕、出图端最小代码 |
 | `references/01_canvas_layout.md` | 画布比例与 dpi、面板字母的位置/字体/尺寸实测值、字号、间距、防重叠 |
-| `references/02a_svg_grid_assembly.md` | **首选**：`svg_grid` 文件级矢量组图——转换器流水线、格子比例约束、面板按目标格子尺寸出图、svg+位图混合、跑完必须读 stderr、交付前核查 |
+| `references/02a_svg_grid_assembly.md` | **首选**：`svg_grid` 文件级矢量组图——转换器流水线、格子比例约束、面板按目标格子尺寸出图、svg+位图混合、跑完必须读 stderr（`--verbose` 展开告警）、交付前核查 |
 | `references/02b_cowplot_assembly.md` | **回退**：R + cowplot 对象级组图代码范式（仅当 02a 的三条判据成立） |
 | `references/03_color.md` | 配色原则与可用色板 |
 | `references/04_manuscript_integration.md` | png+svg 成对输出、命名规范、目录结构、正文插入位置、图注格式（正图 vs 补充图） |

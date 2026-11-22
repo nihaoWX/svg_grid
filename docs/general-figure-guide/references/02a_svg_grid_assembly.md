@@ -143,11 +143,12 @@ svg_grid plot-grid --input tagged/E.svg --output tagged/E.cell.svg --width 2456.
 7. **字母带按行累加**：逐行加 `--labels` 且未显式给 `--plot-margin` 时，**每一行都自动留一条字母带** ⇒ 成品高 ≈ Σ(各面板按画布宽归一后的高) + 行数 ×(字母带 + 底部边距)。实测每行 ~150 px（S36：4 面板内容和 7650 px → 成品 8168 px，+6.8%）。**别把"成品高 ≠ Σ面板高"当出错**——拿成品高反推面板尺寸会系统性偏大。**若要成品高精确等于 Σ 面板高**：把这几张面板当"**一行内 n 格**"（一次调用给 `--labels A,B,C,D`），或先把它们拼成一整张面板再当单输入——两者都只留一条字母带（代价是失去逐行独立排版）。
 8. **行调用自动字母带的横向内缩 = 默认 `--plot-margin`（24）**：`s = 1` 成立的前提是"格子模型里的 margin"与"行调用留给字母带的边距"相等。若给行调用显式 `--plot-margin ≠ 24`（或用 4 值改了横向值）、或改画布宽使自动内缩 ≠ 24，该行面板就被 `(W−2m)/W ≠ 1` 缩放；协议**不缩放 `font-size`** ⇒ 该行字号漂移（W1 会报，但得有人读 stderr）。
 
-## 跑完必须读 stderr
+## 跑完必须读 stderr（加 `--verbose`）
 
-`plot-grid` 把"看着成功其实悄悄错"的情形打成 stderr 告警（**W1–W7，一律非致命**：退出码与产物字节都不变）。
+`plot-grid` 把"看着成功其实悄悄错"的情形打成 stderr 告警（**W1–W9，一律非致命**：退出码与产物字节都不变）。
+**注意：告警默认静音**（R31 起，成功路径 stderr 为 0 字节）——不加 `--verbose` 就看不到它们。
 **每条告警自己会说明"发生了什么 / 为什么重要 / 怎么修"**，照它给的修法改即可——本指南**不再逐条罗列**
-（清单、判据与容差理由见 `tools/svg_grid/ARCHITECTURE/warnings.md`）。所以：**跑完先看 stderr**，
+（清单、判据与容差理由见 `tools/svg_grid/ARCHITECTURE/warnings.md`）。所以：**跑完加 `--verbose` 再看 stderr**，
 别只看产物在不在。
 
 - **量 `s` 时分清两层**："层内格级 `s`"（应为 1）与"原始面板 → 成品的总缩放"（= 归一化倍数，本来 ≠ 1）
@@ -159,7 +160,7 @@ svg_grid plot-grid --input tagged/E.svg --output tagged/E.cell.svg --width 2456.
 ## 出图端与调用方仍须自己做的四件事（工具管不了）
 
 **其余"出图端坑"都已进工具**（mathtext/`<tspan>`、祖先 `<g transform>`、`textLength`、零面积描边路径、
-字形孔、`clipPath`、非等比 `<image>`）——正常链路里不会再遇到，遇到也会由 stderr 出声。仍归调用方的只有这四件：
+字形孔、`clipPath`、非等比 `<image>`）——正常链路里不会再遇到，遇到也会由 stderr 出声（`--verbose` 下）。仍归调用方的只有这四件：
 
 1. **`Path.to_polygons()` 默认丢开放子轮廓**：matplotlib 默认 `closed_only=True`，把无 `Z`、末点 ≠ 首点的
    子轮廓**整批静默丢掉** ⇒ 传 `closed_only=False`，开放的按"仅描边"处理（`<line>`/`<polyline>` + 显式

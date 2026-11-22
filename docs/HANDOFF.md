@@ -12,8 +12,8 @@
 | D2 末行格子尺寸随行拉伸 | ✅ 已修，评审 PASS | `66fba3c`→`cf76029`→`f8be8ef`→`8b08524`；R29 |
 | D3 默认网格是单行 | ✅ 已修，评审 PASS | `e09c33b`→`dc9a900`；R30 |
 | D6 `rows×cols` 上界 + `--verbose` | ✅ 已修，评审 PASS | `3311eec`→`676d82d`；R31 |
-| D4 `plot-grid` 自动 convert | ⏳ 进行中 | — |
-| D5 `--labels` NULL/W3/W8 | ⏳ 未开始 | — |
+| D4 `plot-grid` 自动 convert | ✅ 已修 | `162c0cd`→`79cf9e5`→`a2d5fb5`；R32 |
+| D5 `--labels` NULL/W3/W8 | ⏳ 进行中 | — |
 
 ## 1. 先读什么（按顺序）
 
