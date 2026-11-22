@@ -116,10 +116,10 @@
    `data-svg-grid-label`，渲染后字母叠印。建议 W3 在"给**已带字母**输入再赋**非空**字母"时升为硬错误。
 7. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
    `""` 跳过）。现在 `labels::build` 按输入下标取字母（`src/labels.rs:16-18`）。
-8. **pre-existing（待单独开报告）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
-   不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩
-   （`mask_half_defs.svg` 源暗区 6400 px → 产物 12800 px）。R27/R28 未触碰；defs mask 是最常见写法，优先级高于
-   D3/D6 之后的收尾项。
+8. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
+   不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
+   （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
+   报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：D1–D6 之后立即处理。
 
 ## 其他未决项
 
