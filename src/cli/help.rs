@@ -38,7 +38,8 @@ canvas and grid:
   --height <pt>|auto      canvas height; omitted or `auto` ⇒ derived from the panels'
                           natural heights, and that value IS the output canvas height.
   --nrow <n>              number of rows (≥1); the grid never has an empty row/column.
-  --ncol <n>              number of columns (≥1). Both omitted ⇒ one row.
+  --ncol <n>              number of columns (≥1). Both omitted ⇒ near-square
+                          (cols = ceil(sqrt(inputs)), rows = ceil(inputs/cols)).
   --rel-widths <list>     per-column multipliers on each column's natural width
                           (default all 1; values may be 0 to collapse a column).
   --rel-heights <list>    per-row multipliers on each row's natural height

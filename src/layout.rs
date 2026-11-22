@@ -56,6 +56,18 @@ pub struct GridSpec<'a> {
     pub aspects: &'a [Option<f32>],
 }
 
+/// cowplot's near-square default when neither `--nrow` nor `--ncol` is given:
+/// `cols = ceil(sqrt(count))`, `rows = ceil(count / cols)`. `count` counts input
+/// *slots* (an explicit `NULL`/spacer is a declared empty cell), so a short last
+/// row is legal and its missing trailing slots are never emitted.
+fn default_grid(count: usize) -> (usize, usize) {
+    if count == 0 {
+        return (0, 0);
+    }
+    let cols = (count as f64).sqrt().ceil() as usize;
+    (count.div_ceil(cols), cols)
+}
+
 pub fn compute_grid(spec: GridSpec<'_>) -> Result<GridLayout> {
     // Validate the requested grid *before* any arithmetic on it: `div_ceil(0)`
     // panics, and a panic (`rc=101`) tells the caller the tool is broken instead
@@ -70,7 +82,7 @@ pub fn compute_grid(spec: GridSpec<'_>) -> Result<GridLayout> {
         (Some(rows), Some(cols)) => (rows, cols),
         (Some(rows), None) => (rows, spec.count.div_ceil(rows)),
         (None, Some(cols)) => (spec.count.div_ceil(cols), cols),
-        (None, None) => (1, spec.count),
+        (None, None) => default_grid(spec.count),
     };
 
     if rows == 0 || cols == 0 {
@@ -255,6 +267,23 @@ mod tests {
         .unwrap()
     }
 
+    fn fit_default(count: usize) -> GridLayout {
+        let aspects = vec![Some(ASPECT); count];
+        compute_grid(GridSpec {
+            count,
+            nrow: None,
+            ncol: None,
+            width: 1000.0,
+            height: None,
+            margin: Margins::zero(),
+            gap: 0.0,
+            rel_widths: &[],
+            rel_heights: &[],
+            aspects: &aspects,
+        })
+        .unwrap()
+    }
+
     fn assert_close(actual: f32, expected: f32) {
         assert!(
             (actual - expected).abs() < 1e-3,
@@ -390,6 +419,69 @@ mod tests {
             assert_close(left.x, right.x);
             assert_close(left.width, right.width);
             assert_close(left.height, right.height);
+        }
+    }
+
+    #[test]
+    fn default_grid_is_the_near_square_cowplot_one() {
+        // `cols = ceil(sqrt(n))`, `rows = ceil(n / cols)`; the last row may be short.
+        for (count, expected) in [
+            (1, (1, 1)),
+            (2, (1, 2)),
+            (3, (2, 2)),
+            (4, (2, 2)),
+            (5, (2, 3)),
+            (6, (2, 3)),
+            (7, (3, 3)),
+            (8, (3, 3)),
+            (9, (3, 3)),
+            (10, (3, 4)),
+            (11, (3, 4)),
+            (12, (3, 4)),
+            (13, (4, 4)),
+            (14, (4, 4)),
+            (15, (4, 4)),
+            (16, (4, 4)),
+            (17, (4, 5)),
+        ] {
+            assert_eq!(default_grid(count), expected, "count {count}");
+        }
+    }
+
+    #[test]
+    fn default_grid_inherits_the_d2_row_geometry() {
+        // 5 panels, no --ncol/--nrow → 2×3: equal 266.667-high rows, 333.333-wide cells.
+        let five = fit_default(5);
+        assert_close(five.height, 1600.0 / 3.0);
+        assert_eq!(five.cells.len(), 5);
+        for index in 0..5 {
+            assert_close(five.cells[index].width, 1000.0 / 3.0);
+            assert_close(five.cells[index].height, (1000.0 / 3.0) / ASPECT);
+            assert_close(five.cells[index].height, 266.666_67);
+            let row = index / 3;
+            let column = index % 3;
+            assert_close(five.cells[index].x, column as f32 * 1000.0 / 3.0);
+            assert_close(five.cells[index].y, row as f32 * 266.666_67);
+        }
+
+        // 15 panels → 4×4: the full grid stays exactly as D2 pinned it.
+        let fifteen = fit_default(15);
+        assert_close(fifteen.height, 800.0);
+        for cell in &fifteen.cells {
+            assert_close(cell.width, 250.0);
+            assert_close(cell.height, 200.0);
+        }
+
+        // 1 and 2 panels keep their old one-row geometry byte-for-byte in shape.
+        let one = fit_default(1);
+        assert_close(one.height, 800.0);
+        assert_close(one.cells[0].width, 1000.0);
+        assert_close(one.cells[0].height, 800.0);
+        let two = fit_default(2);
+        assert_close(two.height, 400.0);
+        for cell in &two.cells {
+            assert_close(cell.width, 500.0);
+            assert_close(cell.height, 400.0);
         }
     }
 }

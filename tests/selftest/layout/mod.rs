@@ -229,3 +229,139 @@ fn plan_grid_keeps_a_short_last_row_at_the_full_grid_cell_size() {
         let _ = fs::remove_file(input);
     }
 }
+
+/// D3: with no `--nrow/--ncol`, the grid is cowplot's near-square one
+/// (`cols = ceil(sqrt(n))`, `rows = ceil(n / cols)`) and the plan's numbers are
+/// exactly what the real run applies.
+#[test]
+fn default_grid_is_near_square_and_the_plan_matches_the_run() {
+    use svg_grid::{plan_grid, GridRequest};
+
+    let inputs: Vec<PathBuf> = (0..5)
+        .map(|index| {
+            let path = temp_path(&format!("default_grid_{index}.svg"));
+            fs::write(
+                &path,
+                r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="position"><circle cx="50" cy="40" r="3" fill="#000000"/></g>
+</svg>"##,
+            )
+            .unwrap();
+            path
+        })
+        .collect();
+
+    let plan = plan_grid(GridRequest {
+        inputs: inputs.iter().cloned().map(SvgInput::Path).collect(),
+        width: 1000.0,
+        height: None,
+        nrow: None,
+        ncol: None,
+        rel_widths: vec![],
+        rel_heights: vec![],
+        margin: Margins::zero(),
+        gap: 0.0,
+        normalize: None,
+    })
+    .unwrap();
+
+    // 5 → 2 rows × 3 columns (3+2); all cells keep the D2 size.
+    assert!((plan.height - 1600.0 / 3.0).abs() < 1e-3, "{}", plan.height);
+    for input in &plan.inputs {
+        assert!((input.cell.0 - 1000.0 / 3.0).abs() < 1e-3);
+        assert!((input.cell.1 - (1000.0 / 3.0) / 1.25).abs() < 1e-3);
+        assert!(!input.is_stretched());
+    }
+
+    let output = temp_path("default_grid_out.svg");
+    plot_grid(PlotGridSpec {
+        inputs: inputs.iter().cloned().map(SvgInput::Path).collect(),
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 1000.0,
+        height: None,
+        nrow: None,
+        ncol: None,
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+        font_families: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    // The real run's canvas and cell origins agree with the plan.
+    assert!(svg.contains(r#"height="533.333""#), "{svg}");
+    assert!(svg.contains(r#"viewBox="0 0 1000 533.333""#), "{svg}");
+    for index in 0..5 {
+        assert!(
+            svg.contains(&format!(r#"data-svg-grid-cell="{index}""#)),
+            "missing cell {index}: {svg}"
+        );
+    }
+    assert!(!svg.contains(r#"data-svg-grid-cell="5""#), "{svg}");
+    // #4 is the first (and only) panel of the short last row, one cell to the
+    // right of #3; its geometry is translated by (333.333, 266.667).
+    assert!(svg.contains(r#"<circle cx="500" cy="400""#), "{svg}");
+
+    for input in inputs {
+        let _ = fs::remove_file(input);
+    }
+    let _ = fs::remove_file(output);
+}
+
+/// D3: `count` is the number of input *slots*, so an explicit `NULL` takes part
+/// in the near-square derivation (it is a declared empty cell, not an absence).
+#[test]
+fn explicit_null_counts_as_a_slot_in_the_default_grid() {
+    use svg_grid::{plan_grid, GridRequest};
+
+    let inputs: Vec<PathBuf> = (0..4)
+        .map(|index| {
+            let path = temp_path(&format!("default_grid_null_{index}.svg"));
+            fs::write(
+                &path,
+                r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="position"><circle cx="50" cy="40" r="3" fill="#000000"/></g>
+</svg>"##,
+            )
+            .unwrap();
+            path
+        })
+        .collect();
+
+    let mut slots: Vec<SvgInput> = inputs.iter().cloned().map(SvgInput::Path).collect();
+    slots.push(SvgInput::Spacer);
+
+    let plan = plan_grid(GridRequest {
+        inputs: slots,
+        width: 1000.0,
+        height: None,
+        nrow: None,
+        ncol: None,
+        rel_widths: vec![],
+        rel_heights: vec![],
+        margin: Margins::zero(),
+        gap: 0.0,
+        normalize: None,
+    })
+    .unwrap();
+
+    // 5 slots → 2×3, not 4 slots → 2×2.
+    assert!((plan.height - 1600.0 / 3.0).abs() < 1e-3, "{}", plan.height);
+    assert_eq!(plan.inputs.len(), 5);
+    assert!(matches!(plan.inputs[4].input, SvgInput::Spacer));
+    assert!(plan.inputs[4].scale.is_none());
+    assert!((plan.inputs[4].cell.0 - 1000.0 / 3.0).abs() < 1e-3);
+    assert!((plan.inputs[0].cell.1 - 266.666_66).abs() < 1e-3);
+
+    for input in inputs {
+        let _ = fs::remove_file(input);
+    }
+}

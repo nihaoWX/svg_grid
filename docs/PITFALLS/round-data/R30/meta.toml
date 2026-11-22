@@ -1,0 +1,16 @@
+id = "R30"
+date = "2026-11-22"
+verdict = "新领土"
+family = ["默认网格被写成一行（与 cowplot 近方形推导相反）"]
+closures = [ { finding = "R30-F1", tier = "代码" } ]
+run_before = ["R29"]
+touched = []
+note = """
+为什么认定新问题：`compute_grid` 的 `(None, None)` 分支从未做过行列推导，直接 `(1, count)`；R29 只改行高基准，未碰这个分支，但同函数，故先跑 R29 证据确认显式网格不回归。
+根因与建议修法：已证——`cols = ceil(sqrt(count))`、`rows = ceil(count/cols)`，`count` 为输入槽位数（含显式 NULL）；新增 `default_grid`（`src/layout.rs:59-69`），分支改为调用（`src/layout.rs:81-86`），其余分支不动。
+怎么修才不弄坏前面：D2 几何原样继承（等行高、短末行不拉伸）；1/2 图默认输出与旧 `--ncol 1`/`--ncol 2` 逐字节相同；显式 `--ncol`/`--nrow` 仍走原推导；5/15 图默认数字、1..17 全映射、NULL 槽位、plan-vs-run 都钉进 `test.py` 与单测。
+连带文档：`src/cli/help.rs:41-42` 的“默认一行”描述同步改为近方形公式。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R30 && python3 test.py  # rc=0 = 全过
+"""
