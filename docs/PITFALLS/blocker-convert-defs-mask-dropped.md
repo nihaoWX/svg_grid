@@ -126,3 +126,19 @@ mask/marker，`convert` 会 rc=1。两者必须一起改：`bake` 对 mask/marke
 按"文档里被 `url(#id)` / `href="#id"` 引用的 defs 子项"保留，剪完对悬空引用 fail-closed。
 `<filter>` 的内容不需要合成期缩放（`filterUnits` 默认 `objectBoundingBox`，且滤镜参数不是
 用户空间坐标），所以它只吃第 1、2 步，不吃第 3 步。
+
+## 真实语料证据（2026-11-23，R35 派单前）
+
+`research/` 下 617 个 SVG 里 **0 个**含 `<mask>`/`<marker>`/`<filter>`，但**已经有一个真实产物被这类
+缺陷咬过**：
+
+- 源图 `research/白藜芦醇胰腺癌/steps/09_上游转录因子/出图/S36_S37/figure_panels/S36_panelA_matrix.svg`
+  含 `<defs><pattern id="h9f23a50880" patternUnits="userSpaceOnUse" width="72" height="72">`（斜线 hatch 填充）。
+- 历史产物 `.../work/tagged/S36_panelA_matrix.svg` 里 `<pattern>` **已消失**，只剩
+  `style="fill: url(#h9f23a50880)"` 悬空 ⇒ 该 hatch 区域变成纯色。
+- resvg 渲染对比：668 个像素颜色不同（bbox `(553,109)-(590,230)`，最大通道差 364），黑墨计数相同
+  （66,996 vs 66,996）——**只看黑墨会漏掉，必须比颜色**。
+- 当前 HEAD 的 `convert` 已能保住这个 `<pattern>`（`REFERENCE_TARGETS` 里有 `pattern`），
+  所以这是**历史遗留产物**，不是当前回归；但它证明"按元素名白名单"这条路已经漏过一次。
+
+⇒ 修法必须是"按引用保留"，而不是继续往名单里加名字。
