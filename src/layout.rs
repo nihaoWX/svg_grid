@@ -110,23 +110,33 @@ pub fn compute_grid(spec: GridSpec<'_>) -> Result<GridLayout> {
     // Natural column width ∝ the canvas aspect of the column's first real panel
     // (a column of spacers falls back to a unit 1:1 blank).
     let natural_w = natural_column_weights(rows, cols, spec.aspects);
+    let natural_w_sum: f32 = natural_w.iter().sum();
+    if natural_w_sum <= 0.0 {
+        return Err(SvgGridError::InvalidInput(
+            "rel-widths/rel-heights leave no drawable cells".to_string(),
+        ));
+    }
     let column_signal: Vec<f32> = natural_w
         .iter()
         .zip(&rel_widths)
         .map(|(natural, multiplier)| natural * multiplier)
         .collect();
 
-    // Natural row height = available width ÷ Σ(aspects of that row's panels);
-    // a spacer contributes a unit 1:1 blank.  Scaling every column width by its
-    // aspect then makes each cell's width/height equal the panel's own aspect.
-    let row_aspect_sum = row_aspect_sums(rows, cols, spec.count, spec.aspects);
-    let row_signal: Vec<f32> = row_aspect_sum
+    // Cell size is decided by the *grid*, never by how many panels a row happens
+    // to hold: a row is always measured as if it filled all `cols` columns.  So
+    // the natural row height is `available_w ÷ Σ(natural column weights)` — the
+    // same weights that distribute the column widths — and is shared by every
+    // row.  A short last row therefore keeps the same cell size as the rows above
+    // it instead of stretching its lone panel across the full width.
+    //
+    // The `rel_widths` multipliers are deliberately *not* part of this sum: they
+    // are ratios ("1,1,2" ≡ "3.2,3.2,6.4", ARCHITECTURE/layout.md §1), and feeding
+    // them into the height signal would make scaling every weight by a constant
+    // change the derived canvas height.
+    let natural_row_h = available_w / natural_w_sum;
+    let row_signal: Vec<f32> = rel_heights
         .iter()
-        .zip(&rel_heights)
-        .map(|(sum, multiplier)| {
-            let natural = if *sum > 0.0 { available_w / *sum } else { 0.0 };
-            natural * multiplier
-        })
+        .map(|multiplier| natural_row_h * multiplier)
         .collect();
 
     let sum_w: f32 = column_signal.iter().sum();
@@ -192,21 +202,6 @@ fn natural_column_weights(rows: usize, cols: usize, aspects: &[Option<f32>]) -> 
         .collect()
 }
 
-/// Σ(canvas aspects) for every row, counting a spacer/an absent cell as a unit
-/// blank (`1.0`) and absent trailing cells as `0.0`.
-fn row_aspect_sums(rows: usize, cols: usize, count: usize, aspects: &[Option<f32>]) -> Vec<f32> {
-    (0..rows)
-        .map(|row| {
-            (0..cols)
-                .filter_map(|column| {
-                    let index = row * cols + column;
-                    (index < count).then(|| aspects.get(index).copied().flatten().unwrap_or(1.0))
-                })
-                .sum()
-        })
-        .collect()
-}
-
 /// Resolve one axis' relative weights, fail-closed.
 ///
 /// An empty `supplied` means "not given" → uniform weights, exactly as before.
@@ -233,4 +228,156 @@ fn weights(count: usize, supplied: &[f32], axis: &str, noun: &str) -> Result<Vec
         )));
     }
     Ok(supplied.to_vec())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every grid below uses 100×80 panels (canvas aspect 1.25) and a 1000-wide
+    /// canvas with no margins or gaps, so the expected numbers stay readable.
+    const ASPECT: f32 = 1.25;
+
+    fn fit(count: usize, ncol: Option<usize>, nrow: Option<usize>) -> GridLayout {
+        let aspects = vec![Some(ASPECT); count];
+        compute_grid(GridSpec {
+            count,
+            nrow,
+            ncol,
+            width: 1000.0,
+            height: None,
+            margin: Margins::zero(),
+            gap: 0.0,
+            rel_widths: &[],
+            rel_heights: &[],
+            aspects: &aspects,
+        })
+        .unwrap()
+    }
+
+    fn assert_close(actual: f32, expected: f32) {
+        assert!(
+            (actual - expected).abs() < 1e-3,
+            "expected {expected}, got {actual}"
+        );
+    }
+
+    #[test]
+    fn short_last_row_keeps_the_full_grid_cell_size() {
+        // 5 panels in 2 columns → 3 rows (2 + 2 + 1).  The lone last-row panel
+        // must not be stretched across the row: every cell is 500×400 and the
+        // rows sit at y = 0 / 400 / 800.
+        let grid = fit(5, Some(2), None);
+        assert_close(grid.height, 1200.0);
+        for (index, cell) in grid.cells.iter().enumerate() {
+            assert_close(cell.width, 500.0);
+            assert_close(cell.height, 400.0);
+            assert_close(cell.x, if index % 2 == 0 { 0.0 } else { 500.0 });
+            assert_close(cell.y, (index / 2) as f32 * 400.0);
+        }
+        // The first and last cells (the latter alone in its row) are identical,
+        // and the last row starts in the left-most column.
+        assert_close(grid.cells[4].width, grid.cells[0].width);
+        assert_close(grid.cells[4].height, grid.cells[0].height);
+        assert_close(grid.cells[4].x, grid.cells[0].x);
+    }
+
+    #[test]
+    fn short_last_row_is_measured_as_if_it_filled_all_columns() {
+        // 5 panels in 3 columns → 2 rows (3 + 2).  Both rows share one height and
+        // the two last-row cells keep the same width as the three above them.
+        let grid = fit(5, Some(3), None);
+        assert_close(grid.height, 533.333);
+        for cell in &grid.cells {
+            assert_close(cell.width, 333.333);
+            assert_close(cell.height, 266.667);
+        }
+        assert_close(grid.cells[3].y - grid.cells[0].y, grid.cells[0].height);
+        assert_close(grid.cells[4].y, grid.cells[3].y);
+        assert_close(grid.cells[3].x, 0.0);
+        assert_close(grid.cells[4].x, 333.333);
+
+        // `--nrow 2` derives the same 3 columns and must land on the same grid.
+        let by_row = fit(5, None, Some(2));
+        assert_close(by_row.height, grid.height);
+        for (left, right) in grid.cells.iter().zip(&by_row.cells) {
+            assert_close(left.x, right.x);
+            assert_close(left.y, right.y);
+            assert_close(left.width, right.width);
+            assert_close(left.height, right.height);
+        }
+    }
+
+    #[test]
+    fn complete_rows_keep_the_exact_geometry_they_had_before() {
+        // The fix only applies to the "row measured by its own panel count"
+        // signal; grids whose rows are all complete must not move.  These are the
+        // sizes the 100×80 / 1000-wide fixtures produced before D2.
+        for (count, cols, expected_h) in [(4, 2, 800.0), (6, 2, 1200.0), (16, 4, 800.0)] {
+            let grid = fit(count, Some(cols), None);
+            assert_close(grid.height, expected_h);
+            let cell_w = 1000.0 / cols as f32;
+            let cell_h = cell_w / ASPECT;
+            for cell in &grid.cells {
+                assert_close(cell.width, cell_w);
+                assert_close(cell.height, cell_h);
+            }
+        }
+    }
+
+    #[test]
+    fn rel_heights_only_scale_the_shared_row_height() {
+        // 5 panels in 2 columns with --rel-heights 1,1,2: the short last row is
+        // twice the height of the rows above, but still one column wide.
+        let aspects = vec![Some(ASPECT); 5];
+        let grid = compute_grid(GridSpec {
+            count: 5,
+            nrow: None,
+            ncol: Some(2),
+            width: 1000.0,
+            height: None,
+            margin: Margins::zero(),
+            gap: 0.0,
+            rel_widths: &[],
+            rel_heights: &[1.0, 1.0, 2.0],
+            aspects: &aspects,
+        })
+        .unwrap();
+        assert_close(grid.height, 1600.0);
+        assert_close(grid.cells[0].height, 400.0);
+        assert_close(grid.cells[2].height, 400.0);
+        assert_close(grid.cells[4].height, 800.0);
+        assert_close(grid.cells[4].width, 500.0);
+    }
+
+    #[test]
+    fn rel_widths_are_ratios_and_do_not_change_the_derived_height() {
+        // `1,2` and `2,4` are the same layout (ARCHITECTURE/layout.md §1).  The
+        // height signal deliberately ignores the multipliers, so scaling every
+        // weight must leave the canvas and the cells unchanged.
+        let aspects = vec![Some(ASPECT); 4];
+        let run = |rel_widths: &[f32]| {
+            compute_grid(GridSpec {
+                count: 4,
+                nrow: None,
+                ncol: Some(2),
+                width: 1000.0,
+                height: None,
+                margin: Margins::zero(),
+                gap: 0.0,
+                rel_widths,
+                rel_heights: &[],
+                aspects: &aspects,
+            })
+            .unwrap()
+        };
+        let unit = run(&[1.0, 2.0]);
+        let doubled = run(&[2.0, 4.0]);
+        assert_close(doubled.height, unit.height);
+        for (left, right) in unit.cells.iter().zip(&doubled.cells) {
+            assert_close(left.x, right.x);
+            assert_close(left.width, right.width);
+            assert_close(left.height, right.height);
+        }
+    }
 }

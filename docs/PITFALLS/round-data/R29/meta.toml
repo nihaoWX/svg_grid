@@ -1,0 +1,16 @@
+id = "R29"
+date = "2026-11-22"
+verdict = "新领土"
+family = ["短末行格子被拉伸（行高按本行实际图数算）"]
+closures = [ { finding = "R29-F1", tier = "代码" } ]
+run_before = ["R14"]
+touched = []
+note = """
+为什么认定同类：`compute_grid` 的 `row_aspect_sums` 只在 `index < count` 时累计，与列宽用的“全网格列权重”两套基准；R14 只碰同一函数的零值校验，未触及几何。
+根因与建议修法：已证——行高信号 `available_w / Σ(natural_w)`，所有行等高；`row_aspect_sums` 整段删除（`src/layout.rs:202-217` 旧位置）。
+怎么修才不弄坏前面：跑 R14 的 test.py（已全过）；满行网格的 canvas/格子数字在 test.py 里按旧值钉死。
+`--rel-widths` 不进行高分母：`rel_*` 是比值（1,2 ≡ 2,4），且满行 + rel-widths 的几何必须不变；`--rel-heights` 仍是行高倍数。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R29 && python3 test.py  # rc=0 = 全过
+"""

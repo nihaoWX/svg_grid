@@ -175,3 +175,57 @@ fn cli_rejects_rel_widths_length_mismatch() {
     }
     let _ = fs::remove_file(output);
 }
+
+/// D2: a short last row must keep the same cell size as the rows above it.  The
+/// plan and the real run share `prepare`, so pinning the plan pins the figure.
+#[test]
+fn plan_grid_keeps_a_short_last_row_at_the_full_grid_cell_size() {
+    use svg_grid::{plan_grid, GridRequest};
+
+    let inputs: Vec<PathBuf> = (0..5)
+        .map(|index| {
+            let path = temp_path(&format!("short_row_{index}.svg"));
+            fs::write(
+                &path,
+                r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="position"><circle cx="50" cy="40" r="3" fill="#000000"/></g>
+</svg>"##,
+            )
+            .unwrap();
+            path
+        })
+        .collect();
+
+    let plan = plan_grid(GridRequest {
+        inputs: inputs.iter().cloned().map(SvgInput::Path).collect(),
+        width: 1000.0,
+        height: None,
+        nrow: None,
+        ncol: Some(2),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        margin: Margins::zero(),
+        gap: 0.0,
+        normalize: None,
+    })
+    .unwrap();
+
+    // 5 panels / 2 columns → 3 rows of 400; only the last row has one panel.
+    assert!((plan.height - 1200.0).abs() < 1e-3, "{}", plan.height);
+    for input in &plan.inputs {
+        assert_eq!(input.cell, (500.0, 400.0), "cell of input {}", input.index);
+        let (sx, sy) = input.scale.unwrap();
+        assert!((sx - sy).abs() < 1e-4, "input {} is stretched", input.index);
+    }
+    assert_eq!(plan.inputs[4].cell, plan.inputs[0].cell);
+    assert_eq!(plan.inputs[1].cell, plan.inputs[3].cell);
+    assert!(
+        plan.inputs.iter().all(|input| !input.is_stretched()),
+        "no panel should be stretched once rows are equal"
+    );
+
+    for input in inputs {
+        let _ = fs::remove_file(input);
+    }
+}
