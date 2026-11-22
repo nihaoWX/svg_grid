@@ -27,16 +27,15 @@
   回退 `02b` = cowplot；两副本 `diff -r` 为空）。**HARNESS 是两件套**（2026-10-06 起）：本文件
   + `ARCHITECTURE.md`（含 `# 已定型的决定` 与 `ARCHITECTURE/` 机制文档，索引见该文件）+ `docs/`；**不设 `DECISIONS.md`**。
   **`INSTRUCTIONS.md` 是用户手写、只由用户改**，与其余文件冲突时以它为准。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R33 已入账**；
-  `link` 组 L1–L56；`round-data/R3…R33` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
-  `[tools/svg_grid, monorepo]`（两个都要，旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R34 已入账**；
+  `link` 组 L1–L56；`round-data/R3…R34` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+  `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
 - **黑盒验证**：四轮（`tests/s22_repro/out/skilltest{,2,3,4}/`）。**R3 起 `--height`/`--rel-*` 完全不再出现**；
   **R4 零告警通过**（六格 `sx=sy=1.0000`）。
 - **真实产物**：`research/白藜芦醇胰腺癌` 的 12 张成品图已用本管线重做；**Figure 2**（矢量带 + 13 个位图
   panel）复刻成功——4961×7016 @600 dpi、14 格 `sx=sy=1.00000`、四次 `plot-grid` stderr 全 0。
-
 # Completed
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
@@ -93,34 +92,18 @@
 - 2026-11-22 **用户验收审计（未改代码）**：对照 `INSTRUCTIONS.md` 的四条新要求逐条实测，全部未满足；
   三条根因已定位到 file:line（见 `# Known Issues` 前四条）。同时核实：`doctor` 57 pass / 0 fail / 1 skip、
   `cargo test` 207 项全绿、`~/.local/bin/svg_grid` 与 `target/release` 同 sha256（装的是最新构建）。
-- 2026-10-06 **R26**：参数面收敛（删 18 个未文档化拼法）；新增 `plot-grid --plan`（只读、几何与真跑同源）。
-- 2026-10-06 **R25**：告警瘦身（单条最长 198 字符）；公共因果抽成一行 `note:`。
-- 2026-10-06 **R24**：I/O 报错点名文件（`I/O error at <path>: …`）。
-- 2026-10-06 **R23**：Windows 安装面（`src/home.rs` + `docs/install-windows.md`）。
-- 2026-10-06 **R22**：`install.sh` 增装随工具发布的 skill + `--check` 只读自检。
-- 2026-10-06 **R21**：原生出图升级为查证流程（认包 → 查本仓 tools → 查官方 → 无才自绘）。
-- 2026-10-06 **R20**：指南补主干 `# CORE WORKFLOW` 五步 + `00_native_plots.md`。
-- 2026-10-06 **R19**：自检合成一个测试目标 `tests/selftest/`（190 条未丢）。
-- 2026-10-06 **R18**：只交付一个二进制——`convert` 成为 `svg_grid convert` 子命令。
-- 2026-10-06 **R17**：`doctor` 子命令（两段管线 + 判据 + `--only/--jobs/--json/--keep`）。
-- 2026-10-06 **R16**：修 paint server 被丢弃（新增 W9）。
-- 2026-10-06 **R15**：`install.sh`（release 编译 → `~/.local/bin` → 字体到数据根）。
-- 2026-10-06 **R14**：修"用户参数能打崩工具"（rc=2）、退出码分档、`--help` 契约、字体目录运行时解析。
-- 2026-10-06 **R13**：字体库 `fontlib/`（缺族 W8、空库 fail-closed、字母默认 Arial）。
-- 2026-10-06 **R12**：补 `round-data/R10/` 可跑证据。
-- 2026-10-06 **R11**：`DECISIONS.md` 并入 `ARCHITECTURE.md` 后删除。
-- 2026-09-28 **R10**：指南规范源 = `docs/general-figure-guide/`（另一份是复制件）。
-- 2026-09-28 **R9**：HARNESS 归位（`ARCHITECTURE/` 拆六份机制文档、`PROGRESS` 去历史）。
-- 2026-09-28 **R8**：6 个 > 20 KB 源文件行为保持型拆开。
-- 2026-09-28 **R7**：`src/ink.rs`、`src/path.rs` 拆成目录。
-- 2026-09-28 **R6**：`<path d>` 宽松化（W7）、W6 微尘提示。
-- 2026-09-28 **R5**：主库纳入 `<path>`（最小完备表达能力）。
-- 2026-09-27 **R4**：新增 W6（内容越出自身画布）；死白带判据。
-- 2026-09-27 **R3**：按 7 篇出图手感反馈更新指南。
-- 2026-09-20：按 10 篇真实反馈修阻塞点（7 修 / 3 判外部或用错）。
-- 2026-09-17：组图路线反转为 `svg_grid` 优先、cowplot 降回退。
-- 2026-09-16：布局语义 cowplot 化五项；`convert/` 建 crate；`<image>`/`--png-dpi`。
-
+- 2026-10-06 **R26–R17**：参数面收敛 + `plot-grid --plan`（R26）；告警瘦身、单条 ≤198 字符（R25）；
+  I/O 报错点名文件（R24）；Windows 安装面（R23）；`install.sh` 装 skill + `--check`（R22）；
+  原生出图查证流程（R21）；指南补 `# CORE WORKFLOW`（R20）；自检合成 `tests/selftest/`（R19）；
+  `convert` 并为子命令（R18）；`doctor` 子命令（R17）。
+- 2026-10-06 **R16–R13**：修 paint server 被丢弃 + W9（R16）；`install.sh`（R15）；用户参数打崩工具
+  rc=2、退出码分档（R14）；字体库 `fontlib/` + W8（R13）。
+- 2026-10-06 **R12–R11**：补 `round-data/R10/` 证据（R12）；`DECISIONS.md` 并入 `ARCHITECTURE.md`（R11）。
+- 2026-09-28 **R10–R5**：指南规范源（R10）；HARNESS 归位（R9）；6 个 >20 KB 源文件拆分（R8）；
+  `src/ink.rs`/`src/path.rs` 拆目录（R7）；`<path d>` 宽松化 + W6 微尘（R6）；主库纳入 `<path>`（R5）。
+- 2026-09-27 **R4–R3**：W6 内容越界 + 死白带判据（R4）；按 7 篇反馈更新指南（R3）。
+- 2026-09-20 及更早：按 10 篇反馈修阻塞点（7 修 / 3 判外部或用错）；组图路线反转为 `svg_grid` 优先；
+  布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
 # In Progress
 
 - 无进行中轮次（D1–D6 + D5b 全部完成，R27–R34）。下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R35）。
