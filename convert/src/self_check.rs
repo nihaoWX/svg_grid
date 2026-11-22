@@ -44,10 +44,25 @@ pub fn self_check(root: &Element) -> Result<(), ConvertError> {
     Ok(())
 }
 
-/// The translation stage must leave none of these behind. `in_mask_or_marker`
-/// marks subtrees the `shapes` stage does not translate (mask/marker content is
-/// not part of a supported shape tree): a `<path>` there is untranslated residue
-/// even when its `d` uses the flattened form.
+/// The translation stage must leave none of these behind.
+///
+/// `in_mask_or_marker` marks subtrees the `shapes` stage does not translate
+/// (mask/marker content is not part of a supported shape tree): a `<path>` there
+/// is untranslated residue even when its `d` uses the flattened form.
+///
+/// That mask/marker rule is a **deliberate fail-closed** decision (R28), not an
+/// oversight. A canonical flattened `<path>` inside a root- or `<g>`-level
+/// `<mask>`, or inside a root-level `<marker>`, makes `self_check` return `rc=1`:
+/// the serialization cannot prove provenance there, because the stage never
+/// emits such a path itself. None of the four supported dialects produces a
+/// root-level `<mask>`/`<marker>`, and the 220-fixture corpus showed 0
+/// regressions from tightening this check.
+///
+/// The whitelist is about *provenance*, not about container names: `<a>`,
+/// `<switch>` and `<text>` are ordinary traversed containers (as are nested
+/// `<g>`/`<defs>`), so a canonical flattened path inside them is accepted. It is
+/// not "everything else is residue" — only the untranslated mask/marker payload
+/// subtrees are excluded.
 fn check_residue(element: &Element, in_mask_or_marker: bool, problems: &mut Vec<String>) {
     match element.name.as_str() {
         // The `shapes` stage emits a flattened multi-contour `<path>` for a fill
@@ -97,6 +112,9 @@ fn check_residue(element: &Element, in_mask_or_marker: bool, problems: &mut Vec<
 /// flattened fill region with straight segments, so accepting it is harmless.
 /// Anything else — spaces or newlines between coordinates, relative/mixed
 /// commands, curves, a missing `Z` — is untranslated residue and fails the check.
+/// This is not a container-name rule (see [`check_residue`]): `<a>`, `<switch>`
+/// and `<text>` are traversed like `<g>`, so a canonical flattened path inside
+/// them still passes.
 fn is_flattened_fill_path(element: &Element) -> bool {
     if element.attr("transform").is_some() {
         return false;
