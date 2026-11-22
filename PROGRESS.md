@@ -37,48 +37,33 @@
 - 2026-11-22 **用户验收审计（未改代码）**：对照 `INSTRUCTIONS.md` 的四条新要求逐条实测，全部未满足；
   三条根因已定位到 file:line（见 `# Known Issues` 前四条）。同时核实：`doctor` 57 pass / 0 fail / 1 skip、
   `cargo test` 207 项全绿、`~/.local/bin/svg_grid` 与 `target/release` 同 sha256（装的是最新构建）。
-- 2026-10-06 **R26**：**参数面收敛 + 出图几何由工具算**——删掉 18 个未文档化拼法，`--help` 与解析器双向一一对应；
-  新增 **`plot-grid --plan`**（只读、零写入）：打印总画布、每输入一行 `canvas/cell/s/Δ`、以及可照抄的归一化命令，
-  几何与真跑同源（`geom::cell_scale`）。证据 R26 = 22 条。
-- 2026-10-06 **R25**：**告警瘦身**——单条最长 722 → **198 字符**；公共因果抽成每次运行只打一行的 `note:`；
-  触发条数/码集合/退出码不变。证据 R25 = 96 条。
-- 2026-10-06 **R24**：**I/O 报错点名文件**——`SvgGridError::Io` 带 `Option<PathBuf>`，形状统一为 `I/O error at <path>: …`。
-- 2026-10-06 **R23**：**Windows 安装面**——数据根解析抽成 `src/home.rs`（`HOME` → `USERPROFILE`）；新增 `docs/install-windows.md`。证据 R23 = 30 条。
-- 2026-10-06 **R22**：`install.sh` 增装**随工具发布的 skill**（白名单拷贝、幂等、原子替换、`--no-skill`/`--dry-run`）
-  与 **`--check`**（只读自检）。证据 R22 = 25 条；回填 **R3** 的可跑证据。
-- 2026-10-06 **R21**：原生出图从"查一张表"升级为**查证流程**（认包 → 查本仓 `tools/` → 查官方资料 → 确认无才自绘）；
-  `# native: none` 必须带**两处查证痕迹**。证据 R21 = 53 条。
-- 2026-10-06 **R20**：组图指南补**主干**——`SKILL.md` 立 `# CORE WORKFLOW` 五步；新增 `00_native_plots.md`
-  （95 条函数对照 + 四类例外）；`05_checklist.md` 加 `grep` 可查的来源判据。证据 R20 = 44 条。
-- 2026-10-06 **R19**：**自检合成一个测试目标** `tests/selftest/`（190 条未丢）；`convert` 的 stderr 前缀改为随调用方。
-- 2026-10-06 **R18**：**只交付一个二进制**——`convert` 成为 `svg_grid convert` 子命令；`doctor` 第一段改进程内调用；
-  `install.sh` 只装 `svg_grid`。证据 R18 = 43 条。
-- 2026-10-06 **R17**：`doctor` 子命令——一条命令跑整集语料（两段管线 + 判据 + `--only/--jobs/--json/--keep`）；
-  全量 **57 pass / 0 fail / 1 skip**。此后"改完先跑"的默认回归入口（`ARCHITECTURE/testing.md`）。
-- 2026-10-06 **R16**：语料基线测出两条**静默掉墨水**的缺陷——`<defs>` 里的 paint server 被整段丢弃 ⇒ `url(#…)` 悬空。
-  修：保留 paint server、组图侧不碰其坐标域、新增 **W9**。墨水 0.0672→0.6809、0.2180→0.4245。
-- 2026-10-06 **R15**：安装——`install.sh`（release 编译 → 装 `~/.local/bin` → 装字体到数据根；幂等、`--dry-run`）。
-  **每次改完代码都要重跑一次**（`ARCHITECTURE/install.md`）。
-- 2026-10-06 **R14**：修掉"用户参数能打崩工具"那批（`--ncol/--nrow 0`、`--avif-quality` 越界 ⇒ 用法错 rc=2）；
-  退出码分档 0/1/2/3；`--help`/`-h`/`--version` 修好（stdout + rc=0，覆盖 28 flag）；字体目录改**运行时**解析；
-  `transform.rs` 拆目录。
-- 2026-10-06 **R13**：字体库 `fontlib/`——字体只从该目录读（`load_system_fonts` 已删、`system-fonts` feature 已去掉）、
-  面板字母默认 **Arial**、`--list-fonts`/`--font-dir`、缺族 **W8**、空库 fail-closed；`src/lib.rs` 拆出 `src/labels.rs`。
-- 2026-10-06 **R12**：消费阻塞点报告「R10 缺可跑证据」——自检是真阳性，按 §4.3 **就地补** `round-data/R10/`。
-- 2026-10-06 **R11**：`DECISIONS.md` 并入 `ARCHITECTURE.md` §已定型的决定后删除；跨工具陈旧引用同步为两件套。
-- 2026-09-28 **R10**：指南规范源裁决 = `docs/general-figure-guide/`（另一份是复制件，`rsync` 覆盖）；账本 `link` L6–L8。
-- 2026-09-28 **R9**：HARNESS 归位——`ARCHITECTURE/` 拆出六份机制文档、父文档瘦身、`PROGRESS` 去历史；
-  skill 按"只写现状 + 不列告警"瘦身。
-- 2026-09-28 **R8**：把 6 个 > 20 KB 的源文件全部行为保持型拆开（并修掉 `include!` 造成的 fmt 盲区）。
-- 2026-09-28 **R7**：`src/ink.rs`、`src/path.rs` 行为保持型拆成目录；触发账本 `link` L1/L2。
-- 2026-09-28 **R6**：`<path d>` 宽松化（畸形/非有限 ⇒ W7 警告 + 原样透传）、W6 微尘提示、删掉恒真的检查 2。
-- 2026-09-28 **R5**：主库纳入 `<path>`（"最小的完备表达能力"分界原则）。
-- 2026-09-27 **R4**：新增 W6（内容越出自身画布）；死白带判据修正并落成唯一脚本。
-- 2026-09-27 **R3**：按 7 篇出图手感反馈更新指南（未改一行代码）。
+- 2026-10-06 **R26**：参数面收敛（删 18 个未文档化拼法）；新增 `plot-grid --plan`（只读、几何与真跑同源）。
+- 2026-10-06 **R25**：告警瘦身（单条最长 198 字符）；公共因果抽成一行 `note:`。
+- 2026-10-06 **R24**：I/O 报错点名文件（`I/O error at <path>: …`）。
+- 2026-10-06 **R23**：Windows 安装面（`src/home.rs` + `docs/install-windows.md`）。
+- 2026-10-06 **R22**：`install.sh` 增装随工具发布的 skill + `--check` 只读自检。
+- 2026-10-06 **R21**：原生出图升级为查证流程（认包 → 查本仓 tools → 查官方 → 无才自绘）。
+- 2026-10-06 **R20**：指南补主干 `# CORE WORKFLOW` 五步 + `00_native_plots.md`。
+- 2026-10-06 **R19**：自检合成一个测试目标 `tests/selftest/`（190 条未丢）。
+- 2026-10-06 **R18**：只交付一个二进制——`convert` 成为 `svg_grid convert` 子命令。
+- 2026-10-06 **R17**：`doctor` 子命令（两段管线 + 判据 + `--only/--jobs/--json/--keep`）。
+- 2026-10-06 **R16**：修 paint server 被丢弃（新增 W9）。
+- 2026-10-06 **R15**：`install.sh`（release 编译 → `~/.local/bin` → 字体到数据根）。
+- 2026-10-06 **R14**：修"用户参数能打崩工具"（rc=2）、退出码分档、`--help` 契约、字体目录运行时解析。
+- 2026-10-06 **R13**：字体库 `fontlib/`（缺族 W8、空库 fail-closed、字母默认 Arial）。
+- 2026-10-06 **R12**：补 `round-data/R10/` 可跑证据。
+- 2026-10-06 **R11**：`DECISIONS.md` 并入 `ARCHITECTURE.md` 后删除。
+- 2026-09-28 **R10**：指南规范源 = `docs/general-figure-guide/`（另一份是复制件）。
+- 2026-09-28 **R9**：HARNESS 归位（`ARCHITECTURE/` 拆六份机制文档、`PROGRESS` 去历史）。
+- 2026-09-28 **R8**：6 个 > 20 KB 源文件行为保持型拆开。
+- 2026-09-28 **R7**：`src/ink.rs`、`src/path.rs` 拆成目录。
+- 2026-09-28 **R6**：`<path d>` 宽松化（W7）、W6 微尘提示。
+- 2026-09-28 **R5**：主库纳入 `<path>`（最小完备表达能力）。
+- 2026-09-27 **R4**：新增 W6（内容越出自身画布）；死白带判据。
+- 2026-09-27 **R3**：按 7 篇出图手感反馈更新指南。
 - 2026-09-20：按 10 篇真实反馈修阻塞点（7 修 / 3 判外部或用错）。
-- 2026-09-17：组图路线反转为 `svg_grid` 优先、cowplot 降回退；混合（svg + 位图）端到端走通。
-- 2026-09-16：布局语义 cowplot 化五项；删混合栅格-矢量 composer；`convert/` 建 crate；
-  `<image>`/`raster-images`/`--png-dpi`；五条告警；批次重建 12 张成品图。
+- 2026-09-17：组图路线反转为 `svg_grid` 优先、cowplot 降回退。
+- 2026-09-16：布局语义 cowplot 化五项；`convert/` 建 crate；`<image>`/`--png-dpi`。
 
 # In Progress
 
@@ -127,9 +112,12 @@
    - **默认网格**：用户要求抄 cowplot —— 不给 `ncol`/`nrow` 时 `cols=ceil(sqrt(n))`、`rows=ceil(n/cols)`
      （15 图 → 4×4，5 图 → 3×2），末格按 NULL 声明处理；现在 `(None, None) => (1, count)`（`src/layout.rs:69-74`）
      ⇒ 5 图默认是一行 `1×5`（`--plan` 实测 canvas 1000×242.5），与要求相反。
-   - **空位必须声明**：显式 `ncol`/`nrow` 除不尽时，现在静默留空、不提示；按用户口径必须
-     显式 `--input NULL` / `--input none`，否则报错。`--input NULL` 已可用
-     （`src/cli/parse.rs:470-472`，不区分大小写）。待定：显式模式下报错还是自动补 NULL（见 `# Next Steps`）。
+   - **空位必须声明**：显式 `ncol`/`nrow` 且 `rows×cols > 输入数` 时，现在静默留空、不提示；
+     按用户口径多出的格必须显式 `--input NULL` / `--input none` 声明，否则报错。`--input NULL` 已可用
+     （`src/cli/parse.rs:470-472`，不区分大小写）。**待定**：显式模式下报错还是也自动补 NULL（见 `# Next Steps`）。
+6. **`--labels` 的 NULL 规则未实现**（用户 2026-11-22 定）：裸 `--labels` 的 AUTO **跳过 NULL 槽**；
+   显式列表**按槽位**（含 NULL）——给 NULL 槽写字母就画、写 `""` 跳过。现在 `labels::build` 按输入下标取字母
+   （`src/labels.rs:16-18`），NULL 槽如何占位尚未定义；继承字母的重号（W3）仍只是告警。
 
 ## 其他未决项
 
