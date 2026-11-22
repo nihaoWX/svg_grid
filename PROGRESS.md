@@ -118,6 +118,11 @@
 6. **`--labels` 的 NULL 规则未实现**（用户 2026-11-22 定）：裸 `--labels` 的 AUTO **跳过 NULL 槽**；
    显式列表**按槽位**（含 NULL）——给 NULL 槽写字母就画、写 `""` 跳过。现在 `labels::build` 按输入下标取字母
    （`src/labels.rs:16-18`），NULL 槽如何占位尚未定义；继承字母的重号（W3）仍只是告警。
+7. **`--verbose` 未实现**（用户 2026-11-22 定）：默认只输出必要信息（报错），W1–W9 与聚合 `note:` 静音；
+   `--verbose` 才展开。现在告警一律打 stderr（`src/warnings/mod.rs` 的 `emit`）。
+   **待定**：非等比拉伸（Δ）、字母重号（W3）这类"成品真的会不对"的告警，静音还是升报错。
+8. **`rows×cols` 上界没校验**：现在只查"装不下"（`src/layout.rs:75-77`，`rows*cols < count` ⇒ 报错）；
+   用户要求多出整整一行也报错（5/6 个输入给 9 格）。判定口径（最小矩形 `rows == ceil(count/cols)`）待确认。
 
 ## 其他未决项
 
@@ -174,7 +179,7 @@
 1. **（待用户确认后动手）按 `INSTRUCTIONS.md` 的四条缺口排优先级**：
    ① `plot-grid` 自动 convert（`plan.rs:144` 前接 `svg_grid_convert::convert`，成本最低）；
    ② 字形孔修复（`path_form.rs` 的 N≥3 分支改出 `<path>` + 补回归用例）；
-   ③ 末行 cell 跨满宽（`layout.rs` 只改末行 cell 宽，画布高不变）；
+   ③ 格子尺寸只由网格决定（行高不随该行实际图数变，`layout.rs` 的 `row_aspect_sums`）；
    ④ `--labels` 中间步重号（W3 升硬错误或自动剥离）。
    ②③ 是**产物正确性**问题，建议先于 ①④。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
