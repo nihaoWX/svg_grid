@@ -89,30 +89,51 @@ pub fn describe_missing_font_error(requested: &str, available: &[String]) -> Opt
             }
         }
         // The library itself may hold very long family names: shorten them, but
-        // keep enough room for the chain echo so the message still names what the
-        // user typed.
+        // reserve the chain echo first so the message still names what the user
+        // typed. The echo gets `min(chain, CHAIN_ECHO)` characters, and only when
+        // that leaves no room for the list does it fall back to `MIN_ECHO`.
+        //
+        // Every budget below is measured from the string that is actually
+        // formatted (`fixed.chars().count()`), never from hand-counted constants:
+        // an earlier version counted `"(available: "` as 12 characters instead of
+        // 13, which silently dropped the whole `available:` list.
         let suffix = format!("); {tail}");
-        let overhead = PREFIX.len() + MIDDLE.len() + "(available: ".len() + suffix.chars().count();
-        let chain_room = chain.chars().count().min(CHAIN_ECHO);
-        let room = super::MAX_ERROR_BODY.saturating_sub(overhead + chain_room);
-        if let Some(listed) = list_families_within(available, super::MAX_LISTED, room) {
-            let fixed = format!(" (available: {listed}); {tail}");
-            if let Some(body) = with_clamped_chain(&chain, &fixed) {
-                return Some(body);
+        for echo_room in [chain.chars().count().min(CHAIN_ECHO), MIN_ECHO] {
+            let head = PREFIX.len() + MIDDLE.len() + echo_room;
+            let room = super::MAX_ERROR_BODY
+                .saturating_sub(head + AVAILABLE_OPEN.len() + suffix.chars().count());
+            if let Some(listed) = list_families_within(available, super::MAX_LISTED, room) {
+                let fixed = format!("{AVAILABLE_OPEN}{listed}{suffix}");
+                if let Some(body) = with_clamped_chain(&chain, &fixed) {
+                    return Some(body);
+                }
             }
         }
     }
-    // Never emit a line over the cap: the plainest actionable form, with the chain
-    // echo shortened to whatever room is left. `with_clamped_chain` always fits
-    // here because the fixed part is short.
-    with_clamped_chain(&chain, "; Fix: --list-fonts.")
-        .or_else(|| Some(format!("{PREFIX}\"…\"{MIDDLE}; Fix: --list-fonts.")))
+    // Last resort: the shortest fix, but `available:` is still kept — it is the
+    // actionable half of the message, so it is only given up when the library
+    // itself cannot be named in any form. `truncate_body` is the unconditional
+    // guarantee that no input can push the line over the cap.
+    let suffix = "; Fix: --list-fonts.";
+    let head = PREFIX.len() + MIDDLE.len() + MIN_ECHO;
+    let room = super::MAX_ERROR_BODY.saturating_sub(head + AVAILABLE_OPEN.len() + suffix.len());
+    let listed = list_families_within(available, 1, room).unwrap_or_else(|| "…".to_string());
+    let fixed = format!("{AVAILABLE_OPEN}{listed}{suffix}");
+    let body = with_clamped_chain(&chain, &fixed)
+        .unwrap_or_else(|| format!("{PREFIX}\"…\"{MIDDLE}{fixed}"));
+    Some(truncate_body(&body))
 }
 
 /// The body around the chain echo: `--label-fontfamily <echo> is not in the font
 /// library<fixed>`.
 const PREFIX: &str = "--label-fontfamily ";
 const MIDDLE: &str = " is not in the font library";
+
+/// The opening of the library list inside `fixed`. It is a named constant, and
+/// every budget is measured from the formatted string, precisely because the
+/// leading space is easy to forget — forgetting it once dropped the whole
+/// `available:` list from the message.
+const AVAILABLE_OPEN: &str = " (available: ";
 
 /// The shortest chain echo, `"…"`, used to budget the rest of the line.
 const MIN_ECHO: usize = 3;
@@ -126,16 +147,28 @@ fn fits(body: &str) -> bool {
 }
 
 /// Build the message with the chain echo shortened to the room `fixed` leaves.
-/// Returns `None` when not even `"…"` fits, so the caller can try a shorter form.
-fn with_clamped_chain(chain: &str, fixed: &str) -> Option<String> {
+/// Returns `None` when the result would not fit, so the caller can try a shorter
+/// form — this check is the one guarantee that the ladder never emits an over-long
+/// line, even if the echo arithmetic is edited later.
+pub(super) fn with_clamped_chain(chain: &str, fixed: &str) -> Option<String> {
     let budget =
-        super::MAX_ERROR_BODY.checked_sub(PREFIX.len() + MIDDLE.len() + fixed.chars().count())?;
-    if budget < MIN_ECHO {
-        return None;
-    }
+        super::MAX_ERROR_BODY.saturating_sub(PREFIX.len() + MIDDLE.len() + fixed.chars().count());
     let clamped = clamp_quoted(chain, budget);
     let body = format!("{PREFIX}{clamped}{MIDDLE}{fixed}");
     fits(&body).then_some(body)
+}
+
+/// The unconditional backstop: no input may push the line over the cap, even if a
+/// future edit to the ladder above gets the arithmetic wrong. It is applied to the
+/// last-resort form, whose budget is computed rather than hand-counted, so it
+/// normally changes nothing; it exists so the cap holds by construction.
+pub(super) fn truncate_body(body: &str) -> String {
+    if fits(body) {
+        return body.to_string();
+    }
+    let mut cut: String = body.chars().take(super::MAX_ERROR_BODY - 1).collect();
+    cut.push('…');
+    cut
 }
 
 /// `Arial, Times New Roman, …`: at most `shown` families, with the rest folded.
@@ -158,7 +191,11 @@ fn list_families(available: &[String], shown: usize) -> String {
 /// [`list_families`] that also shortens individual family names so the whole list
 /// fits `budget` characters: a name that does not fit keeps a recognisable prefix
 /// and an ellipsis. Returns `None` when not even one shortened name fits.
-fn list_families_within(available: &[String], shown: usize, budget: usize) -> Option<String> {
+pub(super) fn list_families_within(
+    available: &[String],
+    shown: usize,
+    budget: usize,
+) -> Option<String> {
     if available.is_empty() {
         return (budget >= 4).then(|| "none".to_string());
     }
@@ -196,19 +233,24 @@ fn list_families_within(available: &[String], shown: usize, budget: usize) -> Op
     (listed.chars().count() <= budget).then_some(listed)
 }
 
-/// Shorten a quoted echo to `budget` characters, keeping both quotes and marking
-/// the cut with `…`. The cut prefers a family boundary (`"A, B, …"`) so the echo
-/// never ends in the middle of a family name. The result is guaranteed to fit:
-/// the wrapper adds five characters (two quotes, `, ` and the ellipsis).
-fn clamp_quoted(quoted: &str, budget: usize) -> String {
+/// Shorten a quoted echo to at most `budget` characters, keeping both quotes and
+/// marking the cut with `…`. The cut prefers a family boundary (`"A, B, …"`) so the
+/// echo never ends in the middle of a family name.
+///
+/// The wrapper adds exactly five characters (two quotes, `, ` and the ellipsis), so
+/// keeping `budget - 5` inner characters makes the result exactly `budget` long —
+/// that arithmetic is pinned by `every_clamped_echo_fits_its_budget`. When less
+/// than five characters are available there is nothing to echo, and the caller's
+/// `fits` check is what rejects the three-character `"…"` if even that is too wide.
+pub(super) fn clamp_quoted(quoted: &str, budget: usize) -> String {
     if quoted.chars().count() <= budget {
         return quoted.to_string();
     }
-    if budget < 6 {
+    let inner = quoted.trim_matches('"');
+    let keep = budget.saturating_sub(5);
+    if keep == 0 {
         return "\"…\"".to_string();
     }
-    let inner = quoted.trim_matches('"');
-    let keep = budget - 5;
     let mut shortened: String = inner.chars().take(keep).collect();
     if let Some(cut) = shortened.rfind(',') {
         shortened.truncate(cut);
@@ -218,9 +260,9 @@ fn clamp_quoted(quoted: &str, budget: usize) -> String {
         return "\"…\"".to_string();
     }
     let clamped = format!("\"{shortened}, …\"");
-    if clamped.chars().count() <= budget {
-        clamped
-    } else {
-        "\"…\"".to_string()
-    }
+    debug_assert!(
+        clamped.chars().count() <= budget,
+        "the echo must fit the budget it was given: {clamped:?} > {budget}"
+    );
+    clamped
 }

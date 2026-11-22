@@ -280,3 +280,177 @@ fn the_footer_never_counts() {
     assert!(!footer.contains("1 "), "{footer}");
     assert!(footer.chars().count() <= MAX_LINE, "{} ch", footer.len());
 }
+
+/// A one-character chain must not let the library list fall off the line: this is
+/// the exact shape that regressed once, because the budget for `available:` was
+/// hand-counted one character short and every rendering rung was skipped.
+#[test]
+fn a_single_character_chain_keeps_the_available_list() {
+    let prefix = "svg_grid: font library error: ".len();
+    let library: Vec<String> = ["A", "B", "C", "F0", "F1", "F2", "F3"]
+        .iter()
+        .map(|name| format!("{name}{}", "x".repeat(100)))
+        .collect();
+
+    let message = describe_missing_font_error("X", &library).expect("a dead chain must fail");
+    let total = prefix + message.chars().count();
+    assert!(total <= MAX_LINE, "{total} ch (cap {MAX_LINE}): {message}");
+    assert!(
+        message.contains("available:"),
+        "the library must survive a one-character chain: {message}"
+    );
+    assert!(
+        message.contains("\"X\""),
+        "the chain itself must still be named: {message}"
+    );
+    assert!(
+        message.contains(" (available: "),
+        "the list must be separated from the phrase by a space: {message}"
+    );
+}
+
+/// A short chain must keep its whole echo even when the library holds very long
+/// family names: the echo is worth more than the tail of the list, so it is never
+/// collapsed to `"…"` while it would still fit.
+#[test]
+fn a_short_echo_is_never_collapsed_by_a_long_library() {
+    let prefix = "svg_grid: font library error: ".len();
+    let library: Vec<String> = (0..7)
+        .map(|index| {
+            format!(
+                "Noto Sans CJK JP Display Condensed {index}{}",
+                "y".repeat(10)
+            )
+        })
+        .collect();
+
+    for chain in ["Noto", "AB", "ABC", "ABCD"] {
+        let message = describe_missing_font_error(chain, &library).expect("a dead chain must fail");
+        let total = prefix + message.chars().count();
+        assert!(total <= MAX_LINE, "{total} ch (cap {MAX_LINE}): {message}");
+        assert!(
+            message.contains(&format!("\"{chain}\"")),
+            "the echo must keep the whole {chain:?}: {message}"
+        );
+        assert!(
+            message.contains("available:"),
+            "the library must survive too: {message}"
+        );
+    }
+}
+
+/// `with_clamped_chain` is the single place that rejects an over-long rendering:
+/// a `fixed` part that leaves no room for even `"…"` must yield `None` instead of
+/// an over-cap line.
+#[test]
+fn with_clamped_chain_rejects_a_fixed_part_that_leaves_no_room() {
+    let fixed = format!(" (available: {}); Fix: --list-fonts.", "z".repeat(200));
+    assert!(
+        fonts::with_clamped_chain("\"X\"", &fixed).is_none(),
+        "an impossible fixed part must be rejected, not truncated silently"
+    );
+}
+
+/// The echo clamp keeps its arithmetic honest: for every budget that can hold an
+/// echo at all, the clamped string is within that budget.
+#[test]
+fn every_clamped_echo_fits_its_budget() {
+    let chains = [
+        "\"X\"".to_string(),
+        "\"Noto Sans CJK JP Display Condensed Medium Oblique Extra Light\"".to_string(),
+        "\"Helvetica\", \"Liberation Sans\", \"DejaVu Sans\"".to_string(),
+        format!("\"{}\"", "q".repeat(400)),
+        "\"A, B, C, D, E, F, G, H, I, J, K, L\"".to_string(),
+    ];
+    for chain in &chains {
+        for budget in 3..=120 {
+            let clamped = fonts::clamp_quoted(chain, budget);
+            let width = clamped.chars().count();
+            assert!(
+                width <= budget,
+                "budget {budget} produced {width} chars: {clamped}"
+            );
+        }
+    }
+}
+
+/// Below the ellipsis width there is nothing to echo, and `clamp_quoted` says so
+/// instead of inventing a shorter marker; `with_clamped_chain` then rejects it.
+/// This is the one `budget` where the result is *wider* than asked for, so the
+/// caller's guard is load-bearing rather than decorative.
+#[test]
+fn clamp_quoted_never_shrinks_below_the_ellipsis() {
+    for budget in 0..3 {
+        assert_eq!(fonts::clamp_quoted("\"Arial\"", budget), "\"…\"");
+        assert_eq!(
+            fonts::with_clamped_chain("\"Arial\"", &"x".repeat(200)),
+            None,
+            "a fixed part that leaves {budget} characters must be rejected"
+        );
+    }
+}
+
+/// The last-resort form is the unconditional backstop: whatever the ladder emits,
+/// the cap holds, and a body that is already short is returned untouched.
+#[test]
+fn the_last_resort_cap_truncates_only_when_it_must() {
+    let long = format!("{}{}", "a".repeat(300), "b".repeat(100));
+    let cut = fonts::truncate_body(&long);
+    assert!(
+        cut.chars().count() <= MAX_ERROR_BODY,
+        "{} ch > {MAX_ERROR_BODY}",
+        cut.chars().count()
+    );
+    assert!(cut.ends_with('…'), "{cut}");
+
+    let short = "short body";
+    assert_eq!(fonts::truncate_body(short), short);
+}
+
+/// A fuzz over the shapes that used to break the budget: a chain of any length, a
+/// library of any length, and family names longer than the whole line. Every
+/// failure must stay ≤ 200 characters and must still list the library.
+#[test]
+fn every_chain_and_library_shape_stays_within_the_cap() {
+    let prefix = "svg_grid: font library error: ".len();
+    let chains: Vec<String> = vec![
+        "X".to_string(),
+        "AB".to_string(),
+        "思源".to_string(),
+        "A".repeat(500),
+        (0..60)
+            .map(|index| format!("Fam{index}"))
+            .collect::<Vec<_>>()
+            .join(","),
+        (0..30)
+            .map(|index| format!("Family Name With Spaces {index}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    ];
+    let libraries: Vec<Vec<String>> = vec![
+        vec![],
+        vec!["Arial".to_string()],
+        vec!["Short".to_string(), "MediumName".to_string()],
+        (0..7)
+            .map(|index| format!("L{index}{}", "z".repeat(100)))
+            .collect(),
+        (0..40)
+            .map(|index| format!("Fam{index}{}", "q".repeat(60)))
+            .collect(),
+        vec!["x".repeat(400)],
+    ];
+    for chain in &chains {
+        for library in &libraries {
+            let Some(message) = describe_missing_font_error(chain, library) else {
+                continue;
+            };
+            let total = prefix + message.chars().count();
+            assert!(total <= MAX_LINE, "{total} ch (cap {MAX_LINE}): {message}");
+            assert!(
+                message.contains("available:"),
+                "the library must always be listed: {message}"
+            );
+            assert!(message.contains("--list-fonts"), "{message}");
+        }
+    }
+}

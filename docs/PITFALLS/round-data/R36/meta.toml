@@ -1,0 +1,22 @@
+id = "R36"
+date = "2026-11-23"
+verdict = "新领土"
+family = ["overhead 手算常量少 1 字符", "链回显被压成 \"…\"", "available: 整段丢失", "不可达的末尾复核"]
+closures = [
+  { finding = "R36-F1", tier = "代码" },
+  { finding = "R36-F2", tier = "代码" },
+  { finding = "R36-F3", tier = "代码" },
+  { finding = "R36-F4", tier = "代码" },
+]
+run_before = ["R35"]
+touched = []
+note = """
+为什么认定新问题：R35（D5c）修的是「长单名把行顶到 201」，但它的预算用手算常量 `"(available: ".len()` = 12，而真实 fixed 前缀是 `" (available: "` = 13（含前导空格）。少算 1 字符 ⇒ 列表预算多 1 ⇒ 链回显预算压到 MIN_ECHO 以下 ⇒ `with_clamped_chain` 返回 None ⇒ 整条阶梯落空，落到不含 `available:` 的最短兜底。这是 D5c 新引入的语义回退，不是 D5b 遗留。
+根因与修法：把 `" (available: "` 提为 `const AVAILABLE_OPEN`；每一级预算都由 `format!` 拼出的 `fixed.chars().count()` 反推，而不是手算；链回显优先给 `min(链长, CHAIN_ECHO)`，库列表按剩余预算截断单个族名（保留前缀 + `…`）；兜底也保留 `available:`，并最后无条件过 `truncate_body`，让「任何输入都不超」成为构造性质。`clamp_quoted` 里原本不可达的末尾复核改成 `debug_assert!`，不变量由 `every_clamped_echo_fits_its_budget` 钉住；对外真正生效的守卫是 `with_clamped_chain` 的 `fits().then_some(...)`（删掉会让 4 个测试变红）。
+怎么修才不弄坏前面：短链文案长度不变（194/195/195）；`is not in the font library`、`available:`、`--list-fonts` 在每一级都保留；回退链语义未动（任一名字可用即 rc=0）；`font-family` 仍原样写出；7 个 fixture 无 `--labels` 输出与 `4d737b2` 逐字节相同。
+账本锚点修正：R35-F1/F3 的 `describe_missing_font_error` lines_after 记 52-112，真实 52-110；R35-F2 的 `list_families_within` 记 161-201，真实 161-197（以 `e4660e8` 的代码为准）。旧记录不改，修正值写在本轮 finding 与报告里。
+变异测试：`fits().then_some` → `Some` ⇒ 4 红；`keep - 5` → `- 4` ⇒ 3 红；`AVAILABLE_OPEN` 去前导空格 ⇒ 单字符链测试红；`truncate_body` 的 `if fits` → `if true` ⇒ 兜底测试红。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R36 && python3 test.py  # rc=0 = 58 PASS
+"""
