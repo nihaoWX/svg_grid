@@ -2,21 +2,23 @@
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
-  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）、D2（末行格子尺寸）、
-  D3（默认网格）、D6（网格校验 + `--verbose` 默认静音）、D4（自动 convert）已修复（R27–R32）；余下 D5 在修。**
+  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六个缺陷已全部修复（R27–R33）——
+  D1 字形孔、D2 末行格子尺寸、D3 默认网格、D6 网格校验 + `--verbose` 静音、D4 自动 convert、D5 labels/W3/W8。**
+  余下只有一项 pre-existing（`<defs>` 内 mask/marker 被丢弃，报告已开）。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 232 项**（81 lib + 59 main + 92 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
+  `textLength` 一起缩）。**测试 233 项**（80 lib + 59 main + 94 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
-- **九条非致命告警 W1–W9**（只走 stderr、**默认静音**，`--verbose` 才展开；**退出码与产物字节都不变**，有测试锁定；
-  正常路径 stderr 0 字节；`convert` 子命令同样受控）：
+- **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
+  **W3（给已带字母的输入再加非空字母）rc=2**、**W8（缺标签字体族）rc=3**，两者都**不写产物**、不依赖 `--verbose`；
+  正常路径 stderr 0 字节；`convert` 子命令同样受静音控制：
   契约与清单见 `ARCHITECTURE/warnings.md`。
 - **`convert/`**：R `svglite`/matplotlib/`pdftocairo -svg` 三种来源可入流水线；`<path>` 出形态决策表、
   `clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、`style` 百分比解析。**测试 100 项**（88 lib + 12 CLI）全绿。
   **2026-11-22 D1 已修**：≥3 子路径的填充 path 不再合并成 `<polygon>`，改为展平多轮廓 `<path>`（M/L/Z），
-  字形孔不再填死（R27 + R28，HEAD `64e4551`）。
+  字形孔不再填死（R27 + R28）。
 - **成品交付前检查**：`scripts/check_deliverable.py`（薄壳 + `deliverable_checks/` 包）两条检查
   （死白带 / 外框 2 px 墨迹 = 0），`--selftest` 可自证；判据的**唯一来源**（机制见
   `ARCHITECTURE/check-deliverable.md`）。
@@ -24,8 +26,8 @@
   回退 `02b` = cowplot；两副本 `diff -r` 为空）。**HARNESS 是两件套**（2026-10-06 起）：本文件
   + `ARCHITECTURE.md`（含 `# 已定型的决定` 与 `ARCHITECTURE/` 机制文档，索引见该文件）+ `docs/`；**不设 `DECISIONS.md`**。
   **`INSTRUCTIONS.md` 是用户手写、只由用户改**，与其余文件冲突时以它为准。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R26 已入账**；
-  `link` 组 L1–L56；`round-data/R3…R26` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R33 已入账**；
+  `link` 组 L1–L56；`round-data/R3…R33` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（两个都要，旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -38,6 +40,14 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-22 **D5 labels / W3 / W8 / margin 0（R33）**：裸 `--labels` 的 AUTO **跳过 NULL 槽**（5 槽 `A,B,–,C,D`）；
+  显式列表**按槽位**消费（给 NULL 槽写字母就画、`""` 跳过）。W3 升硬错误：给已带 `data-svg-grid-label`
+  的输入再赋非空字母 ⇒ rc=2、不写产物、文案点名 input#/字母，`--plan` 同 rc；`--labels ,C` 仍放行。
+  W8 升硬错误：缺标签字体族在 SVG/SVGZ/PNG/AVIF **一律 rc=3**、不写产物、文案列可用族与修法，`--plan` 不受影响。
+  `--plot-margin 0` 时字母 baseline 夹到画布内（`y ≥ 0.75em`），W5 改为"已内移"说明。顺带把 `src/lib.rs`
+  20182→18914 B、`tests/selftest/warnings/mod.rs` 20781→14156 B（拆 `src/label_conflicts.rs`、
+  `tests/selftest/warnings/ink.rs`），R8 体积门禁复绿。根 233 tests / convert 100 / doctor 57/0/1，
+  R8–R14 + R28–R32 全绿、R33 证据 19 PASS。提交 `e9425d2`→`398a21e`（删报告），证据 `docs/PITFALLS/round-data/R33/`。
 - 2026-11-22 **D4 自动 convert（R32）**：`plot-grid`/`--plan` 对缺 `data-panel-box="main"` 的输入进程内
   `svg_grid_convert::convert`（纯内存、每条最多一次），未打标签 svglite/matplotlib 输入从 rc=2 变为 rc=0，
   产物与"先手动 convert 再 plot-grid"逐字节相同；已带 panel-box 的输入输出与父提交逐字节相同
@@ -106,32 +116,23 @@
 
 # In Progress
 
-- **D5 `--labels`**（2026-11-22，待派 Generator）：AUTO 跳过 NULL 槽、显式列表按槽位（含 NULL、`""` 跳过）；
-  W3（给已带字母输入再赋非空字母）升为硬错误；W8（缺字体）所有输出都报错；顺带修 `--plot-margin 0` 时
-  首行字母被裁。完成后消费 `defs mask/marker` 报告。
-- 无其他进行中工作。
+- 无进行中轮次（D1–D6 全部完成）。下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R34）。
 
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
 
-## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1–D4、D6 已修，只剩 D5）
+## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测）
 
-1. **【D5】`--labels` 在中间步加会重号**（违反用户期望 #12）：`src/lib.rs:367-379` 只做 W3 检测
-   （`src/warnings/labels.rs:18-36`），exit 0 照常写文件。实测 AB 加字母后再与 C 组合并加字母 ⇒ 4 个
-   `data-svg-grid-label`，渲染后字母叠印。W3 须在"给**已带字母**输入再赋**非空**字母"时升为硬错误。
-2. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
-   `""` 跳过）。现在 `labels::build` 按输入下标取字母（`src/labels.rs:16-18`）。W8（缺字体）也要从告警改报错。
-3. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
+**D1–D6 全部已修（R27–R33）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩一项 pre-existing：
+
+1. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
    不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
    （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
-   报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：D5 之后立即处理。
+   报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：现在立即处理（R34）。
 
 ## 其他未决项
 
-- **`--labels` + 显式 `--plot-margin 0` 会把首行字母裁掉**（pre-existing，D5 时一并处理）：字母 baseline 在
-  cell 顶上方 0.25em（`src/labels.rs:29`），margin 0 时 `y=-6.757` 落在画布外、被静默裁掉；不给
-  `--plot-margin` 的自动字母带正常（5 图默认 y=21.622）。
 - **`--rel-widths` 部分为 0 会静默产出 0 宽格子**（pre-existing，低优先）：如 `0,1` 时首列 cell 宽 0、面板不可见，
   与 `rel_*` 其余 fail-closed 行为不一致。
 
@@ -187,8 +188,8 @@
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
    （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1/D2/D3/D4/D6 已完成**（R27–R32；`1e05ce1`/`66fba3c`+`cf76029`/`e09c33b`/`3311eec`/`162c0cd`）；
-   只剩 **D5 labels/W3/W8**，之后消费 `defs mask/marker` 报告。
+   **D1–D6 已全部完成**（R27–R33）；下一步消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R34），
+   再做一次交付前全量复核（测试 / doctor / R8–R14 / 两副本 diff / 账本 check）。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
    `git -C <repo> show <commit>:<path>`。

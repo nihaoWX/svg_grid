@@ -13,7 +13,7 @@
 | D3 默认网格是单行 | ✅ 已修，评审 PASS | `e09c33b`→`dc9a900`；R30 |
 | D6 `rows×cols` 上界 + `--verbose` | ✅ 已修；D6b 关闭性复核通过（R4–R14 绿） | `3311eec`→`676d82d`；R31；连带面 `79cf9e5`/`dc0bda6` |
 | D4 `plot-grid` 自动 convert | ✅ 已修 | `162c0cd`→`79cf9e5`→`a2d5fb5`；R32 |
-| D5 `--labels` NULL/W3/W8 | ⏳ 进行中 | — |
+| D5 `--labels` NULL/W3/W8 | ✅ 已修 | `e9425d2`→`398a21e`；R33 |
 
 ## 1. 先读什么（按顺序）
 
@@ -79,7 +79,7 @@
 - 现象：5 图不给 `ncol/nrow` ⇒ `1×5`（`--plan` 实测 canvas 1000×242.5）；用户要 `2×3`（末格 NULL）。
 - 修法：`cols = ceil(sqrt(n))`、`rows = ceil(n/cols)`；末格自动当 NULL。
 
-### D4 `plot-grid` 不会自动 convert
+### D4（修前）`plot-grid` 不会自动 convert
 
 - 位置：`src/geom.rs:21`（`find_panel_box` 的报错）；唯一调用点 `src/plan.rs:144`
   （`plot_grid` 与 `plan_grid` 共用）。
@@ -90,7 +90,7 @@
 - 注意：已组好的组合图有多个 panel-box，`convert` 会报 `Incomplete`——但这类输入本来就有 panel box，
   不会进自动分支。
 
-### D5 `--labels` 的 NULL 规则与"必要信息"报错
+### D5（修前）`--labels` 的 NULL 规则与"必要信息"报错
 
 - 现状：`src/labels.rs:16-18` 按**输入下标**取字母；空位（`None`）在 `lib.rs` 的循环里 `continue`，
   所以 NULL 槽永远拿不到字母。

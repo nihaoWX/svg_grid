@@ -16,7 +16,7 @@
 | 项 | 规则 |
 |---|---|
 | 位置 | 组图的**左上角外侧**（画布边缘与 panel 之间的留白处），**不画进 panel 内部** |
-| 字体 | **默认 `Arial`**；`--label-fontfamily` 可改成任意族名或 **CSS 列表（回退链，第一个可用者生效）**。本指南的版面口径是 **serif、常规体、不加粗** ⇒ 传 `--label-fontfamily serif --label-fontface normal`。字体**只**从字体库目录读（用不到本机系统字体）：默认**数据根** `$HOME/svg_grid/fontlib`，`SVG_GRID_FONT_DIR` 或 `--font-dir <dir>` 换成别的目录；`--list-fonts` 列出库里实际可用的族；换机器跑一次 `fontlib/setup.sh`（幂等，默认就装进数据根，把本机 Arial / Times New Roman 复制进来）；要的族不在库里会在 stderr 出 W8（非致命，会回退到别的族、字宽与换行随之改变），按它给的修法补字体或改族名。库里一个字体都没有而要出 PNG/AVIF 或要加字母 ⇒ **非零退出**（不会静默出白图） |
+| 字体 | **默认 `Arial`**；`--label-fontfamily` 可改成任意族名或 **CSS 列表（回退链，第一个可用者生效）**。本指南的版面口径是 **serif、常规体、不加粗** ⇒ 传 `--label-fontfamily serif --label-fontface normal`。字体**只**从字体库目录读（用不到本机系统字体）：默认**数据根** `$HOME/svg_grid/fontlib`，`SVG_GRID_FONT_DIR` 或 `--font-dir <dir>` 换成别的目录；`--list-fonts` 列出库里实际可用的族；换机器跑一次 `fontlib/setup.sh`（幂等，默认就装进数据根，把本机 Arial / Times New Roman 复制进来）；要的族不在库里 ⇒ **所有输出格式（SVG/SVGZ/PNG/AVIF）都 rc=3、不写产物**（不再静默回退到别的族）；文案列出可用族与修法（`--list-fonts`、`fontlib/setup.sh`）。`--plan` 不读字体、不受影响 |
 | 大小 | 占**画布宽度约 1.8–2.2 %** |
 | 内容 | 只放字母本身。**组图阶段不新增任何 panel 内文字**；源面板自带的标题若位于坐标轴**上方**则保留（见 §3），落在数据区内部或图外的脚注/来源标注则不要（说明文字放 md 图注） |
 

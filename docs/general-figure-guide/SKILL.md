@@ -120,7 +120,7 @@ svg_grid plot-grid --input tagged/A.svg --input tagged/B.svg --output row1.svg -
 
 回退路线**必须**检查输出非空白——cowplot 在本机实测过静默产出全白图。
 `plot-grid` 跑完**先看 stderr**，但**必须加 `--verbose`**——默认成功路径 stderr 是空的，W1–W9 与
-`note:` 只有加这个 flag 才展开（一律非致命、只说"发生了什么/为什么/怎么修"）。
+`note:` 只有加这个 flag 才展开（除 W3/W8 是**硬错误**外，告警一律非致命、只说"发生了什么/为什么/怎么修"）。
 
 **组什么图（原则 2、3）**：
 
