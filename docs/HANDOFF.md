@@ -11,8 +11,8 @@
 | D1 convert 填死字形孔 | ✅ 已修，对抗评审 PASS | `1e05ce1`→`3a9747a`，`1da48f0`→`64e4551`；R27/R28 |
 | D2 末行格子尺寸随行拉伸 | ✅ 已修，评审 PASS | `66fba3c`→`cf76029`→`f8be8ef`→`8b08524`；R29 |
 | D3 默认网格是单行 | ✅ 已修，评审 PASS | `e09c33b`→`dc9a900`；R30 |
-| D6 `rows×cols` 上界 + `--verbose` | ⏳ 进行中 | — |
-| D4 `plot-grid` 自动 convert | ⏳ 未开始 | — |
+| D6 `rows×cols` 上界 + `--verbose` | ✅ 已修，评审 PASS | `3311eec`→`676d82d`；R31 |
+| D4 `plot-grid` 自动 convert | ⏳ 进行中 | — |
 | D5 `--labels` NULL/W3/W8 | ⏳ 未开始 | — |
 
 ## 1. 先读什么（按顺序）

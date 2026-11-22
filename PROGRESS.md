@@ -3,14 +3,16 @@
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）、D2（末行格子尺寸）、
-  D3（默认网格）已修复并评审通过（R27/R28/R29/R30）；其余见 `# Known Issues`，按 D6→D4→D5 在修。**
+  D3（默认网格）、D6（网格校验 + `--verbose` 默认静音）已修复并评审通过（R27–R31）；其余见 `# Known Issues`，
+  按 D4→D5 在修。**
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 217 项**（81 lib + 59 main + 77 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
+  `textLength` 一起缩）。**测试 223 项**（81 lib + 59 main + 83 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
-- **九条非致命告警 W1–W9**（只走 stderr，**退出码与产物字节都不变**，有测试锁定；正常路径 stderr 0 字节）：
+- **九条非致命告警 W1–W9**（只走 stderr、**默认静音**，`--verbose` 才展开；**退出码与产物字节都不变**，有测试锁定；
+  正常路径 stderr 0 字节；`convert` 子命令同样受控）：
   契约与清单见 `ARCHITECTURE/warnings.md`。
 - **`convert/`**：R `svglite`/matplotlib/`pdftocairo -svg` 三种来源可入流水线；`<path>` 出形态决策表、
   `clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、`style` 百分比解析。**测试 100 项**（88 lib + 12 CLI）全绿。
@@ -37,6 +39,13 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-22 **D6 网格校验 + `--verbose`（R31）**：显式 `ncol/nrow` 时新增下界校验
+  `(rows-1)*cols < count`（`src/layout.rs:93-123`）——5 图 `--nrow 4`（4×2）、5/6/3 图 3×3 均 rc=2，
+  文案点名空行、给 `--nrow` 建议值与需补的 `--input NULL` 数；合法短末行（5 图 `--ncol 2`）、默认网格、
+  显式 NULL 补齐 4×2 仍 rc=0；`--plan` 同 rc/同文案且不写文件。`--verbose` 从零新增（`plot-grid` 与 `convert`
+  都接受）：默认 stderr 只留报错，W1–W9 与聚合 `note:` 静音，`--plan` 的 stdout `note:` 不受影响；
+  doctor 内部显式开诊断保持 57/0/1。根 223 tests（81+59+83）/ convert 100 / R31 证据 50 PASS。
+  提交 `3311eec`→`676d82d`（删报告），证据 `docs/PITFALLS/round-data/R31/`。
 - 2026-11-22 **D3 默认网格（R30）**：不给 `--ncol/--nrow` 时 `cols=ceil(sqrt(count))`、`rows=ceil(count/cols)`
   （count 含显式 NULL：1→1×1、2→1×2、3/4→2×2、5/6→2×3、7–9→3×3、10–12→3×4、13–16→4×4、17→4×5），
   末行不满合法、末槽不生成 cell。5 图默认 `1000×533.333`、格全 `333.333×266.667`；15 图默认 `1000×800`、格 `250×200`。
@@ -91,35 +100,30 @@
 
 # In Progress
 
-- **D6 网格校验 + `--verbose` 默认静音**（2026-11-22，待派 Generator）：① 显式 `ncol/nrow` 时按
-  `(rows-1)*cols < count ≤ rows*cols` 校验（不许整行全空、不许装不下；5 图给 4×2、5/6 图给 3×3 都要报错，
-  5 图 `--ncol 2` 合法）；② W1–W9 与聚合 `note:` 默认不再打 stderr，`--verbose` 才展开，
-  `convert` 子命令同样受控；`--plan` 的 stdout `note:` 不受影响。
-- 完成后依次 D4 自动 convert → D5 labels → 消费 `defs mask/marker` 报告。
+- **D4 `plot-grid` 自动 convert**（2026-11-22，待派 Generator）：输入缺 `data-panel-box="main"` 时
+  在进程内调 `svg_grid_convert::convert`（纯字符串、不写原图），再按转换产物取 panel/canvas；
+  `--plan` 同样生效；不支持方言/转换失败仍 rc=2 且文案说清是自动转换失败；已带 panel-box 的输入**不**转换。
+  完成后 D5 labels → 消费 `defs mask/marker` 报告。
 - 无其他进行中工作。
 
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
 
-## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1/D2/D3 已修，其余按 D6→D4→D5 顺序在修）
+## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1/D2/D3/D6 已修，其余按 D4→D5 在修）
 
-1. **【D6】"整行全空"没校验**：现在只查"装不下"（`src/layout.rs:75-77`）；用户要求多出整整一行也报错
-   （5 输入给 `--nrow 4`（2 列）或 3×3、6 输入给 3×3）。判据等价于 `(rows-1)*cols < count ≤ rows*cols`；
-   末行不满合法（5 输入 2×3），末槽不生成 cell。
-3. **【D6】`--verbose` 未实现**：默认只输出必要信息（报错），W1–W9 与聚合 `note:` 静音；`--verbose` 才展开
-   （`convert` 子命令同样受控）。现在告警一律打 stderr（`src/warnings/mod.rs` 的 `emit`）。
-4. **【D4】`plot-grid` 不会自动 convert**（违反用户期望 #11）：未打标签的输入直接 `rc=2`：
+1. **【D4】`plot-grid` 不会自动 convert**（违反用户期望 #11）：未打标签的输入直接 `rc=2`：
    `svg_grid: invalid input: input SVG must contain a <rect data-panel-box="main" .../> element`
    （抛出点 `src/geom.rs:21`，唯一调用点 `src/plan.rs:144`）。钩子 `svg_grid_convert::convert(&str, bool)`
-   （`convert/src/pipeline.rs:22`，纯字符串、无 I/O；`Cargo.toml` 已依赖 convert）；`doctor` 的进程内调用可作范式
+   （`convert/src/pipeline.rs:22`，纯字符串、无 I/O；`Cargo.toml` 已依赖 convert，返回
+   `Conversion::{Converted{svg,warnings}, AlreadyConverted, Incompatible(findings) }`）；`doctor` 的进程内调用可作范式
    （`src/cli/doctor/run.rs:205` → `run_in`）。
-5. **【D5】`--labels` 在中间步加会重号**（违反用户期望 #12）：`src/lib.rs:367-379` 只做 W3 检测
+2. **【D5】`--labels` 在中间步加会重号**（违反用户期望 #12）：`src/lib.rs:367-379` 只做 W3 检测
    （`src/warnings/labels.rs:18-36`），exit 0 照常写文件。实测 AB 加字母后再与 C 组合并加字母 ⇒ 4 个
    `data-svg-grid-label`，渲染后字母叠印。建议 W3 在"给**已带字母**输入再赋**非空**字母"时升为硬错误。
-6. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
+3. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
    `""` 跳过）。现在 `labels::build` 按输入下标取字母（`src/labels.rs:16-18`）。
-7. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
+4. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
    不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
    （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
    报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：D1–D6 之后立即处理。
@@ -184,8 +188,9 @@
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
    （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1（字形孔）、D2（末行格子尺寸）、D3（默认网格）已完成**（`1e05ce1`/`1da48f0`/`66fba3c`+`cf76029`/`e09c33b`，
-   R27/R28/R29/R30，评审 PASS）；从 **D6 校验 + `--verbose`** 接着往下：D6 → D4 自动 convert → D5 labels。
+   **D1（字形孔）、D2（末行格子尺寸）、D3（默认网格）、D6（校验 + `--verbose`）已完成**
+   （`1e05ce1`/`1da48f0`/`66fba3c`+`cf76029`/`e09c33b`/`3311eec`，R27–R31，评审 PASS）；
+   从 **D4 自动 convert** 接着往下：D4 → D5 labels → 消费 defs mask 报告。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
    `git -C <repo> show <commit>:<path>`。
