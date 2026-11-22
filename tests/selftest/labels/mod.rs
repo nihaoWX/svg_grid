@@ -145,6 +145,8 @@ fn cli_labels_flag_semantics() {
             "160".to_string(),
         ];
         args.extend(extra.iter().map(|value| value.to_string()));
+        // These assertions inspect the warning surface; opt in explicitly.
+        args.push("--verbose".to_string());
         let result = run_plot_grid(&args);
         assert!(
             result.status.success(),
@@ -207,6 +209,8 @@ fn cli_reserves_label_band_and_warns_on_tight_margin() {
             "600".to_string(),
         ];
         args.extend(extra.iter().map(|value| value.to_string()));
+        // These assertions inspect the warning surface; opt in explicitly.
+        args.push("--verbose".to_string());
         let result = run_plot_grid(&args);
         let svg = fs::read_to_string(&out).unwrap_or_default();
         let _ = fs::remove_file(&out);

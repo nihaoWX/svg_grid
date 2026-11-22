@@ -365,3 +365,167 @@ fn explicit_null_counts_as_a_slot_in_the_default_grid() {
         let _ = fs::remove_file(input);
     }
 }
+
+/// Build a `plot-grid` invocation for `panels`, optionally with `--plan`.
+fn grid_args(
+    panels: &[PathBuf],
+    extra: &[&str],
+    out: Option<&std::path::Path>,
+    plan: bool,
+) -> Vec<String> {
+    let mut args = Vec::new();
+    for panel in panels {
+        args.push("--input".to_string());
+        args.push(panel.to_string_lossy().into_owned());
+    }
+    args.extend(["--width", "1000", "--plot-margin", "0"].map(String::from));
+    for value in extra {
+        args.push((*value).to_string());
+    }
+    if plan {
+        args.push("--plan".to_string());
+    } else if let Some(out) = out {
+        args.push("--output".to_string());
+        args.push(out.to_string_lossy().into_owned());
+    }
+    args
+}
+
+#[test]
+fn an_all_empty_last_row_is_rejected_by_run_and_plan() {
+    let panels = write_panels(&[
+        "emptyrow_0",
+        "emptyrow_1",
+        "emptyrow_2",
+        "emptyrow_3",
+        "emptyrow_4",
+        "emptyrow_5",
+    ]);
+
+    // (inputs, explicit grid, smallest --nrow that still has a panel in its last
+    // row, NULL placeholders that would fill the requested grid).
+    let cases: &[(usize, &[&str], usize, usize)] = &[
+        (5, &["--nrow", "4"], 3, 3),
+        (5, &["--ncol", "3", "--nrow", "3"], 2, 4),
+        (6, &["--ncol", "3", "--nrow", "3"], 2, 3),
+        (3, &["--ncol", "3", "--nrow", "3"], 1, 6),
+    ];
+
+    for (index, (count, extra, min_rows, missing)) in cases.iter().enumerate() {
+        let out = temp_path(&format!("emptyrow_out_{index}.svg"));
+        let run = run_plot_grid(&grid_args(&panels[..*count], extra, Some(&out), false));
+        assert_eq!(
+            run.status.code(),
+            Some(2),
+            "case {extra:?} must be a usage error, stderr: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+        assert!(!out.exists(), "an invalid grid must write nothing");
+        let stderr = String::from_utf8_lossy(&run.stderr);
+        assert!(
+            stderr.contains("grid leaves the last row empty"),
+            "the error must name the empty row: {stderr}"
+        );
+        assert!(
+            stderr.contains(&format!("reduce --nrow to {min_rows}")),
+            "the error must offer the concrete rows count: {stderr}"
+        );
+        assert!(
+            stderr.contains(&format!("add {missing} `--input NULL`")),
+            "the error must offer the NULL padding: {stderr}"
+        );
+
+        // `--plan` resolves the same grid through `compute_grid`: same rc, same text.
+        let plan = run_plot_grid(&grid_args(&panels[..*count], extra, None, true));
+        assert_eq!(
+            plan.status.code(),
+            Some(2),
+            "--plan must reject it too, stderr: {}",
+            String::from_utf8_lossy(&plan.stderr)
+        );
+        assert_eq!(
+            plan.stderr, run.stderr,
+            "--plan and the real run must report the same grid error"
+        );
+    }
+
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
+#[test]
+fn short_last_rows_and_default_grids_are_not_mistaken_for_empty_rows() {
+    let panels = write_panels(&[
+        "notempty_0",
+        "notempty_1",
+        "notempty_2",
+        "notempty_3",
+        "notempty_4",
+        "notempty_5",
+        "notempty_6",
+        "notempty_7",
+        "notempty_8",
+    ]);
+
+    // A short last row is legal as long as it has *a* cell: 4 in a 2×3 grid ends
+    // 3+1, 7 in 3×3 ends 3+3+1, and 5 with only --ncol 3 derives two rows.
+    for (count, extra) in [
+        (4usize, vec!["--ncol", "3", "--nrow", "2"]),
+        (7, vec!["--ncol", "3", "--nrow", "3"]),
+        (5, vec!["--ncol", "3"]),
+    ] {
+        let run = run_plot_grid(&grid_args(&panels[..count], &extra, None, true));
+        assert!(
+            run.status.success(),
+            "{count} inputs {extra:?} must be accepted, stderr: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+
+    // Explicit NULLs count as slots: 5 panels + 3 NULL = 8 slots in a 4×2 grid,
+    // which is completely full and must be accepted.
+    let mut nulled: Vec<String> = Vec::new();
+    for panel in &panels[..5] {
+        nulled.push("--input".to_string());
+        nulled.push(panel.to_string_lossy().into_owned());
+    }
+    for _ in 0..3 {
+        nulled.push("--input".to_string());
+        nulled.push("none".to_string());
+    }
+    nulled.extend(
+        [
+            "--width",
+            "1000",
+            "--plot-margin",
+            "0",
+            "--ncol",
+            "4",
+            "--nrow",
+            "2",
+            "--plan",
+        ]
+        .map(String::from),
+    );
+    let nulled_run = run_plot_grid(&nulled);
+    assert!(
+        nulled_run.status.success(),
+        "5 panels + 3 explicit NULLs in 4×2 must be accepted, stderr: {}",
+        String::from_utf8_lossy(&nulled_run.stderr)
+    );
+
+    // Every default grid is near-square, so it can never have an empty last row.
+    for count in 1..=9 {
+        let run = run_plot_grid(&grid_args(&panels[..count], &[], None, true));
+        assert!(
+            run.status.success(),
+            "default grid for {count} input(s) must be accepted, stderr: {}",
+            String::from_utf8_lossy(&run.stderr)
+        );
+    }
+
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}

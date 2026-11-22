@@ -133,7 +133,18 @@ pub struct LabelSpec {
     pub colour: String,
 }
 
+/// Compose the panels and write the requested outputs. Non-fatal diagnostics are
+/// collected but **not printed**: stderr stays empty on a successful run, matching
+/// the CLI default. Use [`plot_grid_with_diagnostics`] to opt into the W1–W9
+/// warning surface (`--verbose`).
 pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
+    plot_grid_with_diagnostics(spec, false)
+}
+
+/// [`plot_grid`] with explicit control over the non-fatal diagnostics: when
+/// `verbose` is true, W1–W9 and their shared cause notes are printed to stderr
+/// after the output is written. The exit code and the output bytes never change.
+pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<()> {
     let (prepared, grid) = prepare(&GridRequest {
         inputs: spec.inputs.clone(),
         width: spec.width,
@@ -274,9 +285,9 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
     let svg = dom::serialize(&output)?;
     output::write_outputs(&svg, &spec.output_svg, spec.output_svgz.as_deref())?;
 
-    // Flush diagnostics only once the output is on disk: they never change the
-    // exit code nor the output bytes.
-    warnings.emit();
+    // Flush diagnostics only once the output is on disk, and only for a verbose
+    // run: they never change the exit code nor the output bytes.
+    warnings.emit(verbose);
 
     Ok(())
 }

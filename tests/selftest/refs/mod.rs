@@ -54,6 +54,7 @@ fn w9_fires_for_a_dangling_url_and_is_silent_when_every_id_resolves() {
             "1",
             "--plot-margin",
             "0",
+            "--verbose",
         ],
     );
     assert!(fired.status.success(), "W9 must not fail the run");
@@ -103,6 +104,7 @@ fn w9_fires_for_a_dangling_url_and_is_silent_when_every_id_resolves() {
             "1",
             "--plot-margin",
             "0",
+            "--verbose",
         ],
     );
     assert!(quiet.status.success());
@@ -140,6 +142,7 @@ fn w9_fires_for_a_dangling_url_and_is_silent_when_every_id_resolves() {
             "1",
             "--plot-margin",
             "0",
+            "--verbose",
         ],
     );
     assert!(many.status.success(), "W9 must not fail the run");

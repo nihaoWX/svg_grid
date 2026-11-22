@@ -258,6 +258,10 @@ pub(crate) fn run_one(context: &Context, fixture: &Fixture) -> Outcome {
             &number(width),
             "--height",
             &number(height),
+            // Doctor *judges* W7/W9, so it opts into the diagnostics the CLI
+            // withholds by default; otherwise a run that should fail its check
+            // would look clean (the user-facing default stays silent).
+            "--verbose",
         ],
     ) {
         Ok(output) => {
@@ -467,7 +471,11 @@ pub(super) fn read_stderr_lines(convert_stderr: &str, plot_stderr: &str) -> Vec<
 fn convert_in_process(input: &Path, output: &Path) -> (i32, String) {
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
-    let options = svg_grid_convert::Options::default();
+    // Stage 1 also opts into diagnostics: doctor classifies converter warnings.
+    let options = svg_grid_convert::Options {
+        verbose: true,
+        ..svg_grid_convert::Options::default()
+    };
     let result = svg_grid_convert::cli::run_in(
         super::super::convert::SUBCOMMAND,
         input,

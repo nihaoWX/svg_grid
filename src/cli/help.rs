@@ -16,7 +16,7 @@ usage:
   svg_grid plot-grid --input A.svg [--input B.svg ...] --output-png OUT.png [options]
   svg_grid plot-grid --input A.svg [--input B.svg ...] --plan [options]
   svg_grid plot-grid --list-fonts [--font-dir <dir>]
-  svg_grid convert --input PANEL.svg [--output OUT.svg] [--check] [--report] [--force]
+  svg_grid convert --input PANEL.svg [--output OUT.svg] [--check] [--report] [--force] [--verbose]
   svg_grid doctor [--fixtures <dir>] [--only <glob>] [--jobs <n>] [--json] [--keep <dir>]
   svg_grid --help | -h
   svg_grid --version
@@ -84,6 +84,12 @@ fonts (panel letters and every PNG/AVIF):
   it. A missing or empty library is fatal whenever the run needs glyphs (PNG/AVIF output
   or --labels) — that is a configuration error, not a rendering quirk.
 
+diagnostics:
+  --verbose               print non-fatal W1–W9 layout warnings and their cause notes
+                          to stderr (also accepted by `convert`). Without it a
+                          successful run writes nothing to stderr; errors are still
+                          reported as before.
+
 convert (graphics dialect -> tag protocol; the same code the standalone
 `svg_grid_convert` binary runs, now built into this one):
   --input <path>          the SVG a plotting tool produced (svglite/ggplot2/
@@ -97,6 +103,8 @@ convert (graphics dialect -> tag protocol; the same code the standalone
                           converted (also completes a half-finished product: a
                           panel box without the matching data-scale grouping).
                           `-f` is the short form.
+  --verbose               print the converter's non-fatal warnings to stderr;
+                          without it a successful conversion is silent.
   An input that already is a complete conversion product exits 0; with --output
   it is copied verbatim, so `convert --input a.svg --output b.svg` always
   produces b.svg. Its diagnostics are prefixed `svg_grid convert:` (the standalone

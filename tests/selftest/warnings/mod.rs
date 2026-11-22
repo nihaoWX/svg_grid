@@ -6,6 +6,123 @@ use std::fs;
 
 use crate::common::*;
 
+/// The assertions in this file describe the **diagnostic** surface, so every run
+/// below opts into it explicitly. Without `--verbose` a successful run is silent
+/// (covered once by `diagnostics_are_silent_by_default_and_verbose_restores_them`).
+fn run_cli(
+    name: &str,
+    inputs: &[std::path::PathBuf],
+    extra: &[&str],
+) -> (std::process::Output, std::path::PathBuf) {
+    let mut with_verbose = extra.to_vec();
+    with_verbose.push("--verbose");
+    crate::common::run_cli(name, inputs, &with_verbose)
+}
+
+#[test]
+fn diagnostics_are_silent_by_default_and_verbose_restores_them() {
+    let panels = write_panels(&["quiet_verbose"]);
+    let build = |out: &std::path::Path, verbose: bool| -> Vec<String> {
+        let mut args: Vec<String> = vec![
+            "--input".to_string(),
+            panels[0].to_string_lossy().into_owned(),
+            "--output".to_string(),
+            out.to_string_lossy().into_owned(),
+            "--width".to_string(),
+            "1000".to_string(),
+            "--height".to_string(),
+            "800".to_string(),
+            "--ncol".to_string(),
+            "1".to_string(),
+            "--plot-margin".to_string(),
+            "0".to_string(),
+        ];
+        if verbose {
+            args.push("--verbose".to_string());
+        }
+        args
+    };
+
+    let quiet_out = temp_path("diagnostics_quiet.svg");
+    let quiet = run_plot_grid(&build(&quiet_out, false));
+    assert!(
+        quiet.status.success(),
+        "a warning must not change the exit code"
+    );
+    assert_eq!(
+        quiet.stderr.len(),
+        0,
+        "without --verbose a successful run must be silent, got: {}",
+        String::from_utf8_lossy(&quiet.stderr)
+    );
+
+    let loud_out = temp_path("diagnostics_loud.svg");
+    let loud = run_plot_grid(&build(&loud_out, true));
+    assert!(loud.status.success());
+    let stderr = String::from_utf8_lossy(&loud.stderr);
+    assert!(
+        stderr.contains("scaled by the layout") && stderr.contains("non-fatal warning(s)"),
+        "--verbose must restore the W1 diagnostics, got: {stderr}"
+    );
+    assert_eq!(
+        fs::read(&quiet_out).unwrap(),
+        fs::read(&loud_out).unwrap(),
+        "--verbose must not change the output bytes"
+    );
+
+    for path in [quiet_out, loud_out] {
+        let _ = fs::remove_file(path);
+    }
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
+#[test]
+fn plan_notes_stay_on_stdout_and_do_not_depend_on_verbose() {
+    let panels = write_panels(&["plan_note_a", "plan_note_b", "plan_note_c"]);
+    let mut args: Vec<String> = Vec::new();
+    for panel in &panels {
+        args.push("--input".to_string());
+        args.push(panel.to_string_lossy().into_owned());
+    }
+    args.extend(
+        [
+            "--width",
+            "300",
+            "--ncol",
+            "3",
+            "--plot-margin",
+            "0",
+            "--plan",
+        ]
+        .map(String::from),
+    );
+
+    let quiet = run_plot_grid(&args);
+    assert!(quiet.status.success());
+    let quiet_stdout = String::from_utf8_lossy(&quiet.stdout);
+    assert!(
+        quiet_stdout.contains("note:"),
+        "the plan contract has a stdout note line: {quiet_stdout}"
+    );
+    assert!(quiet.stderr.is_empty(), "plan has no stderr diagnostics");
+
+    args.push("--verbose".to_string());
+    let loud = run_plot_grid(&args);
+    assert!(loud.status.success());
+    assert_eq!(
+        quiet_stdout,
+        String::from_utf8_lossy(&loud.stdout),
+        "--verbose must not alter the plan's stdout contract"
+    );
+    assert!(loud.stderr.is_empty(), "plan has no stderr diagnostics");
+
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
 #[test]
 fn warns_when_an_input_is_rescaled_and_is_silent_at_unit_scale() {
     let panels = write_panels(&["scale"]);

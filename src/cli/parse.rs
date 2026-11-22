@@ -51,6 +51,7 @@ pub(crate) const FLAGS: &[(&str, &[&str])] = &[
     ("--label-colour", &[]),
     ("--font-dir", &[]),
     ("--list-fonts", &[]),
+    ("--verbose", &[]),
 ];
 
 /// Flags handled *before* any value is taken, so they must also appear in `--help`.
@@ -107,6 +108,9 @@ pub(crate) struct PlotGridArgs {
     /// `None` → `$SVG_GRID_FONT_DIR`, else the data root (`$HOME/svg_grid/fontlib`).
     pub font_dir: Option<PathBuf>,
     pub list_fonts: bool,
+    /// `--verbose`: print the W1–W9 non-fatal diagnostics to stderr. Off by
+    /// default, so a successful run writes only its outputs.
+    pub verbose: bool,
     /// `--plan`: print the resolved layout on stdout and exit, writing nothing
     /// (`ARCHITECTURE/cli.md` §`--plan`). Read-only by contract, so it rejects
     /// every output flag instead of silently ignoring one.
@@ -154,6 +158,7 @@ impl Default for PlotGridArgs {
             label_colour: "#000000".to_string(),
             font_dir: None,
             list_fonts: false,
+            verbose: false,
             plan: false,
         }
     }
@@ -206,6 +211,11 @@ fn parse_plot_grid(rest: &[String]) -> Result<PlotGridArgs, CliError> {
             }
             "--list-fonts" => {
                 args.list_fonts = true;
+                index += 1;
+                continue;
+            }
+            "--verbose" => {
+                args.verbose = true;
                 index += 1;
                 continue;
             }

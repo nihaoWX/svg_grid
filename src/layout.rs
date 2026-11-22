@@ -90,10 +90,32 @@ pub fn compute_grid(spec: GridSpec<'_>) -> Result<GridLayout> {
             "nrow and ncol must be greater than zero".to_string(),
         ));
     }
-    if rows * cols < spec.count {
+    let capacity = rows
+        .checked_mul(cols)
+        .ok_or_else(|| SvgGridError::InvalidInput("grid dimensions are too large".to_string()))?;
+    if capacity < spec.count {
         return Err(SvgGridError::InvalidInput(
             "grid does not contain enough cells for inputs".to_string(),
         ));
+    }
+    // A grid whose *last* row has no cell at all is just as wrong as one that is
+    // too small: `(rows-1)*cols >= count` means every input fits in the rows above
+    // the last one, so the last row would be drawn completely empty while every
+    // preceding row is full. cowplot's grid never has an empty row; reject it with
+    // the two concrete ways to fix the invocation rather than silently shrinking
+    // the canvas (`ARCHITECTURE/layout.md`, D6).
+    let cells_above_last = capacity - cols;
+    if spec.count > 0 && cells_above_last >= spec.count {
+        let min_rows = spec.count.div_ceil(cols);
+        let missing = capacity - spec.count;
+        let occupied_rows = cells_above_last / cols;
+        return Err(SvgGridError::InvalidInput(format!(
+            "grid leaves the last row empty: a {rows} x {cols} grid has {capacity} cells, but the \
+             {count} input slot(s) all fit in the first {occupied_rows} row(s), so row {rows} has \
+             no panel; fix: reduce --nrow to {min_rows}, or add {missing} `--input NULL` \
+             placeholder(s) to fill all {capacity} cells",
+            count = spec.count,
+        )));
     }
 
     // `rel_*` are multipliers on each axis' *natural* size (cowplot semantics);

@@ -125,6 +125,9 @@ pub(crate) fn compose_one(name: &str, body: &str) -> (std::process::Output, Path
             "1",
             "--plot-margin",
             "0",
+            // `compose_one` is the diagnostics helper: always ask for the warnings
+            // (the default-silent contract has its own test).
+            "--verbose",
         ],
     );
     (result, input, out)

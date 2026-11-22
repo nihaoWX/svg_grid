@@ -36,6 +36,8 @@ fn panel_letters_default_to_arial() {
         "1",
         "--labels",
         "A",
+        // These runs assert diagnostics; without this flag even a W8 would be silent.
+        "--verbose",
     ];
 
     // (a) No --label-fontfamily: the letter appears with the default family.
@@ -143,6 +145,7 @@ fn warns_when_the_label_family_is_not_in_the_library() {
             "A",
             "--label-fontfamily",
             "NoSuchFont_xyz",
+            "--verbose",
         ],
     );
 

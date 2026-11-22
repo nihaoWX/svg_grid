@@ -9,8 +9,9 @@ use std::path::{Path, PathBuf};
 
 use svg_grid::{
     auto_label_top_band, auto_labels, default_font_dir, font_families, format_number, plan_grid,
-    plot_grid, render_svg_to_avif_with_fonts, render_svg_to_png_with_dpi_with_fonts, AlignMode,
-    GridPlan, GridRequest, LabelSize, LabelSpec, PlannedInput, PlotGridSpec, SvgInput,
+    plot_grid_with_diagnostics, render_svg_to_avif_with_fonts,
+    render_svg_to_png_with_dpi_with_fonts, AlignMode, GridPlan, GridRequest, LabelSize, LabelSpec,
+    PlannedInput, PlotGridSpec, SvgInput,
 };
 
 use super::parse::{LabelSizeValue, PlotGridArgs};
@@ -106,6 +107,10 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
         None
     };
 
+    // `--verbose` gates the library's non-fatal diagnostics; capture it before the
+    // argument struct is consumed below.
+    let verbose = args.verbose;
+
     let label_spec = label_list.map(|labels| LabelSpec {
         labels,
         x: args.label_x.clone(),
@@ -118,23 +123,26 @@ pub(crate) fn run(args: PlotGridArgs) -> Result<(), CliError> {
         colour: args.label_colour.clone(),
     });
 
-    plot_grid(PlotGridSpec {
-        inputs: request.inputs,
-        output_svg: output_svg.clone(),
-        output_svgz: args.output_svgz,
-        width: request.width,
-        height: request.height,
-        nrow: request.nrow,
-        ncol: request.ncol,
-        rel_widths: request.rel_widths,
-        rel_heights: request.rel_heights,
-        margin: request.margin,
-        gap: request.gap,
-        align: AlignMode::Panels,
-        labels: label_spec,
-        normalize: request.normalize,
-        font_families: families,
-    })?;
+    plot_grid_with_diagnostics(
+        PlotGridSpec {
+            inputs: request.inputs,
+            output_svg: output_svg.clone(),
+            output_svgz: args.output_svgz,
+            width: request.width,
+            height: request.height,
+            nrow: request.nrow,
+            ncol: request.ncol,
+            rel_widths: request.rel_widths,
+            rel_heights: request.rel_heights,
+            margin: request.margin,
+            gap: request.gap,
+            align: AlignMode::Panels,
+            labels: label_spec,
+            normalize: request.normalize,
+            font_families: families,
+        },
+        verbose,
+    )?;
 
     if let Some(output_png) = args.output_png {
         render_svg_to_png_with_dpi_with_fonts(&output_svg, &output_png, args.png_dpi, &font_dir)?;

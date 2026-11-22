@@ -46,6 +46,7 @@ pub const FLAGS: &[(&str, &[&str])] = &[
     ("--check", &[]),
     ("--report", &[]),
     ("--force", &["-f"]),
+    ("--verbose", &[]),
 ];
 
 /// The standalone binary's own name: the diagnostics prefix used when the caller
@@ -102,6 +103,7 @@ fn real_main(prog: &str, args: &[String]) -> Result<(), String> {
             "--check" => options.check = true,
             "--report" => options.report = true,
             "--force" | "-f" => options.force = true,
+            "--verbose" => options.verbose = true,
             "--help" | "-h" => {
                 println!("{}", usage(prog));
                 return Ok(());
@@ -142,6 +144,7 @@ fn usage(prog: &str) -> String {
   --force           re-run conversion even if the input already looks converted
                     (also completes a half-finished product: a panel box without
                     the matching data-scale grouping)
+  --verbose         print non-fatal conversion warnings to stderr (default silent)
 
 An already-converted input exits 0; with --output <path> it is copied verbatim,
 so `convert --input a.svg --output b.svg` always produces b.svg.
@@ -250,8 +253,10 @@ pub fn run_in(
             ))
         }
         Conversion::Converted(done) => {
-            for warning in &done.warnings {
-                emit(err, format_args!("{prog}: warning: {warning}"));
+            if options.verbose {
+                for warning in &done.warnings {
+                    emit(err, format_args!("{prog}: warning: {warning}"));
+                }
             }
             if options.check {
                 emit(
@@ -373,13 +378,20 @@ mod tests {
     }
 
     /// `FLAGS` is what `svg_grid --help` is checked against, so it has to describe
-    /// the real surface: four value flags, one bare flag, three short aliases.
+    /// the real surface: two value flags, four bare flags, three short aliases.
     #[test]
     fn the_registry_describes_the_documented_surface() {
         let names: Vec<&str> = FLAGS.iter().map(|(name, _)| *name).collect();
         assert_eq!(
             names,
-            vec!["--input", "--output", "--check", "--report", "--force"]
+            vec![
+                "--input",
+                "--output",
+                "--check",
+                "--report",
+                "--force",
+                "--verbose"
+            ]
         );
         let aliases: Vec<&str> = FLAGS
             .iter()

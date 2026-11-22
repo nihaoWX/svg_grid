@@ -42,6 +42,8 @@ fn three_spellings_of_one_geometry_agree_on_the_overflow() {
         "1",
         "--plot-margin",
         "0",
+        // This test inspects W6, so opt in to diagnostics.
+        "--verbose",
     ];
     for (label, input) in [
         ("polyline", &polyline),

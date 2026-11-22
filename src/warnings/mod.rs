@@ -5,16 +5,19 @@
 //! layout rescales an input, stretches a cell away from its panel's aspect
 //! ratio, re-letters an already-lettered composite, or receives inconsistent
 //! labels, the run still succeeds (exit code 0) and the output file is still
-//! written byte-for-byte as before; a warning is printed to stderr so an agent
-//! driving the tool can notice and fix the invocation.
+//! written byte-for-byte as before; with `--verbose`, a warning is printed to
+//! stderr so an agent driving the tool can notice and fix the invocation. Without
+//! that flag the diagnostics are suppressed entirely: stderr is reserved for
+//! errors (a usage error, a duplicate label list, a missing font), so a successful
+//! run is byte-for-byte silent even when the layout had something to report.
 //!
 //! Every message answers three questions: *what happened*, *why it matters*, and
 //! *what to do about it* — but the *why* is never repeated from line to line. A
 //! cause that several messages share is lifted into one `svg_grid: note:` line,
 //! printed at most once per run (see [`NOTE_FONT_SIZE`] and friends); each
 //! warning then carries only *what happened*, *which input*, and the `Fix:`.
-//! A run with no warnings prints neither a warning nor a note (zero bytes of
-//! stderr — that is a regression item).
+//! A run with no warnings (or a non-verbose run) prints neither a warning nor a
+//! note (zero bytes of stderr — that is a regression item).
 //!
 //! The presentation rules live in `ARCHITECTURE/warnings.md` §1:
 //!
@@ -174,15 +177,17 @@ impl Warnings {
         }
     }
 
-    /// Print every warning to stderr with the uniform `svg_grid: warning:` prefix,
-    /// each on its own line, then the cause notes (one line each), then the
-    /// uniform footer. The exit code is never affected and no output byte changes.
+    /// Print every warning to stderr when `verbose` is set: the uniform
+    /// `svg_grid: warning:` prefix, each on its own line, then the cause notes
+    /// (one line each), then the uniform footer. Without `verbose` nothing is
+    /// printed — successful runs keep stderr for errors only. The exit code is
+    /// never affected and no output byte changes either way.
     ///
     /// The footer carries no count: the number of warnings is the number of lines
     /// above, and a one-warning run must not print `1 non-fatal warning(s)`
     /// (`ARCHITECTURE/warnings.md` §1 rule 3).
-    pub fn emit(&self) {
-        if self.messages.is_empty() {
+    pub fn emit(&self, verbose: bool) {
+        if !verbose || self.messages.is_empty() {
             return;
         }
         for message in &self.messages {

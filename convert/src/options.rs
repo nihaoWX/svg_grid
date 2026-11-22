@@ -10,6 +10,9 @@ pub struct Options {
     pub report: bool,
     /// Re-run conversion even if the input already looks converted.
     pub force: bool,
+    /// Print the converter's non-fatal warnings to stderr. Off by default: a
+    /// successful conversion keeps stderr for errors only.
+    pub verbose: bool,
 }
 
 #[derive(Debug)]

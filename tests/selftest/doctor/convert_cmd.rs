@@ -152,6 +152,54 @@ fn the_diagnostics_name_the_subcommand_and_keep_the_one_bit_exit_code() {
 }
 
 #[test]
+fn convert_warnings_are_silent_without_verbose() {
+    let bins = Binaries::discover();
+    let dir = temp_dir("convert-quiet");
+    let input = dir.join("panel.svg");
+    let output = dir.join("tagged.svg");
+    write(&input, SVGLITE_PANEL);
+
+    let run = convert(
+        &bins,
+        &["--input", &path_of(&input), "--output", &path_of(&output)],
+    );
+    assert_eq!(run.code, 0, "stderr:\n{}", run.stderr);
+    assert_eq!(
+        run.stderr, "",
+        "a successful conversion is silent without --verbose: {}",
+        run.stderr
+    );
+    assert!(output.is_file(), "the converted SVG must still be written");
+}
+
+#[test]
+fn convert_warnings_come_back_with_verbose() {
+    let bins = Binaries::discover();
+    let dir = temp_dir("convert-verbose");
+    let input = dir.join("panel.svg");
+    let output = dir.join("tagged.svg");
+    write(&input, SVGLITE_PANEL);
+
+    let run = convert(
+        &bins,
+        &[
+            "--input",
+            &path_of(&input),
+            "--output",
+            &path_of(&output),
+            "--verbose",
+        ],
+    );
+    assert_eq!(run.code, 0, "stderr:\n{}", run.stderr);
+    assert!(
+        run.stderr.starts_with("svg_grid convert: warning: "),
+        "Warnings come back with the converter's own prefix:\n{}",
+        run.stderr
+    );
+    assert!(output.is_file(), "the converted SVG must still be written");
+}
+
+#[test]
 fn help_wins_over_the_subcommand_and_documents_it() {
     let bins = Binaries::discover();
     let output = Command::new(&bins.svg_grid)
@@ -160,7 +208,13 @@ fn help_wins_over_the_subcommand_and_documents_it() {
         .expect("the svg_grid binary must be runnable");
     assert_eq!(output.status.code(), Some(0));
     let help = String::from_utf8_lossy(&output.stdout);
-    for needle in ["svg_grid convert --input", "--check", "--report", "--force"] {
+    for needle in [
+        "svg_grid convert --input",
+        "--check",
+        "--report",
+        "--force",
+        "--verbose",
+    ] {
         assert!(help.contains(needle), "--help lacks {needle:?}");
     }
     assert!(

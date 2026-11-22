@@ -1,0 +1,19 @@
+id = "R31"
+date = "2026-11-22"
+verdict = "新领土"
+family = ["显式网格允许最后一行整行全空", "非致命告警默认可见（应 --verbose 才输出）"]
+closures = [
+  { finding = "R31-F1", tier = "代码" },
+  { finding = "R31-F2", tier = "代码" },
+]
+run_before = ["R30"]
+touched = []
+note = """
+为什么认定新问题：`compute_grid` 只校验了上界 `rows*cols >= count`，从未校验用户 INSTRUCTIONS 第 46 行的下界 `(rows-1)*cols < count`；D2/R30 都没动过这条检查。告警侧全仓没有 `--verbose`，`Warnings::emit` 与 convert 的 warning 循环都是无条件打印，属另一条独立缺陷，一起并入 R31。
+根因与建议修法：已证——空行判据 `(rows-1)*cols >= count > 0`；用 `capacity.checked_mul` 得到总格数，新增可行动错误（点名空行、给 `--nrow` 与 NULL 补齐两种修法），真跑与 `--plan` 共用 `compute_grid` 故同样 rc=2。`--verbose` 通过 `plot_grid_with_diagnostics(spec, verbose)` 与 `Warnings::emit(verbose)` 显式传参，无全局状态；convert 用 `Options.verbose` 包住 warning 循环。
+怎么修才不弄坏前面：合法短末行（5/`--ncol 2`、4/3×2、7/3×3、5/`--ncol 3`）、默认近方形 1..17、显式 NULL 补齐 4×2 全部保持 rc=0；告警文案字符串未改；`--plan` 的 stdout `note:` 不受 flag 影响；doctor 判定 W7/W9 需要诊断，故两处内部调用显式开 verbose，57/0/1 保持。
+连带面：9+ 条既有告警测试改为显式 `--verbose`，新增默认静音/verbose 恢复/plan 契约/convert 两条测试；`src/cli/help.rs` 与 convert usage 增补 flag 说明。ARCHITECTURE/PROGRESS/INSTRUCTIONS 未动，由 Arranger 统一同步。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R31 && python3 test.py  # rc=0 = 50 PASS
+"""
