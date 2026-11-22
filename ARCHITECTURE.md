@@ -30,6 +30,15 @@
 8. **HARNESS 是两件套**（2026-10-06 用户裁决）：`ARCHITECTURE.md` + `ARCHITECTURE/` + `PROGRESS.md`。
    **不设 `DECISIONS.md`**——它与 `ARCHITECTURE` 本质重复，且 agent 会把两者的内容混记；
    其中仍有价值的部分已迁入本文件 `# 已定型的决定`（原来那份见 git）。
+9. **产品定义以 `INSTRUCTIONS.md` 为准**（用户手写、只由用户改）：`svg_grid` 是**给 agent 用的通用组图库**
+   （不是 skill），`docs/general-figure-guide/` 是依赖它的 skill。CLI 逻辑模仿 R `cowplot`。
+10. **单次调用是 1D 且必须填满**（2026-11-20 用户明确）：一次 `plot-grid` 只做**纵向或横向**一种，
+    且**任何角落都不许留白**——两个图大小差别再大也要铺满。二维版面靠**嵌套最小步骤**得到
+    （如 `B+C` → `BC`；`A` 与 `BC` 横向 → `ABC`；再纵向叠）。
+11. **`convert` 必须自动**（2026-11-20 用户明确）：`plot-grid` 遇到未打标签的输入应**自己转换**，
+    不要求调用方先跑 `convert`；`convert` 也不许损坏原图（字形孔等必须保真）。
+12. **`--labels` 只作用于"`svg_grid` 眼里的单个图"**：即该次调用的直接输入；组合图（行块）本身不加字母，
+    所以字母只在**最后一步**加（`INSTRUCTIONS.md` §期望的用法）。
 
 # 已定型的决定
 
@@ -65,41 +74,40 @@
 ```
 tools/svg_grid/
 ├── Cargo.toml / Cargo.lock     # 主库 crate
+├── INSTRUCTIONS.md             # **用户手写、只由用户改**：产品概念 / 期望用法 / 目录规划（与其余文件冲突时以它为准）
 ├── ARCHITECTURE.md             # 本文件：定义 + 已定型的决定 + 布局 + 跨领域约定 + ARCHITECTURE/ 索引
 ├── ARCHITECTURE/               # 机制细节，一个子项一份（见下表；每个文件 ≤ 20 KB）
-│   ├── tag-protocol.md         # 主库的输入契约、图元、与 convert 的分界原则、<path> 保真边界
-│   ├── layout.md               # 布局语义、几何约束、设计参照（R plot_grid 逻辑与对齐表）
-│   ├── convert.md              # 转换器：翻译手段、fail-closed 清单、<path> 出形态决策表、幂等、方言兼容性
-│   ├── warnings.md             # 告警契约（三要素/聚合/非致命/英文）、判据取向、W1–W7 表、与 skill 的配合契约
-│   ├── check-deliverable.md    # 成品交付前检查脚本：两条判据、为什么删第三条、不覆盖什么
-│   └── general-figure-guide.md # skill 怎么写：写作规则、各部分 owner、两副本同步纪律
+│   ├── tag-protocol.md         # 输入契约、图元、与 convert 的分界原则、<path> 保真边界
+│   ├── layout.md               # 布局语义、几何约束、设计参照（R plot_grid 对齐表）
+│   ├── convert.md              # 翻译手段、fail-closed 清单、<path> 出形态决策表、幂等
+│   ├── warnings.md             # 告警契约、判据取向、W1–W9 表、与 skill 的配合
+│   ├── fonts.md / cli.md / install.md / testing.md   # 字体、CLI 契约、安装、语料与 doctor
+│   ├── check-deliverable.md    # 交付前检查脚本：两条判据、不覆盖什么
+│   └── general-figure-guide.md # skill 怎么写：写作规则、owner 划分、两副本同步纪律
 ├── PROGRESS.md                 # 只记当前状态（进度/问题/下一步），不记历史
 ├── src/                        # 主库：纯 SVG 组图器
-│   ├── main.rs                 # 薄壳：只 `fn main()`，委托给 `cli`（R14 起）
-│   ├── cli/                    # 参数解析 / 帮助文本 / 执行 / 单测（mod.rs parse.rs execute.rs help.rs tests.rs）
+│   ├── main.rs                 # 薄壳：只 `fn main()`，委托给 `cli`
+│   ├── cli/                    # 参数解析 / 帮助文本 / 执行 / 单测
 │   ├── lib.rs                  # plot_grid()：布局 → 逐输入按标签协议变换 → 拼装输出
 │   ├── layout.rs               # 网格划分（nrow/ncol/rel-*/margin/gap）→ 每个 cell 的 Rect
 │   ├── geom.rs                 # canvas box / panel box 解析；scale_panel_to_cell
-│   ├── transform/              # 按 data-scale 策略逐图元重写坐标（协议的执行者；R14 拆成目录）
-│   │   └── mod.rs / primitives.rs / lengths.rs / paths.rs
-│   ├── path/                   # <path d> 的解析 / 按轴重写 / 展平（R5 起；R7 拆成目录）
-│   │   └── mod.rs / parse.rs / rewrite.rs / flatten.rs / tests.rs
-│   ├── ink/                    # 内容墨迹盒（W6 用；R4 起，R5 覆盖 path 与 <defs> 子树；R7 拆成目录）
-│   │   └── mod.rs / walk.rs / bbox.rs / shapes.rs / text.rs / uses.rs / tests.rs
-│   ├── warnings/               # 八条非致命告警（W1–W8）的收集与文案（R8 拆成目录；R13 加 fonts.rs）
-│   │   └── mod.rs / fonts.rs / scale.rs / labels.rs / content.rs / passthrough.rs / tests.rs
+│   ├── transform/              # 按 data-scale 策略逐图元重写坐标（mod/primitives/lengths/paths）
+│   ├── path/                   # <path d> 的解析 / 按轴重写 / 展平（mod/parse/rewrite/flatten/tests）
+│   ├── ink/                    # 内容墨迹盒（W6 用；mod/walk/bbox/shapes/text/uses/tests）
+│   ├── warnings/               # 九条非致命告警 W1–W9 的收集与文案
 │   ├── dom.rs                  # 最小 XML DOM（parse/serialize）
-│   ├── labels.rs               # 面板字母的构造（R13 拆出，守 20 KB 口径）
+│   ├── labels.rs               # 面板字母的构造
 │   ├── input.rs / output.rs    # SVG 读写；error.rs / normalize.rs
 │   └── raster.rs               # PNG/AVIF 渲染；PNG 写 pHYs（dpi 元数据）
-├── tests/selftest/             # **唯一**自检测试目标（R19 起；旧 compose_tests + doctor_tests 合并，按主题分模块）
-├── tests/s22_repro/            # 端到端测试资产：S22 的 6 个 matplotlib panel → 复刻（脚本入库，out/ 忽略）
-├── tests/fig2_mixed/           # 端到端测试资产：Figure 2 的矢量带 + 13 个位图 panel 复刻
-├── tests/{mpl_dialect,poppler_dialect,shape_paint}/  # 方言与出形态 fixture（matplotlib / pdftocairo / 字形孔与连接边）
+├── tests/selftest/             # **唯一**自检测试目标（R19 起；按主题分模块）
+├── tests/fixtures/             # `doctor` 语料（ggplot2 / matplotlib / seaborn；MANIFEST.toml 登记）
+├── tests/{mpl_dialect,rdkit_dialect}/  # 方言 fixture
+├── tests/{s22_repro,fig2_mixed}/  # 端到端资产：S22 六面板复刻；Figure 2 矢量带 + 13 位图 panel
+├── tests/user_tests/<日期>/    # **用户的真实使用体验**：README（带测试时的 commit id）+ 输入/成品
 ├── scripts/                    # 成品交付前检查（薄壳 check_deliverable.py + deliverable_checks/ 包）
 ├── docs/
 │   ├── general-figure-guide/   # 本工具自带的组图 skill（**规范源**；manuscripts_skills 那份是复制件）
-│   └── PITFALLS/               # 报告 + round-data/R4…R14（每轮可跑证据；账本由 pitfalls-manager 管理，不在此）
+│   └── PITFALLS/               # 报告 + round-data/R4…R26（每轮可跑证据；账本由 pitfalls-manager 管理）
 └── convert/                    # 外源 SVG → 协议格式 的转换器（独立 crate，与 src/ 隔离）
     ├── src/lib.rs / main.rs    # 薄入口：mod + pub use / fn main
     ├── src/dom.rs error.rs options.rs geom.rs transform.rs   # DOM、类型、画布盒、transform 分类
@@ -110,9 +118,9 @@ tools/svg_grid/
     └── README.md               # 用法、两步流水线、缩放后果与配准建议
 ```
 
-> ⚠️ **`tools/svg_grid/` 下另有一个用户建的空 git 仓库**（`.git`，准备把这个工具单独开源用）。
-> 本工具的**开发与提交一律用根仓库**；在该目录内直接跑 `git` 会落到那个空仓（看不到任何跟踪文件，
-> 容易被误判成"工作区全丢了"）。子 agent 曾因此踩坑，故记于此。
+> **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；根仓库 `.gitignore`
+> 排除 `tools/`，所以**开发与提交一律用本目录的仓库**。旧记录说的"另有一个空的用户仓库、要用根仓库"
+> 已作废（2026-11-22 核实：本目录 `git log`/`git remote` 就是正式历史）。
 
 ## `ARCHITECTURE/` 索引
 
