@@ -74,6 +74,65 @@ fn every_warning_fits_the_200_character_cap() {
     }
 }
 
+/// W8 reads `--label-fontfamily` as a CSS fallback chain: any available or generic
+/// name satisfies it, and only a wholly unavailable chain is an error — whose line
+/// must still fit the 200-char cap under the longer `font library error:` prefix.
+#[test]
+fn a_font_chain_is_satisfied_by_any_usable_family() {
+    let available = vec!["Arial".to_string(), "Times New Roman".to_string()];
+    for satisfied in [
+        "Arial",
+        "Helvetica, Arial, sans-serif",
+        "Liberation Sans, Arial",
+        "serif, NoSuchFont",
+        "NoSuchFont, monospace",
+        r#""Helvetica", "Arial""#,
+        "",
+    ] {
+        assert_eq!(
+            describe_missing_font_error(satisfied, &available),
+            None,
+            "a chain with a usable family must pass: {satisfied:?}"
+        );
+    }
+
+    let prefix = "svg_grid: font library error: ".len();
+    for dead in [
+        "NoSuchFont_xyz",
+        "Helvetica, Liberation Sans, DejaVu Sans",
+        "A,B,C,D,E,F,G,H",
+        "Helvetica, Liberation Sans, DejaVu Sans, Noto Sans, FreeSans, Ubuntu",
+    ] {
+        let message = describe_missing_font_error(dead, &available)
+            .unwrap_or_else(|| panic!("a wholly unavailable chain must fail: {dead:?}"));
+        assert!(
+            message.contains("is not in the font library"),
+            "the doctor's W8 phrase must survive: {message}"
+        );
+        assert!(
+            message.contains("no family in the chain is usable"),
+            "the message must say the whole chain failed: {message}"
+        );
+        assert!(
+            message.contains("available:") && message.contains("Arial"),
+            "the library must be listed: {message}"
+        );
+        assert!(
+            message.contains("--list-fonts"),
+            "the fix must be actionable: {message}"
+        );
+        assert!(
+            prefix + message.chars().count() <= MAX_LINE,
+            "{} ch (cap {MAX_LINE}): {message}",
+            prefix + message.chars().count()
+        );
+    }
+
+    // An empty library still produces a usable line rather than an empty list.
+    let message = describe_missing_font_error("NoSuchFont_xyz", &[]).unwrap();
+    assert!(message.contains("available: none"), "{message}");
+}
+
 /// Rule 2: a shared cause is one note line per run, and a clean run prints none.
 #[test]
 fn a_shared_cause_is_printed_once_and_a_clean_run_prints_nothing() {
@@ -122,7 +181,7 @@ fn no_cause_note_repeats_a_warning_phrase() {
             "draws ink outside its own canvas box",
             "point at an id that nothing in the output defines",
             "could not be rewritten",
-            "already contain panel letters",
+            "already carry letters",
             "repeats some letters",
             "may be clipped by the canvas",
             "not in the font library",

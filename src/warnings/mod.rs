@@ -113,6 +113,14 @@ pub(crate) const MAX_BODY: usize = MAX_LINE - WARNING_PREFIX.len();
 /// What is left for a note body once the note prefix is printed.
 pub(crate) const MAX_NOTE: usize = MAX_LINE - NOTE_PREFIX.len();
 
+/// What is left for a **hard error** body once `svg_grid: <tier>: ` is printed.
+///
+/// A hard error does not go through [`WARNING_PREFIX`]; the longest tier prefix
+/// is `font library error: ` (see `SvgGridError`'s `Display`), so this is the
+/// budget every error body must respect to keep the printed line within
+/// [`MAX_LINE`].
+pub(crate) const MAX_ERROR_BODY: usize = MAX_LINE - "svg_grid: font library error: ".len();
+
 /// Cause shared by W1 and W2: the tag protocol is position-only, so `font-size`
 /// is never rescaled. Printed once per run; W1/W2 themselves only report numbers.
 pub const NOTE_FONT_SIZE: &str =
@@ -241,11 +249,23 @@ pub(crate) fn assemble(
     plain: &[String],
     tails: &[&str],
 ) -> String {
+    assemble_within(head, detailed, plain, tails, MAX_BODY)
+}
+
+/// [`assemble`] with an explicit body budget: hard errors print under a longer
+/// prefix (`svg_grid: invalid input: `), so they must fit [`MAX_ERROR_BODY`].
+pub(crate) fn assemble_within(
+    head: &str,
+    detailed: &[String],
+    plain: &[String],
+    tails: &[&str],
+    budget: usize,
+) -> String {
     for shown in (0..=detailed.len()).rev() {
         for items in [detailed, plain] {
             for tail in tails {
                 let body = format!("{head}{}{tail}", fold(items, shown));
-                if body.chars().count() <= MAX_BODY {
+                if body.chars().count() <= budget {
                     return body;
                 }
             }

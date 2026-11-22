@@ -66,11 +66,12 @@ def body_panel(tmp, tag, body):
     return path
 
 def plot(tmp, tag, inputs, extra):
+    """一次真实运行。D6 起告警默认静音，本脚本判的是告警文案，故一律带 --verbose。"""
     out = tmp / f"{tag}_out.svg"
     args = [BIN, "plot-grid"]
     for item in inputs:
         args += ["--input", item]
-    args += ["--output", out, *extra]
+    args += ["--output", out, *extra, "--verbose"]
     return run(args)
 
 def warning_lines(stderr):
@@ -93,9 +94,11 @@ def codes(stderr):
     table = [
         ("W1", "scaled by the layout"),
         ("W2", "stretched"),
-        ("W3", "already contain panel letters"),
+        ("W3", "already carry letters"),
         ("W4a", "entries but the grid has"),
         ("W4b", "repeats some letters"),
+        # D5 起字母被夹进画布（W5 说「moved inside」），旧文案只在极端情况下出现。
+        ("W5", "was moved inside the canvas"),
         ("W5", "may be clipped by the canvas"),
         ("W6", "draws ink outside its own canvas box"),
         ("W7", "could not be rewritten"),
@@ -189,10 +192,6 @@ def main():
         ("W2 格子被拉伸", plot(tmp, "w2", [p1, p2], ["--width", "300", "--ncol", "2",
                                                  "--rel-widths", "2,1", "--plot-margin", "0"]),
          2, ["W1", "W2"]),
-        ("W3 重复加字母", plot(tmp, "w3", [lettered], ["--width", "400", "--height", "160",
-                                                    "--ncol", "1", "--plot-margin", "0",
-                                                    "--labels", "C"]),
-         3, ["W3", "W5", "W6"]),
         ("W4a 字母个数不符", plot(tmp, "w4a", [p1, p2, p3], ["--width", "300", "--ncol", "3",
                                                          "--plot-margin", "0", "--labels", "A,B"]),
          3, ["W4a", "W5"]),
@@ -214,14 +213,6 @@ def main():
           'fill="url(#no-such-id)"/></g>')], base),
          1, ["W9"]),
     ]
-    if fonts:
-        scenarios.append(("W8 字体库没有该族",
-                          plot(tmp, "w8", [p1], ["--width", "100", "--height", "80", "--ncol", "1",
-                                                 "--plot-margin", "0", "--labels", "A",
-                                                 "--label-fontfamily", "NoSuchFont_xyz"]),
-                          2, ["W5", "W8"]))
-    else:
-        skip("W8 字体库没有该族", f"{FONT_DIR} 里没有 .ttf（环境问题，不是行为差异）")
 
     for label, done, want_count, want_codes in scenarios:
         stderr = done.stderr
@@ -240,6 +231,37 @@ def main():
               f"{label}：awk 实测最长 {max(measured) if measured else '-'} ≤ {MAX_LINE}",
               stderr[:600])
 
+    # ── W3 / W8 自 D5 起是硬错误（rc=2 / rc=3、不写产物），不再是告警行
+    print("\n== ① W3 / W8 硬错误（D5 起）==")
+    w3 = plot(tmp, "w3", [lettered], ["--width", "400", "--height", "160",
+                                      "--ncol", "1", "--plot-margin", "0", "--labels", "C"])
+    check(w3.returncode == 2, "W3 重复加字母 ⇒ rc=2（硬错误，不是告警）", f"rc={w3.returncode}")
+    check(not (tmp / "w3_out.svg").exists(), "W3 硬错误不写产物")
+    check("already carry letters" in w3.stderr and "data-svg-grid-label" in w3.stderr,
+          "W3 文案点名重复的字母来源", w3.stderr[:400])
+    check("--labels" in w3.stderr and "Fix:" in w3.stderr, "W3 文案给出修法", w3.stderr[:400])
+    check(not warning_lines(w3.stderr), "W3 不再以 `svg_grid: warning:` 形式出现",
+          "\n".join(warning_lines(w3.stderr)))
+    check(max(awk_lengths(w3.stderr) or [0]) <= MAX_LINE,
+          f"W3 单行 {max(awk_lengths(w3.stderr) or [0])} ≤ {MAX_LINE}", w3.stderr[:400])
+
+    if fonts:
+        w8 = plot(tmp, "w8", [p1], ["--width", "100", "--height", "80", "--ncol", "1",
+                                    "--plot-margin", "0", "--labels", "A",
+                                    "--label-fontfamily", "NoSuchFont_xyz"])
+        check(w8.returncode == 3, "W8 缺族 ⇒ rc=3（字体错误层，不是告警）", f"rc={w8.returncode}")
+        check(not (tmp / "w8_out.svg").exists(), "W8 硬错误不写产物")
+        check("NoSuchFont_xyz" in w8.stderr and "is not in the font library" in w8.stderr,
+              "W8 文案点名缺族", w8.stderr[:400])
+        check("available:" in w8.stderr and "--list-fonts" in w8.stderr,
+              "W8 文案列出可用族与修法", w8.stderr[:400])
+        check(not warning_lines(w8.stderr), "W8 不再以 `svg_grid: warning:` 形式出现",
+              "\n".join(warning_lines(w8.stderr)))
+        check(max(awk_lengths(w8.stderr) or [0]) <= MAX_LINE,
+              f"W8 单行 {max(awk_lengths(w8.stderr) or [0])} ≤ {MAX_LINE}", w8.stderr[:400])
+    else:
+        skip("W8 字体库没有该族", f"{FONT_DIR} 里没有 .ttf（环境问题，不是行为差异）")
+
     # V1（转换器那一侧，前缀更长：`svg_grid_convert: warning: `）
     print("\n== ① V1（convert 的 <style> 告警）==")
     conv_src = tmp / "conv_in.svg"
@@ -250,7 +272,8 @@ def main():
         '<rect x="1" y="1" width="10" height="10" style="width: 5;"/>\n'
         '<g data-panel-group="1"><rect x="2" y="2" width="5" height="5"/></g></svg>\n'
     )
-    conv = run([CONVERT, "--input", conv_src, "--output", tmp / "conv_out.svg", "--check"])
+    conv = run([CONVERT, "--input", conv_src, "--output", tmp / "conv_out.svg", "--check",
+                "--verbose"])
     conv_warn = [line for line in conv.stderr.splitlines()
                  if line.startswith("svg_grid_convert: warning:")]
     check(conv.returncode == 0, "V1：--check 成功", f"rc={conv.returncode} {conv.stderr[:200]}")

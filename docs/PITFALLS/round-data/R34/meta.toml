@@ -1,0 +1,21 @@
+id = "R34"
+date = "2026-11-23"
+verdict = "新领土"
+family = ["W8 把回退链当单族名", "硬错误行超 200 字符", "账本 R33-F4 行号漂移"]
+closures = [
+  { finding = "R34-F1", tier = "代码" },
+  { finding = "R34-F2", tier = "代码" },
+  { finding = "R34-F3", tier = "代码" },
+  { finding = "R34-F4", tier = "代码" },
+]
+run_before = ["R33"]
+touched = []
+note = """
+为什么认定新问题：D5 把 W8 升成硬错时，`describe_missing_font_error` 只取“第一个非通用名”判断是否在库，把 CSS 回退链当成了单族名；这是 D5 新引入的判据错误，不是 D2–D4 的连带面。行长度越界同源：硬错误不走 `fit`/`assemble` 的 `MAX_BODY` 预算，而它打印时的前缀更长。
+根因与修法：`src/warnings/fonts.rs:52` 改为“链里任一名字可用（在库或通用族）即放行”，只有整条链都不可用才报错；文案点名整条链 + 可用族 + 修法，并按 `MAX_ERROR_BODY` 逐级收缩（可用族 6→3→1，再 `clamp_quoted` 截链回显到逗号边界）。`src/warnings/mod.rs:122` 新增 `MAX_ERROR_BODY`（170），`:257` 把 `assemble` 的预算参数化成 `assemble_within`；`src/warnings/labels.rs:19` 的 W3 与 `:45` 的 W5 改用该预算并压短尾句（205→188、217→191）。
+怎么修才不弄坏前面：`font-family` 字符串仍原样写出（`src/labels.rs:26` 未动），渲染器自己做同样的回退；W3 的 `already carry letters`、W8 的 `is not in the font library` 两个码词保留，doctor 的 `WARNING_CODES` 与 R13/R33 证据继续命中；W4a 长度不符仍是警告 rc=0（`INSTRUCTIONS.md:56-58` 未把它列为必要信息）。
+旧证据适配：R16 的 `compose()`、R25 的 `plot()` 补 `--verbose`（D6 起告警默认静音，这两个脚本判的是告警文案）；R25 的 W3/W8 从“警告计数表”改为“硬错误块”（W3 rc=2、W8 rc=3、均 ≤200）；R25 的 W5 码词表补 `was moved inside the canvas`。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R34 && python3 test.py  # rc=0 = 38 PASS
+"""

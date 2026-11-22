@@ -7,7 +7,7 @@
 
 use crate::geom::Rect;
 
-use super::{assemble, fit};
+use super::{assemble_within, fit};
 
 /// Build the W3 hard error when an input already carries panel letters but this
 /// call would letter it again (the classic nesting mistake: passing `--labels`
@@ -28,14 +28,15 @@ pub fn describe_existing_labels(offenders: &[(usize, String)]) -> Option<String>
         .iter()
         .map(|(index, letter)| format!("#{index} ({letter:?})"))
         .collect();
-    Some(assemble(
+    Some(assemble_within(
         "panels in ",
         &detailed,
         &plain,
         &[
-            " already carry letters (data-svg-grid-label); lettering them again would \
-             duplicate them. Fix: use --labels only where these panels are direct inputs.",
+            " already carry letters (data-svg-grid-label); lettering again duplicates \
+             them. Fix: --labels only at the layer that owns the panels.",
         ],
+        super::MAX_ERROR_BODY,
     ))
 }
 
@@ -47,8 +48,8 @@ pub fn describe_moved_label(label: &str, index: usize, from: f32, to: f32) -> Op
     }
     let head = format!("panel letter {label:?} (cell {index}) was moved inside the canvas: ");
     let body = format!(
-        "its baseline {from:.3} is above the canvas, so it was clamped to {to:.3}. \
-         Fix: omit --plot-margin so the label band is reserved, or enlarge its top."
+        "baseline {from:.3} is above it, clamped to {to:.3}. \
+         Fix: omit --plot-margin to reserve the label band, or enlarge its top."
     );
     Some(fit(&[format!("{head}{body}")]))
 }

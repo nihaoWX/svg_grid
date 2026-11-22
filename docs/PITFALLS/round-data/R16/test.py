@@ -82,7 +82,9 @@ def compose(src, out_svg, out_png=None, width="216", extra=()):
     args = [str(BIN), "plot-grid", "--input", str(src), "--output", str(out_svg)]
     if out_png is not None:
         args += ["--output-png", str(out_png), "--png-dpi", "300"]
-    args += ["--width", str(width), "--plot-margin", "0", "--font-dir", str(FONT_DIR), *extra]
+    # D6 起告警默认静音；本脚本判的是告警文案，故一律带 --verbose（干净路径仍 0 字节）。
+    args += ["--width", str(width), "--plot-margin", "0", "--font-dir", str(FONT_DIR),
+             "--verbose", *extra]
     return run(args, cwd="/tmp")            # 不依赖 cwd
 
 

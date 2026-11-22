@@ -394,7 +394,7 @@ fn step_of(stage: &StageResult) -> &'static str {
 pub(crate) const WARNING_CODES: &[(&str, &str)] = &[
     ("W1", "scaled by the layout"),
     ("W2", "stretched: "),
-    ("W3", "already contain panel letters"),
+    ("W3", "already carry letters"),
     ("W4a", "`--labels` has "),
     ("W4b", "repeats some letters"),
     ("W5", "may be clipped by the canvas"),

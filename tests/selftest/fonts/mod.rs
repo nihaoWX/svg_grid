@@ -179,6 +179,161 @@ fn a_missing_label_family_is_a_hard_font_error() {
     }
 }
 
+/// `--label-fontfamily` is a CSS fallback chain: the first *available* family wins,
+/// not the first non-generic one. A chain whose head is missing but whose tail is in
+/// the library must run silently, and the user's string must reach the output verbatim.
+#[test]
+fn a_fallback_chain_wins_with_its_first_available_family() {
+    if !fonts_available() {
+        return;
+    }
+    let panels = write_panels(&["fonts_chain_tail"]);
+    let chain = "Helvetica, Arial, sans-serif";
+    let (result, out) = run_cli(
+        "fonts_chain_tail_out.svg",
+        &panels,
+        &[
+            "--width",
+            "100",
+            "--height",
+            "80",
+            "--ncol",
+            "1",
+            "--plot-margin",
+            "0",
+            "--vjust",
+            "1",
+            "--labels",
+            "A",
+            "--label-fontfamily",
+            chain,
+            "--verbose",
+        ],
+    );
+    assert!(
+        result.status.success(),
+        "a chain with an available tail must succeed: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    assert_eq!(
+        result.stderr.len(),
+        0,
+        "a satisfied chain must be silent, got: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let svg = fs::read_to_string(&out).unwrap();
+    assert!(
+        svg.contains(&format!(r#"font-family="{chain}""#)),
+        "the chain must be written verbatim, not rewritten to the resolved family"
+    );
+
+    // A generic family anywhere in the chain is always satisfiable: the renderer
+    // resolves it, so the run must not fail even when no named family is installed.
+    let (generic, generic_out) = run_cli(
+        "fonts_chain_generic_out.svg",
+        &panels,
+        &[
+            "--width",
+            "100",
+            "--height",
+            "80",
+            "--ncol",
+            "1",
+            "--plot-margin",
+            "0",
+            "--vjust",
+            "1",
+            "--labels",
+            "A",
+            "--label-fontfamily",
+            "serif, NoSuchFont_xyz",
+            "--verbose",
+        ],
+    );
+    assert!(
+        generic.status.success(),
+        "a chain containing a generic family must succeed: {}",
+        String::from_utf8_lossy(&generic.stderr)
+    );
+    assert_eq!(generic.stderr.len(), 0);
+
+    for path in [out, generic_out] {
+        let _ = fs::remove_file(path);
+    }
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
+/// Only a chain whose every name is unavailable is a font error, and the message
+/// must name the whole chain, list the library, and stay inside the 200-char cap.
+#[test]
+fn a_wholly_unavailable_chain_is_a_hard_font_error() {
+    if !fonts_available() {
+        return;
+    }
+    let panels = write_panels(&["fonts_chain_dead"]);
+    let chain = "Helvetica, Liberation Sans, DejaVu Sans";
+    let (result, out) = run_cli(
+        "fonts_chain_dead_out.svg",
+        &panels,
+        &[
+            "--width",
+            "100",
+            "--height",
+            "80",
+            "--ncol",
+            "1",
+            "--plot-margin",
+            "0",
+            "--vjust",
+            "1",
+            "--labels",
+            "A",
+            "--label-fontfamily",
+            chain,
+        ],
+    );
+    assert_eq!(
+        result.status.code(),
+        Some(3),
+        "a wholly unavailable chain must be a font error: {}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&result.stderr);
+    assert!(
+        stderr.contains("Helvetica") && stderr.contains("is not in the font library"),
+        "the chain must be named: {stderr}"
+    );
+    assert!(
+        stderr.contains("no family in the chain is usable"),
+        "the message must say the whole chain failed: {stderr}"
+    );
+    assert!(
+        stderr.contains("available:") && stderr.contains("Arial"),
+        "the available families must be listed: {stderr}"
+    );
+    assert!(
+        stderr.contains("--list-fonts"),
+        "the error must say how to fix it: {stderr}"
+    );
+    for line in stderr.lines() {
+        assert!(
+            line.chars().count() <= 200,
+            "every stderr line must stay within 200 chars ({}): {line}",
+            line.chars().count()
+        );
+    }
+    assert!(
+        !std::path::Path::new(&out).exists(),
+        "a failed font lookup must not leave an output file"
+    );
+
+    for panel in panels {
+        let _ = fs::remove_file(panel);
+    }
+}
+
 #[test]
 fn empty_font_dir_fails_closed_when_a_png_is_requested() {
     let panels = write_panels(&["fonts_empty_png"]);
