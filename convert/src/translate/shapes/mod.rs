@@ -12,29 +12,37 @@
 //!
 //! | filled | stroked | subpaths | output |
 //! |---|---|---|---|
-//! | yes | no | any | one `<polygon>`: every subpath concatenated and explicitly closed |
+//! | yes | no | 1–2 | one `<polygon>`: the subpaths concatenated and explicitly closed |
+//! | yes | no | ≥3 | one flattened `<path>` (`M`/`L`/`Z` per subpath) |
 //! | yes | yes | 1 | a `<polygon>` if the subpath is closed, else a `<polyline>` (unchanged from before) |
-//! | yes | yes | >1 | one **fill-only** `<polygon>` (concatenated + closed) plus one **stroke-only** shape per subpath |
+//! | yes | yes | 2 | one **fill-only** `<polygon>` (concatenated + closed) plus one **stroke-only** shape per subpath |
+//! | yes | yes | ≥3 | one **fill-only** flattened `<path>` plus one **stroke-only** shape per subpath |
 //! | no | any | any | one `<polyline>` per subpath |
 //!
 //! A **filled** path is a single fill region, so all its subpaths (a glyph's outer
-//! contour *and* its holes) belong to one `<polygon>` — one polygon per subpath
-//! would fill every counter (`O`, `0`, `8`, `B`) solid. Concatenating them,
-//! however, introduces *bridges* between the contours, so each concatenated
-//! subpath is **explicitly closed** (see below) and a stroked path is **split**:
-//! a `<polygon>` that kept the source `stroke` would paint those bridges.
+//! contour *and* its holes) belong to one shape — one shape per subpath would fill
+//! every counter (`O`, `0`, `8`, `B`) solid. A `<path>` carrying both paints is
+//! **split**, because a shape that kept the source `stroke` would paint the
+//! bridges between contours.
 //!
-//! ## Why each concatenated subpath is explicitly closed
+//! ## Why three or more subpaths cannot be one `<polygon>`
 //!
-//! A `<polygon>` implicitly draws an edge from its last point back to its first,
-//! and the concatenated list also has an edge from one subpath's end to the next
-//! subpath's start. For an *open* subpath (`M` without `Z` — exactly the
-//! pdftocairo glyph shape) those bridge edges are real edges that change the
-//! winding number and can add or erase fill. Appending the first point to every
-//! open subpath makes each outbound bridge and its return the same segment walked
-//! in opposite directions, so their net winding contribution is zero: the fill
-//! region then matches the source's "all subpaths share one `fill-rule`"
-//! semantics, and nested rings keep their holes.
+//! Concatenating the contours into a `<polygon>` introduces a bridge from one
+//! contour's end to the next contour's start, and the polygon's **implicit
+//! closing edge** (last point → first point) adds one more. With **two**
+//! subpaths those two bridges are the same segment walked in opposite directions,
+//! so they enclose zero area and the winding number is unchanged — that is the
+//! only case the old "the bridges cancel" argument covered, and the old tests
+//! (`tests.rs` N=2 cases) exercised exactly that. With **three or more**
+//! subpaths the bridges plus the implicit edge form a real ring whose interior
+//! gets winding ±1, so every hole inside it is filled solid.
+//!
+//! Therefore a fill region with three or more subpaths is emitted as a flattened
+//! `<path>` with one explicit `M … L … Z` contour per subpath: there is no
+//! implicit edge between contours, each contour is closed on its own, and the
+//! source `fill-rule` (`nonzero` or `evenodd`) applies to the whole region with
+//! exactly the source semantics. `resvg` supports `<path>` fully; every point is
+//! already flattened and transformed, so no curves or transforms survive.
 //!
 //! Because a `<polygon>`/`<polyline>` cannot paint the fill along the concatenated
 //! outline and the stroke along each subpath at once, the several-subpath stroked

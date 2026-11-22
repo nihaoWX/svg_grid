@@ -8,13 +8,16 @@
 //!    attributes; the output contains no `<g transform>`. A `<clipPath>` that is
 //!    referenced from a transformed context is transformed by the *same* matrix
 //!    so the clip box stays in the coordinate system of the geometry it clips.
-//! 2. **`<path>` → `<polyline>`/`<polygon>`** (`shapes`) — straight commands are
-//!    exact, curves are flattened to within `DEFAULT_TOLERANCE` source units. A
-//!    fill-only path becomes a *single* `<polygon>` (all subpaths concatenated
-//!    and explicitly closed, so a glyph's holes survive); a stroked-only path
-//!    stays one `<polyline>` per subpath; a path that is both filled and stroked
-//!    is split into a fill-only polygon and one stroke-only shape per subpath
-//!    when it has several subpaths. The same module rectifies `<clipPath>` bodies
+//! 2. **`<path>` → `<polyline>`/`<polygon>`/`<path>`** (`shapes`) — straight
+//!    commands are exact, curves are flattened to within `DEFAULT_TOLERANCE`
+//!    source units. A fill-only path with one or two subpaths becomes a *single*
+//!    `<polygon>` (concatenated and explicitly closed); with **three or more**
+//!    subpaths it becomes a flattened `<path>` (`M`/`L`/`Z` per contour), because
+//!    a polygon's implicit closing edge would turn the bridges into a ring and
+//!    fill a glyph's holes solid (see `shapes`). A stroked-only path stays one
+//!    `<polyline>` per subpath; a path that is both filled and stroked is split
+//!    into a fill-only shape and one stroke-only shape per subpath when it has
+//!    several subpaths. The same module rectifies `<clipPath>` bodies
 //!    (`<path>` → `<rect>`).
 //! 3. **`<use>`/`<defs>` expansion** (`uses`) — each `<use>` becomes a `<g
 //!    translate>` wrapper around a copy of the referenced element; unreferenced

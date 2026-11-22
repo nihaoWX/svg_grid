@@ -26,7 +26,8 @@
 //!    Between the scan and the tag protocol runs a *translation* stage
 //!    (`translate`) that rewrites the matplotlib dialect into the composer's
 //!    vocabulary: `<g transform>`/affine transforms are baked into leaf
-//!    coordinates, `<path>` becomes `<polyline>`/`<polygon>`, `<use>` is expanded
+//!    coordinates, `<path>` becomes `<polyline>`/`<polygon>` (or a flattened
+//!    multi-contour `<path>` when a fill has ≥3 subpaths), `<use>` is expanded
 //!    (and unreferenced `<defs>` content dropped), and `<image>` transforms are
 //!    baked into the bitmap.
 //! 2. **geometry that scales, marks that do not** — panel/axis geometry (and the

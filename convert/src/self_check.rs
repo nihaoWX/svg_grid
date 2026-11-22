@@ -47,6 +47,10 @@ pub fn self_check(root: &Element) -> Result<(), ConvertError> {
 /// The translation stage must leave none of these behind.
 fn check_residue(element: &Element, problems: &mut Vec<String>) {
     match element.name.as_str() {
+        // The `shapes` stage emits a flattened multi-contour `<path>` for a fill
+        // region with three or more subpaths (a `<polygon>` cannot keep its
+        // holes); such a path is a finished product, not dialect residue.
+        "path" if is_flattened_fill_path(element) => {}
         "path" => problems.push("a <path>".to_string()),
         "use" => problems.push("a <use>".to_string()),
         "symbol" => problems.push("a <symbol>".to_string()),
@@ -72,6 +76,27 @@ fn check_residue(element: &Element, problems: &mut Vec<String>) {
             check_residue(child, problems);
         }
     }
+}
+
+/// True for the `<path>` the `shapes` stage emits on purpose: absolute `M`/`L`
+/// straight commands only, at least one explicit `Z`, and no transform. Any other
+/// `<path>` is untranslated residue.
+fn is_flattened_fill_path(element: &Element) -> bool {
+    if element.attr("transform").is_some() {
+        return false;
+    }
+    let Some(d) = element.attr("d") else {
+        return false;
+    };
+    let mut closed = false;
+    for command in d.chars().filter(|ch| ch.is_ascii_alphabetic()) {
+        match command {
+            'M' | 'L' => {}
+            'Z' => closed = true,
+            _ => return false,
+        }
+    }
+    closed
 }
 
 /// True for the composer's supported text rotation form `rotate(a, x, y)`.
@@ -142,8 +167,9 @@ mod tests {
 
     #[test]
     fn self_check_detects_dialect_residue() {
-        // A `<path>` is accepted by the scan (the translator handles it), but the
-        // *output* must never contain one — the residue check enforces that.
+        // A `<path>` is accepted by the scan (the translator handles it), but an
+        // untranslated one — curves, relative commands, or no explicit close —
+        // must never reach the output.
         let root = parse(
             "<svg><rect data-panel-box='main' x='0' y='0' width='1' height='1'/>\
              <g data-scale='xy'><path d='M 0 0 L 1 1'/></g></svg>",
@@ -152,6 +178,21 @@ mod tests {
         match self_check(&root) {
             Err(ConvertError::SelfCheck(detail)) => assert!(detail.contains("path")),
             other => panic!("expected SelfCheck error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn self_check_accepts_the_flattened_multi_contour_fill_path() {
+        // The `shapes` stage emits this exact form on purpose for a fill region
+        // with three or more subpaths (a `<polygon>` would fill its holes solid).
+        let root = parse(
+            "<svg><rect data-panel-box='main' x='0' y='0' width='1' height='1'/>\
+             <g data-scale='xy'><path d='M 0,0 L 4,0 L 4,4 Z M 1,1 L 3,1 L 3,3 Z \
+             M 8,8 L 9,8 L 9,9 Z' fill-rule='evenodd'/></g></svg>",
+        )
+        .unwrap();
+        if let Err(error) = self_check(&root) {
+            panic!("the flattened fill path must pass the self-check, got {error:?}");
         }
     }
 

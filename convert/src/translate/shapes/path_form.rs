@@ -43,14 +43,16 @@ pub(crate) fn path_shapes(
             shapes.push(shape);
         }
     } else if !stroked {
-        // Fill-only path: the whole region in one `<polygon>`; the source
-        // `fill-rule` (if any) is carried over by `shape_skeleton` so the holes
-        // keep their meaning, and every subpath is explicitly closed (see the
-        // module docs).
-        let mut shape = shape_skeleton(element, &stroke_width, &remaining_style);
-        shape.name = "polygon".to_string();
-        shape.set_attr("points", join_closed_points(&subpaths));
-        shapes.push(shape);
+        // Fill-only path: the whole region in one shape (a `<polygon>` for one or
+        // two subpaths, a flattened `<path>` for three or more — see
+        // `fill_region_shape`); the source `fill-rule` (if any) is carried over by
+        // `shape_skeleton`, so the holes keep their meaning.
+        shapes.push(fill_region_shape(
+            element,
+            &stroke_width,
+            &remaining_style,
+            &subpaths,
+        ));
     } else if subpaths.len() == 1 {
         // Filled *and* stroked with a single subpath (the common patch/bar): keep
         // the pre-existing shape exactly — a `<polygon>` when closed, a
@@ -76,11 +78,9 @@ pub(crate) fn path_shapes(
         let fill_style = remaining_style
             .as_deref()
             .and_then(|style| style_without(style, "stroke"));
-        let mut fill_shape = shape_skeleton(element, &None, &fill_style);
-        fill_shape.name = "polygon".to_string();
+        let mut fill_shape = fill_region_shape(element, &None, &fill_style, &subpaths);
         fill_shape.remove_attr("stroke-width");
         fill_shape.set_attr("stroke", "none");
-        fill_shape.set_attr("points", join_closed_points(&subpaths));
         shapes.push(fill_shape);
 
         let stroke_style = remaining_style
@@ -149,9 +149,63 @@ fn join_points<'a>(points: impl Iterator<Item = &'a (f32, f32)>) -> String {
         .join(" ")
 }
 
+/// The fill region of a `<path>` as a single shape: one `<polygon>` for one or two
+/// subpaths, one flattened `<path>` for three or more.
+///
+/// A `<polygon>` cannot express a fill region with **three or more** subpaths: its
+/// implicit edge (last point → first point) closes the concatenated point list, so
+/// the N bridges between the subpaths become a real ring that flips the winding
+/// number inside it and fills the glyph's holes solid. With N=2 the two bridges
+/// are the same segment walked in opposite directions (zero area), which is why
+/// the old concatenation happened to work there. A `<path>` with one explicit
+/// `M`/`L`/`Z` subpath per contour has no such implicit edge: each contour is
+/// closed on its own and the source `fill-rule` applies to the whole region,
+/// exactly as in the source (`resvg` supports it — see the module docs).
+fn fill_region_shape(
+    element: &Element,
+    stroke_width: &Option<String>,
+    remaining_style: &Option<String>,
+    subpaths: &[Subpath],
+) -> Element {
+    let mut shape = shape_skeleton(element, stroke_width, remaining_style);
+    if subpaths.len() >= 3 {
+        shape.name = "path".to_string();
+        shape.set_attr("d", joined_closed_path_data(subpaths));
+    } else {
+        shape.name = "polygon".to_string();
+        shape.set_attr("points", join_closed_points(subpaths));
+    }
+    shape
+}
+
+/// Serialize every subpath as its own closed contour: absolute `M`/`L` commands
+/// followed by `Z` (the flattened points, no curves, no transforms).
+fn joined_closed_path_data(subpaths: &[Subpath]) -> String {
+    let mut d = String::new();
+    for subpath in subpaths {
+        let points = match subpath.points.split_last() {
+            // A closed subpath repeats its first point; `Z` closes it already.
+            Some((last, rest)) if rest.first() == Some(last) => rest,
+            _ => &subpath.points[..],
+        };
+        let Some(first) = points.first() else {
+            continue;
+        };
+        if !d.is_empty() {
+            d.push(' ');
+        }
+        d.push_str(&format!("M {},{}", fmt_num(first.0), fmt_num(first.1)));
+        for (x, y) in &points[1..] {
+            d.push_str(&format!(" L {},{}", fmt_num(*x), fmt_num(*y)));
+        }
+        d.push_str(" Z");
+    }
+    d
+}
+
 /// Concatenate every subpath into one point string, **explicitly closing** each:
-/// a subpath whose last point is not its first gets the first point appended, so
-/// the bridges between subpaths cancel (see the module docs).
+/// a subpath whose last point is not its first gets the first point appended.
+/// Only used for the one/two-subpath `<polygon>` (see [`fill_region_shape`]).
 fn join_closed_points(subpaths: &[Subpath]) -> String {
     let mut points = Vec::new();
     for subpath in subpaths {
