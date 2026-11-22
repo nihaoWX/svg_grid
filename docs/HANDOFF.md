@@ -106,16 +106,24 @@
 - 本次会话留下的临时材料（重启后可能没了，需要就重建）：`/tmp/sgtest/`（ncol=2 复现、嵌套）、
   `/tmp/render/`（字形孔对比渲染、donuts2）、`/tmp/svg_grid_audit_report.md`、`/tmp/svgaudit/REPORT.md`。
 
-## 5. 账本（`pitfalls-manager`）的坑 —— 动手前先解决
+## 5. 账本（`pitfalls-manager`）——已迁移，别再当坑
 
-- 账本按 **`/home/nihao/bioagentforge`（monorepo）** 锚定，`where` 都是 `tools/svg_grid/...`；
-  但根仓库在 **`f9e29083` 已彻底移除 `tools/` 跟踪**（`.gitignore:22` 的 `tools/`）⇒
-  **46 条 `where` 全部显示悬空**，`pitfalls-manager check` 会打 46 条提示（`rc=0`，只是 hint）。
-- **好消息**：`query` 是**路径后缀匹配**，`query src/layout.rs` 仍能命中 R14-F1 等历史；
-  旧证据用 `git -C /home/nihao/bioagentforge show <sha>:tools/svg_grid/...` 取回（旧 commit 里还在）。
-- **要用户裁决**：新账本锚点怎么办 —— (a) 新轮次改用工具仓相对路径（`where = src/layout.rs`，
-  锚到本目录的 `.git`），与旧轮次并存；(b) 把 `tools/` 恢复进根仓库跟踪；(c) 重建账本。建议 (a)，
-  但**第一次 `record` 前先确认工具把锚点解析到哪个仓**。
+**2026-11-22 已完成 reanchor**（用户指定锚点改为工具自己的仓）：
+
+- `meta.repo_paths` = **`["/home/nihao/bioagentforge/tools/svg_grid", "/home/nihao/bioagentforge"]`**。
+  第一个是工具仓（新记录用），第二个是旧 monorepo（**必须保留**：R1–R26 的 `code_before/after`
+  与报告 commit 只在 monorepo 里，去掉会让 `record` 直接失败）。
+- `pitfalls-manager check --repo .../tools/svg_grid`：迁移前 **46 条** → 迁移后 **0 条**（0 字节）。
+- `query src/layout.rs` 仍命中 `R14-F1`；`ids` 迁移前后逐字一致；对 46 条 distinct `where` 全扫，
+  **`⚠ suspect anchor` = 0**；新轮 `record` 在临时库里 `rc=0`。
+- **`where` 故意没重写**（仍是 `tools/svg_grid/...`）：那是旧快照里的真实坐标，也是 `git show` 的取回坐标；
+  改成 `src/...` 会让 `validate_ledger` 整本失败并毁掉旧证据取回。并轨靠新增的 **`link` 组 L11–L55**
+  （`tools/svg_grid/<p>` ↔ `<p>`）与 1 条 retired（L56，R11-F2 的跨项目路径）。
+- **报告路径未改**（`tools/svg_grid/docs/PITFALLS/...`），旧证据仍可 `git -C /home/nihao/bioagentforge show <sha>:<path>`。
+- 工具侧新增受支持的 **`reanchor`** 子命令（`tools/pitfalls-manager` commit `bcb19c0`，已装 `~/.local/bin`）。
+- 回滚备份：`/home/nihao/pitfalls-manager-backups/svg_grid-reanchor-20261122-221338/`（含迁移前 `history.db`、
+  前后 `check/query/ids`、REPORT.md）。
+- **新轮次**：`where` 用工具仓相对路径（`src/layout.rs`、`convert/src/...`）；查询旧路径靠后缀匹配 + link。
 - `docs/PITFALLS/` 目前**没有待处理报告**（只剩 `round-data/R3…R26` 的可跑证据）。
 
 ## 6. 本次会话的提交（都在本目录的仓）
