@@ -92,11 +92,21 @@ let row_signal: Vec<f32> = rel_heights
   （只被 rel-heights 拉高，不被末行逻辑拉宽）。
 - `--rel-widths 1,2` 与 `2,4`：canvas、每格尺寸完全一致。
 
-**注意（验收文字的内部冲突）**：任务第 5 条把“15 图 4×4”列为“满行网格不得变化”，但 15 图在
-4 列下必然是 `4+4+4+3` 的短末行（这正是 D2 要修的形状）。以 aspect 1.25 为例，旧几何
-canvas `1000×866.667`（末行 3 格 `250×266.667`），新几何 `1000×800`（全 `250×200`）——
-**必然变化**，否则 D2 不成立。真正“满行”的 16/4×4 与 15/5×3 已钉死不变量；若第 5 条原意是
-16 图 4×4，则与之相符。此点已在返回里标为需要确认的口径问题，未按错误示例改代码。
+### 行为变更（有意）：15 图 4 列
+
+任务第 5 条的“满行网格几何不变”指**每一行都铺满 cols 列**的形状（4/2×2、6/2×3、16/4×4、
+15/5×3 等），不是“15 图 4 列”。15 图在 4 列下必然是 `4+4+4+3` 的短末行，正是 D2 要修的形状，
+因此按新语义**有意改变**（评审 2026-11-22 已确认）：
+
+| | 旧几何 | 新几何 |
+|---|---|---|
+| canvas | `1000×866.667` | `1000×800` |
+| 前 3 行 | 4 格 `250×200` | 4 格 `250×200` |
+| 末行 3 格 | `250×266.667`（比前面高 66.667，整图因此多出 66.667 高） | `250×200` |
+| 各行 y | `0 / 200 / 400 / 600` | `0 / 200 / 400 / 600` |
+
+真正满行的 16/4×4（`1000×800`、`250×200`）与 15/5×3（`1000×480`、`200×160`）已用
+`complete_rows_keep_the_exact_geometry_they_had_before` 钉死；4/2×2、6/2×3、9/3×3 同测试覆盖。
 
 ## 测试与全链
 
@@ -105,8 +115,8 @@ canvas `1000×866.667`（末行 3 格 `250×266.667`），新几何 `1000×800`�
 - `src/layout.rs:266` `short_last_row_keeps_the_full_grid_cell_size`
 - `src/layout.rs:286` `short_last_row_is_measured_as_if_it_filled_all_columns`（含 `--nrow 2` 等价）
 - `src/layout.rs:312` `complete_rows_keep_the_exact_geometry_they_had_before`
-- `src/layout.rs:329` `rel_heights_only_scale_the_shared_row_height`
-- `src/layout.rs:354` `rel_widths_are_ratios_and_do_not_change_the_derived_height`
+- `src/layout.rs:331` `rel_heights_only_scale_the_shared_row_height`
+- `src/layout.rs:356` `rel_widths_are_ratios_and_do_not_change_the_derived_height`（`1,2` vs `2,4` 的 canvas 高与每格几何逐项相等，并断言绝对宽 `333.333/666.667`、高 `400`）
 - `tests/selftest/layout/mod.rs:182` `plan_grid_keeps_a_short_last_row_at_the_full_grid_cell_size`
   （走 `plan_grid`，验证 `--plan` 与 `plot-grid` 共用的 `prepare`）
 

@@ -313,7 +313,13 @@ mod tests {
         // The fix only applies to the "row measured by its own panel count"
         // signal; grids whose rows are all complete must not move.  These are the
         // sizes the 100×80 / 1000-wide fixtures produced before D2.
-        for (count, cols, expected_h) in [(4, 2, 800.0), (6, 2, 1200.0), (16, 4, 800.0)] {
+        for (count, cols, expected_h) in [
+            (4, 2, 800.0),
+            (6, 2, 1200.0),
+            (9, 3, 800.0),
+            (16, 4, 800.0),
+            (15, 5, 480.0),
+        ] {
             let grid = fit(count, Some(cols), None);
             assert_close(grid.height, expected_h);
             let cell_w = 1000.0 / cols as f32;
@@ -373,6 +379,12 @@ mod tests {
         };
         let unit = run(&[1.0, 2.0]);
         let doubled = run(&[2.0, 4.0]);
+        // The absolute geometry is pinned as well: the multipliers may only
+        // distribute the width, never feed the height signal.
+        assert_close(unit.height, 800.0);
+        assert_close(unit.cells[0].width, 1000.0 / 3.0);
+        assert_close(unit.cells[1].width, 2000.0 / 3.0);
+        assert_close(unit.cells[0].height, 400.0);
         assert_close(doubled.height, unit.height);
         for (left, right) in unit.cells.iter().zip(&doubled.cells) {
             assert_close(left.x, right.x);

@@ -7,8 +7,8 @@ run_before = ["R14"]
 touched = []
 note = """
 为什么认定同类：`compute_grid` 的 `row_aspect_sums` 只在 `index < count` 时累计，与列宽用的“全网格列权重”两套基准；R14 只碰同一函数的零值校验，未触及几何。
-根因与建议修法：已证——行高信号 `available_w / Σ(natural_w)`，所有行等高；`row_aspect_sums` 整段删除（`src/layout.rs:202-217` 旧位置）。
-怎么修才不弄坏前面：跑 R14 的 test.py（已全过）；满行网格的 canvas/格子数字在 test.py 里按旧值钉死。
+根因与建议修法：已证——行高信号 `available_w / Σ(natural_w)`，所有行等高；`row_aspect_sums` 整段删除（旧 `src/layout.rs:195-208`）。
+怎么修才不弄坏前面：跑 R14 的 test.py（已全过）；满行网格（4/2、6/2、9/3、16/4、15/5）的 canvas/格子数字在 test.py 与单测里按旧值钉死；15 图 4 列是 4+4+4+3 短末行，属有意行为变更（旧 canvas 866.667 → 新 800）。
 `--rel-widths` 不进行高分母：`rel_*` 是比值（1,2 ≡ 2,4），且满行 + rel-widths 的几何必须不变；`--rel-heights` 仍是行高倍数。
 """
 how_to_run = """
