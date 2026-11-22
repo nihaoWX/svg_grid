@@ -4,13 +4,13 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六个缺陷已全部修复（R27–R34）——
   D1 字形孔、D2 末行格子尺寸、D3 默认网格、D6 网格校验 + `--verbose` 静音、D4 自动 convert、D5 labels/W3/W8
-  （含 D5b 的 W8 回退链修复）。**
+  （含 D5b–D5d 的 W8 回退链与 200 字符硬上限收尾）。**
   余下三项 pre-existing，均已开报告：`<defs>` 内 mask/marker 被丢弃、组合图字母重号静默、doctor 告警码漂移。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 236 项**（81 lib + 59 main + 96 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
+  `textLength` 一起缩）。**测试 245 项**（89 lib + 59 main + 97 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
   **W3（给已带字母的输入再加非空字母）rc=2**、**W8（缺标签字体族）rc=3**，两者都**不写产物**、不依赖 `--verbose`；
@@ -27,8 +27,8 @@
   回退 `02b` = cowplot；两副本 `diff -r` 为空）。**HARNESS 是两件套**（2026-10-06 起）：本文件
   + `ARCHITECTURE.md`（含 `# 已定型的决定` 与 `ARCHITECTURE/` 机制文档，索引见该文件）+ `docs/`；**不设 `DECISIONS.md`**。
   **`INSTRUCTIONS.md` 是用户手写、只由用户改**，与其余文件冲突时以它为准。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R34 已入账**；
-  `link` 组 L1–L56；`round-data/R3…R34` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R36 已入账**；
+  `link` 组 L1–L56；`round-data/R3…R36` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -40,12 +40,13 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
-- 2026-11-23 **D5b W8 回退链（R34）**：`describe_missing_font_error` 原来取"链里第一个非通用名"判是否在库，
-  把 CSS 回退链当单族名 ⇒ 链首不在库就 rc=3。改为**链里任一名字可用（在库或通用族）即放行**，
-  只有整条链都不可用才 rc=3 并点名整链 + 可用族 + 修法；`font-family` 原样交给渲染器。
-  新增 `MAX_ERROR_BODY`/`assemble_within`，W3 205→188、W8 239→194/195、W5 217→191（全部 ≤200 字符）。
-  根 236 tests（81+59+96）/ convert 100 / doctor 57/0/1；R8–R14 + R28–R34 全绿、R34 证据 38 PASS。
-  提交 `e362c01`→`b55669e`（删报告），证据 `docs/PITFALLS/round-data/R34/`。
+- 2026-11-23 **D5b–D5d W8 收尾（R34–R36）**：① `describe_missing_font_error` 原来取"链里第一个非通用名"
+  判是否在库 ⇒ 改为**链里任一名字可用（在库或通用族）即放行**，整链不可用才 rc=3 并点名整链 + 可用族 + 修法；
+  ② 错误行 200 字符硬上限（`MAX_ERROR_BODY`/`assemble_within`），W3 205→188、W8 239→194/195、W5 217→191；
+  ③ D5c 把病态输入的预算手算错 1（`"(available: "` 12 vs 真实 13）⇒ 整段 `available:` 丢失、回显塌成 `"…"`；
+  D5d 改为**按 `format!` 拼出的真实长度反推预算**，加 `AVAILABLE_OPEN`/`truncate_body`，链回显优先于库列表。
+  根 245 tests（89+59+97）/ convert 100 / doctor 57/0/1；R8–R14 + R28–R36 全绿。提交 `e362c01`→`b55669e`（R34）、
+  `e4660e8`→`5482421`（R35）、`98a173e`→`d32ab03`（R36）；STOP 后 4d737b2 压 PROGRESS 回 19990 B。
 - 2026-11-22 **D5 labels / W3 / W8 / margin 0（R33）**：裸 `--labels` 的 AUTO **跳过 NULL 槽**（5 槽 `A,B,–,C,D`）；
   显式列表**按槽位**消费（给 NULL 槽写字母就画、`""` 跳过）。W3 升硬错误：给已带 `data-svg-grid-label`
   的输入再赋非空字母 ⇒ rc=2、不写产物、文案点名 input#/字母，`--plan` 同 rc；`--labels ,C` 仍放行。
@@ -106,7 +107,7 @@
   布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
 # In Progress
 
-- 无进行中轮次（D1–D6 + D5b 全部完成，R27–R34）。下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R35）。
+- 无进行中轮次（D1–D6 + D5b–D5d 全部完成，R27–R36）。下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R37）。
 
 # Known Issues
 
@@ -114,9 +115,9 @@
 
 ## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-23 实测）
 
-**D1–D6 + D5b 全部已修（R27–R34）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩三项 pre-existing，均已开报告：
+**D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩三项 pre-existing，均已开报告：
 
-1. **`<defs>` 内 mask/marker 被丢弃**（待消费，下一轮 R35）：`convert/src/translate/uses.rs:176` 的 `prune_defs`
+1. **`<defs>` 内 mask/marker/filter 被丢弃**（待消费，下一轮 R37）：`convert/src/translate/uses.rs:176` 的 `prune_defs`
    的 `REFERENCE_TARGETS` 不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
    （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
    报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（含 2026-11-23 追加的 maskUnits/markerUnits/self_check 三层实测）。
@@ -135,18 +136,15 @@
 
 - **嵌套组图会累积"与目标网格的偏差"**（不是变形：每步 `Δ=0.00%`）。实测 A4 目标 1000×1414 的
   最小步骤链拼出 1532.48（**+8.4%**），其中 GH 行 1.445 倍行高（底行 3 格只放 2 个 ⇒ 每格 1.5 格宽）。
-  中间步的 margin 也会静默改变外层列宽比（BC 用默认 margin 24 ⇒ A:BC = 1.951 而非 2.000；
-  用 `--plot-margin 0` ⇒ 精确 2.000）。字母带每行再 +116.8 px（+1.16%）。
+  中间步 margin 也会改变外层列宽比（默认 24 ⇒ A:BC = 1.951 而非 2.000；`--plot-margin 0` ⇒ 精确 2.000）。
   ⇒ **嵌套时中间步一律 `--plot-margin 0`**，且跨行块只能"近似"表达（无 span 能力）。
 - **无跨格（span/merge）能力**：`src/cli/parse.rs` 的 FLAGS 只有 `nrow/ncol/rel-*/gap`，
   `grep span|merge|rowspan|colspan` 在 `src/` 无命中。用户例子里的"A 占 2×2"只能靠嵌套近似
   （A 与 BC 横向组合时同高、宽比 2:1、`Δ=0` 这一步是对的，但 ABC 的纵横比 1.4682 vs 理想 1.4144）。
-- **W6 在嵌套输出上是假阳性**：`right 538.560 = (300+838.560)−600`、`bottom 550.742 = (24+856.718)−329.976`
-  全部来自**残留的 `visibility="hidden"` 内层 panel-box rect**，而 ink walker 只跳 `display:none`
-  （`src/ink/walk.rs:82,128`）。改成 `display="none"` 后数字立刻掉到 139.465 且 bottom 消失。
-  另 `left 90` 是 `0.75em/字符` 上界估算（真实约 −14，高估 6.4×）。
-- **`round-data/R17/test.py` 22.4 KB**，超"每份 ≤ 20 KB"的口径（R18 之后略涨）：要压只能把该轮证据按族拆文件；
-  不影响 `doctor`/`cargo test`，故暂留。
+- **W6 在嵌套输出上是假阳性**：越界数字全部来自**残留的 `visibility="hidden"` 内层 panel-box rect**
+  （ink walker 只跳 `display:none`，`src/ink/walk.rs:82,128`）；改 `display="none"` 后 bottom 消失。
+  另 `left` 是 `0.75em/字符` 上界估算（高估约 6.4×）。
+- **`round-data/R17/test.py` 22.4 KB**，超"每份 ≤ 20 KB"口径：要压只能按族拆文件，暂留。
 
 - **合成时面板内容不再被面板画布裁剪**：超出面板画布的元素会渲染到成品外边距（密集版式下可能压到相邻
   面板）。要严格复刻栅格语义需在 cell 上补 clip——**尚未做**（机制见 `ARCHITECTURE/layout.md` §2）。
@@ -185,7 +183,7 @@
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
    （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1–D6 + D5b 已全部完成**（R27–R34）；下一步消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R35），
+   **D1–D6 + D5b–D5d 已全部完成**（R27–R36）；下一步消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R37），
    再做一次交付前全量复核（测试 / doctor / R8–R14 / 两副本 diff / 账本 check）。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出

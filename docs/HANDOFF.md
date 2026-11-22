@@ -15,6 +15,8 @@
 | D4 `plot-grid` 自动 convert | ✅ 已修 | `162c0cd`→`79cf9e5`→`a2d5fb5`；R32 |
 | D5 `--labels` NULL/W3/W8 | ✅ 已修 | `e9425d2`→`398a21e`；R33 |
 | D5b W8 把回退链当单族名 | ✅ 已修，评审 PASS | `e362c01`→`b55669e`；R34 |
+| D5c 病态输入的 W8 行超 200 字符 | ✅ 已修 | `e4660e8`→`5482421`；R35 |
+| D5d 预算手算少 1（丢 `available:`、回显塌 `"…"`） | ✅ 已修，对抗评审 PASS | `98a173e`→`d32ab03`；R36 |
 
 ## 1. 先读什么（按顺序）
 
@@ -155,7 +157,7 @@
 ## 7. 建议的下一步
 
 1. ~~先解账本锚点~~ —— 已于 2026-11-22 完成（`reanchor`，`check` 0 条）。
-2. ~~按 D1 → D2 → D3 → D6 → D4 → D5 动手~~ —— **六项全部完成（R27–R34）**，见 §0。
+2. ~~按 D1 → D2 → D3 → D6 → D4 → D5 动手~~ —— **六项全部完成（R27–R36）**，见 §0。
    每轮仍走 `query <位置> --repo .` → 改 → `cargo test` → `doctor` → `install.sh` → commit → `record`；
    若与旧轮同址（复发），在 `docs/PITFALLS/round-data/<新轮>/` 留可跑证据。
 3. **下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`**（`prune_defs` 丢 mask/marker，
