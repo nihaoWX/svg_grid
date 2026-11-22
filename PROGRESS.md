@@ -2,8 +2,8 @@
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
-  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）已修复并评审通过
-  （R27/R28）；其余见 `# Known Issues`，按 D2→D3→D6→D4→D5 在修。**
+  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：D1（convert 损坏字形孔）与 D2（末行格子尺寸）
+  已修复并评审通过（R27/R28/R29）；其余见 `# Known Issues`，按 D3→D6→D4→D5 在修。**
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
@@ -37,6 +37,12 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-22 **D2 末行格子尺寸（R29）**：`src/layout.rs` 行高信号改为 `available_w / Σ(全网格列权重)`
+  （列权重 = `--rel-widths` 或该列第一张非 NULL 面板的纵横比），删除按"本行实际图数"求和的 `row_aspect_sums`；
+  短末行与满行同尺寸（5 图 `--ncol 2` ⇒ `1000×1200`、全 `500×400`），满行形状几何逐字节不变
+  （4/2×2、6/2×3、9/3×3、16/4×4、15/5×3 与父提交 `cmp` 相同）。15 图 `--ncol 4`（4+4+4+3）为有意行为变更。
+  新增 6 条测试（含 `--rel-widths 1,2` vs `2,4` 等价与变异可捕获）；根 213 tests / convert 100 / doctor 57/0/1。
+  提交 `66fba3c`（D1 注释）→`cf76029`→`f8be8ef`→`8b08524`（删报告），证据 `docs/PITFALLS/round-data/R29/`。
 - 2026-11-22 **D1 字形孔（R27 + R28）**：convert 对 ≥3 子路径的填充路径不再合并成单 `<polygon>`
   （隐式闭合把 bridge 连成闭环、内孔被填死），改为展平多轮廓 `<path>`；N≤2 保留原 polygon。
   R28 收紧 self-check 白名单（只认与输出序列化一致的展平 path；mask/marker 内 `<path>` 一律判残渣）、
@@ -80,43 +86,37 @@
 
 # In Progress
 
-- **D2 末行格子尺寸**（2026-11-22，Generator 执行中）：把 `src/layout.rs` 的行高信号改为
-  `available_w / Σ(全网格列权重)`，所有行等高；验收 5 输入 `--ncol 2` 三行等高、index 0 与 index 4 的 cell
-  宽高相同；满行网格几何必须不变。完成后依次 D3 默认网格 → D6 校验/`--verbose` → D4 自动 convert → D5 labels。
+- **D3 默认网格**（2026-11-22，Generator 执行中）：不给 `--ncol/--nrow` 时 `cols=ceil(sqrt(count))`、
+  `rows=ceil(count/cols)`（1→1×1、2→2×1、3→2×2、5→3×2、15→4×4、16→4×4），末行不满合法、末槽不生成 cell。
+  完成后依次 D6 校验/`--verbose` → D4 自动 convert → D5 labels → 消费 `defs mask/marker` 报告。
 - 无其他进行中工作。
 
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
 
-## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1 已修，其余按 D2→D3→D6→D4→D5 顺序在修）
+## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-22 实测；D1/D2 已修，其余按 D3→D6→D4→D5 顺序在修）
 
-1. **【D2】末行格子尺寸随"该行实际有几个图"变**（违反用户期望 #10）。`src/layout.rs` 的 `row_aspect_sums`
-   （`:197-208`）对末行只累计**实际存在的**面板 ⇒ 行高按"本行铺满整宽"算（`available_w / Σaspect`），
-   而 cell 宽仍按"只占一列"算 ⇒ 5 输入 `--ncol 2` 时 E 格 **476×972.614**、`Δ=−50%`。根因：**行高按"本行几个图"算，
-   列宽按"全网格几列"算**，两套基准。cowplot 1.2.0 实测：5 图 `ncol=2` 的 5 个格子全 `1/2 × 1/3`（同格，不拉伸）。
-   正确修法：格子尺寸只由网格决定 —— 行高 = `available_w / Σ(全网格 column weights)`（`--rel-heights` 只做倍数），
-   末行少几个图不影响格子大小。
-2. **【D3/D6】默认网格与"声明"规则都没实现**（违反用户期望 #10）：
+1. **【D3/D6】默认网格与"声明"规则都没实现**（违反用户期望 #10）：
    - **默认网格**：不给 `ncol`/`nrow` 时 `cols=ceil(sqrt(n))`、`rows=ceil(n/cols)`（15 图 → 4×4，5 图 → 3×2），
      末格按 NULL 处理；现在 `(None, None) => (1, count)`（`src/layout.rs:69-74`）⇒ 5 图默认是一行 `1×5`。
-   - **空位必须声明**：显式 `ncol`/`nrow` 且 `rows×cols > 输入数` 时现在静默留空；用户口径要求显式 `--input NULL`，
-     否则报错（默认自动补 NULL 已获准）。
-3. **【D6】`rows×cols` 上界没校验**：现在只查"装不下"（`src/layout.rs:75-77`）；用户要求多出整整一行也报错
+   - **空位声明**：显式 `ncol`/`nrow` 时只要没有"整行全空"就合法（末行不满可以，末槽不生成 cell）；
+     整行全空（如 5 输入给 3×3）报错。默认模式末格自动按 NULL 处理。
+2. **【D6】`rows×cols` 上界没校验**：现在只查"装不下"（`src/layout.rs:75-77`）；用户要求多出整整一行也报错
    （5/6 个输入给 9 格）。判据等价于 `(rows-1)*cols < count ≤ rows*cols`（不许整行全空）。
-4. **【D6】`--verbose` 未实现**：默认只输出必要信息（报错），W1–W9 与聚合 `note:` 静音；`--verbose` 才展开
+3. **【D6】`--verbose` 未实现**：默认只输出必要信息（报错），W1–W9 与聚合 `note:` 静音；`--verbose` 才展开
    （`convert` 子命令同样受控）。现在告警一律打 stderr（`src/warnings/mod.rs` 的 `emit`）。
-5. **【D4】`plot-grid` 不会自动 convert**（违反用户期望 #11）：未打标签的输入直接 `rc=2`：
+4. **【D4】`plot-grid` 不会自动 convert**（违反用户期望 #11）：未打标签的输入直接 `rc=2`：
    `svg_grid: invalid input: input SVG must contain a <rect data-panel-box="main" .../> element`
    （抛出点 `src/geom.rs:21`，唯一调用点 `src/plan.rs:144`）。钩子 `svg_grid_convert::convert(&str, bool)`
    （`convert/src/pipeline.rs:22`，纯字符串、无 I/O；`Cargo.toml` 已依赖 convert）；`doctor` 的进程内调用可作范式
    （`src/cli/doctor/run.rs:205` → `run_in`）。
-6. **【D5】`--labels` 在中间步加会重号**（违反用户期望 #12）：`src/lib.rs:367-379` 只做 W3 检测
+5. **【D5】`--labels` 在中间步加会重号**（违反用户期望 #12）：`src/lib.rs:367-379` 只做 W3 检测
    （`src/warnings/labels.rs:18-36`），exit 0 照常写文件。实测 AB 加字母后再与 C 组合并加字母 ⇒ 4 个
    `data-svg-grid-label`，渲染后字母叠印。建议 W3 在"给**已带字母**输入再赋**非空**字母"时升为硬错误。
-7. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
+6. **【D5】`--labels` 的 NULL 规则未实现**：裸 `--labels` 的 AUTO 跳过 NULL 槽；显式列表按槽位（含 NULL，
    `""` 跳过）。现在 `labels::build` 按输入下标取字母（`src/labels.rs:16-18`）。
-8. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
+7. **pre-existing（已开报告，待消费）**：`convert/src/translate/uses.rs:176` 的 `prune_defs` 的 `REFERENCE_TARGETS`
    不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
    （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
    报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（2026-11-22 实测）。优先级：D1–D6 之后立即处理。
@@ -175,8 +175,8 @@
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
    （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1（字形孔）已完成**（`1e05ce1` + `1da48f0`，R27/R28，评审 PASS）；从 **D2 格子尺寸** 接着往下：
-   D2 → D3 默认网格 → D6 校验/`--verbose` → D4 自动 convert → D5 labels。
+   **D1（字形孔）与 D2（末行格子尺寸）已完成**（`1e05ce1`/`1da48f0`/`66fba3c`+`cf76029`，R27/R28/R29，评审 PASS）；
+   从 **D3 默认网格** 接着往下：D3 → D6 校验/`--verbose` → D4 自动 convert → D5 labels。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
    **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
    `git -C <repo> show <commit>:<path>`。
