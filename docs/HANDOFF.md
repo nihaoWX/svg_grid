@@ -4,7 +4,7 @@
 > `INSTRUCTIONS.md`（最高优先级）。**修复进度见下面的 §0**，修复后的语义以 `PROGRESS.md` 与
 > `ARCHITECTURE/` 为准；§2 起的缺陷描述保留作复现步骤。
 
-## 0. 修复进度（2026-11-22 晚更新）
+## 0. 修复进度（2026-11-23 更新）
 
 | 缺陷 | 状态 | 提交 / 账本 |
 |---|---|---|
@@ -14,6 +14,7 @@
 | D6 `rows×cols` 上界 + `--verbose` | ✅ 已修；D6b 关闭性复核通过（R4–R14 绿） | `3311eec`→`676d82d`；R31；连带面 `79cf9e5`/`dc0bda6` |
 | D4 `plot-grid` 自动 convert | ✅ 已修 | `162c0cd`→`79cf9e5`→`a2d5fb5`；R32 |
 | D5 `--labels` NULL/W3/W8 | ✅ 已修 | `e9425d2`→`398a21e`；R33 |
+| D5b W8 把回退链当单族名 | ✅ 已修，评审 PASS | `e362c01`→`b55669e`；R34 |
 
 ## 1. 先读什么（按顺序）
 
@@ -153,20 +154,22 @@
 
 ## 7. 建议的下一步
 
-1. **先解账本锚点**（§5），否则 `record` 可能过不了闸门。
-2. 按 **D1 → D2 → D3 → D6 → D4 → D5** 动手（先产物正确性，后易用性）。
-   每轮走 `query <位置> --repo .` → 改 → `cargo test` → `doctor` → `install.sh` → commit → `record`；
+1. ~~先解账本锚点~~ —— 已于 2026-11-22 完成（`reanchor`，`check` 0 条）。
+2. ~~按 D1 → D2 → D3 → D6 → D4 → D5 动手~~ —— **六项全部完成（R27–R34）**，见 §0。
+   每轮仍走 `query <位置> --repo .` → 改 → `cargo test` → `doctor` → `install.sh` → commit → `record`；
    若与旧轮同址（复发），在 `docs/PITFALLS/round-data/<新轮>/` 留可跑证据。
-3. D1 修完用 `pandamap_ALB_A.svg` 做**逐像素**对比（原图 vs 转换后再组图），并把 `tests/user_tests/2026-11-20/`
-   当真实语料跑一遍：那里现在放着 5 个已转换的 panel 和用户当时的成品 `ABCDE.svg`（注意：那份成品
-   与 `--ncol 5` 的输出**逐字节相同**，不是 README 里写的 `--ncol 2`，别拿它当 ncol=2 的期望值）。
-4. 用户 2026-11-22 的提交 `6e582be` 删掉了 `tests/poppler_dialect` 与 `tests/shape_paint`
-   （后者含 `fixture_glyph_hole.svg`，但只测 N=2）——**先确认是否你本意**；若是有意，D1 的回归用例
-   要新建；若是误删，从 `6e582be^` 取回。
+3. **下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`**（`prune_defs` 丢 mask/marker，
+   报告已含 maskUnits/markerUnits/self_check 三层实测与修法口径）。
+   另有两份新报告待排期：`blocker-svg_grid-duplicate-letters-across-composites.md`、
+   `suggestion-svg_grid-doctor-warning-codes-drift.md`。
+4. 交付前全量复核：`cargo test`（根 236 + convert 100）、`doctor` 57/0/1、`round-data/R8–R14`+`R28–R34`、
+   两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
 
-- §5 的账本锚点。
-- 显式 `NULL` 是否允许出现在**列表中间**（例子 2 只演示了末尾；实现上建议允许）。
-- W8 改成报错后，**只出 PNG/AVIF 时的缺字体**是否也报错（现在空库是 `rc=3`，缺族是告警）。
+- ~~§5 的账本锚点~~ —— 已解决。
+- ~~显式 `NULL` 是否允许出现在**列表中间**~~ —— 用户裁决：**允许**（已实现，`--input NULL` 可在任意位置）。
+- ~~W8 改成报错后，只出 PNG/AVIF 时的缺字体是否也报错~~ —— 用户裁决：**所有输出格式都报错**（rc=3，已实现）。
+- 仍待用户裁决：W6 容差 1 px 与嵌套假阳性、RDKit 方言重测、`research/` 两份旧 `DECISIONS.md` 是否迁、
+  是否引入 span 能力（见 `PROGRESS.md` §Known Issues）。
 - `--verbose` 是否也覆盖 `convert` 子命令的告警（建议覆盖，保持一致）。
