@@ -94,13 +94,13 @@ def main():
             cmd = [str(binary), "plot-grid", "--input", str(inputs[0])]
             for i in inputs[1:]:
                 cmd += ["--input", str(i)]
-            cmd += ["--output", str(out), "--width", "400", "--ncol", str(len(inputs))] + extra
+            cmd += ["--output", str(out), "--width", "400", "--ncol", str(len(inputs)), "--verbose"] + extra
             return subprocess.run(cmd, capture_output=True, text=True)
 
         # W3 需要"已带字母的输入" ⇒ 先自己造一个
         first = subprocess.run([str(binary), "plot-grid", "--input", str(w4b_1), "--input", str(w4b_2),
                                 "--output", str(tmp / "lettered.svg"), "--width", "400", "--ncol", "2",
-                                "--labels", "A,B", "--plot-margin", "0"],
+                                "--labels", "A,B", "--plot-margin", "0", "--verbose"],
                                capture_output=True, text=True)
         lettered = tmp / "lettered.svg"
         cases = [

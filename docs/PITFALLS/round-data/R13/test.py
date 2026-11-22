@@ -48,7 +48,7 @@ def check(ok, label, detail=""):
 
 
 def run(args):
-    return subprocess.run([str(BIN), "plot-grid"] + args, capture_output=True, text=True)
+    return subprocess.run([str(BIN), "plot-grid", *args, "--verbose"], capture_output=True, text=True)
 
 
 def main():

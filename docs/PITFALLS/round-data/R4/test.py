@@ -57,7 +57,7 @@ def find_bin():
 def run_plot_grid(binary, svg, tmp):
     out = pathlib.Path(tmp) / "out.svg"
     p = subprocess.run([str(binary), "plot-grid", "--input", str(svg), "--output", str(out),
-                        "--ncol", "1", "--plot-margin", "24", "--width", "4400"],
+                        "--ncol", "1", "--plot-margin", "24", "--width", "4400", "--verbose"],
                        capture_output=True, text=True)
     return p
 

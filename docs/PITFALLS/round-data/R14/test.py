@@ -128,10 +128,22 @@ def main():
     check(p.returncode == 0 and out.exists(), "分档 0：正常组图", f"rc={p.returncode} {p.stderr[:200]!r}")
     p = run(["plot-grid", "--input", str(tmp / "no-such.svg"), "--output", str(out)])
     check(p.returncode == 1, "分档 1：读不到输入文件（IO）", f"rc={p.returncode} {p.stderr[:200]!r}")
-    bad = tmp / "no-tag.svg"
-    bad.write_text('<svg width="10" height="10"><rect x="0" y="0" width="10" height="10"/></svg>')
+    # D4 changed a *missing* panel box from rc=2 to auto-conversion.  Keep the
+    # tier-2 assertion on a structural error that is still fatal: a tagged panel
+    # whose canvas has zero width (auto-conversion is deliberately skipped).
+    bad = tmp / "zero-canvas.svg"
+    bad.write_text('<svg width="0" height="10" viewBox="0 0 0 10">'
+                   '<rect data-panel-box="main" x="0" y="0" width="0" height="10"/></svg>')
     p = run(["plot-grid", "--input", str(bad), "--output", str(out)])
-    check(p.returncode == 2, "分档 2：输入 SVG 结构坏（没有 data-panel-box）",
+    check(p.returncode == 2, "分档 2：输入 SVG 结构坏（有 panel-box 但 canvas 宽 0）",
+          f"rc={p.returncode} {p.stderr[:200]!r}")
+
+    # D4 intentional change: an untagged SVG (the old tier-2 case) is now
+    # converted in memory and succeeds.
+    untagged = tmp / "untagged.svg"
+    untagged.write_text('<svg width="10" height="10"><rect x="0" y="0" width="10" height="10"/></svg>')
+    p = run(["plot-grid", "--input", str(untagged), "--output", str(out)])
+    check(p.returncode == 0 and out.exists(), "分档 0：未打标签输入自动转换（D4，原为 rc=2）",
           f"rc={p.returncode} {p.stderr[:200]!r}")
     p = run(["plot-grid", "--input", str(panel), "--output", str(out),
              "--output-png", str(tmp / "o.png"), "--font-dir", str(empty_lib)])

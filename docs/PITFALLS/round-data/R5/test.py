@@ -47,7 +47,7 @@ def run(tmp, name, body, w, h, out_w, out_h):
     svg.write_text((SVG_H + BOX + "</svg>").format(w=w, h=h).replace("</svg>", body + "</svg>"))
     out = pathlib.Path(tmp) / f"{name}.out.svg"
     p = subprocess.run([str(find_bin()), "plot-grid", "--input", str(svg), "--output", str(out),
-                        "--ncol", "1", "--plot-margin", "0", "--width", str(out_w), "--height", str(out_h)],
+                        "--ncol", "1", "--plot-margin", "0", "--width", str(out_w), "--height", str(out_h), "--verbose"],
                        capture_output=True, text=True)
     return p, (out if out.exists() else None)
 

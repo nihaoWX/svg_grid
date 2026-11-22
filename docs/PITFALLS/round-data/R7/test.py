@@ -82,7 +82,7 @@ def main():
             svg.write_text(SVG_H + BOX + body + "</svg>")
             p = subprocess.run([str(binary), "plot-grid", "--input", str(svg),
                                 "--output", str(tmp / f"{name}.out.svg"),
-                                "--ncol", "1", "--plot-margin", "0", "--width", "200", "--height", "200"],
+                                "--ncol", "1", "--plot-margin", "0", "--width", "200", "--height", "200", "--verbose"],
                                capture_output=True, text=True)
             ok = p.returncode == want_rc and (want is None or want in p.stderr)
             check(ok, f"行为 smoke `{name}` ⇒ rc={want_rc} 且 stderr 含 {want or '（不检）'}",
