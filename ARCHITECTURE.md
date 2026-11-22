@@ -32,13 +32,16 @@
    其中仍有价值的部分已迁入本文件 `# 已定型的决定`（原来那份见 git）。
 9. **产品定义以 `INSTRUCTIONS.md` 为准**（用户手写、只由用户改）：`svg_grid` 是**给 agent 用的通用组图库**
    （不是 skill），`docs/general-figure-guide/` 是依赖它的 skill。CLI 逻辑模仿 R `cowplot`。
-10. **单次调用是 1D 且必须填满**（2026-11-20 用户明确）：一次 `plot-grid` 只做**纵向或横向**一种，
-    且**任何角落都不许留白**——两个图大小差别再大也要铺满。二维版面靠**嵌套最小步骤**得到
-    （如 `B+C` → `BC`；`A` 与 `BC` 横向 → `ABC`；再纵向叠）。
+10. **单次调用是一个二维网格，且"尽量填满"**（2026-11-20 用户明确）：一次 `plot-grid` 在 `rows × cols`
+    的网格里放图，**不支持跨格（span）**；"填满"指**除显式声明的 `NULL`/垫片外不许空出一格**——
+    没声明就空着是缺陷（cowplot 会静默留空，本工具要比它严）。5 个图的 3+2 版面靠**嵌套最小步骤**得到
+    （上排 3 图、下排 2 图，再纵向叠；两排等宽），或 3+3 但其中一个显式 `--input NULL`。
 11. **`convert` 必须自动**（2026-11-20 用户明确）：`plot-grid` 遇到未打标签的输入应**自己转换**，
     不要求调用方先跑 `convert`；`convert` 也不许损坏原图（字形孔等必须保真）。
-12. **`--labels` 只作用于"`svg_grid` 眼里的单个图"**：即该次调用的直接输入；组合图（行块）本身不加字母，
-    所以字母只在**最后一步**加（`INSTRUCTIONS.md` §期望的用法）。
+12. **`--labels` 作用于该次调用的直接输入**：分步组图时在**拥有该散图的那一层**加字母——字母位置以该次
+    组合为参照、也只有那一次可调；已在里层的字母，外层用空字符串占位（`--labels ,C`）。
+13. **"占比"= 该散图在最终图里占几格，不是 `--rel-*`**（2026-11-20 用户明确）：占比由**出图端的画布尺寸
+    与纵横比**决定（agent 按目标格子出图）；`--rel-*` 只是微调手段，不是版面占比的表达方式。
 
 # 已定型的决定
 
@@ -62,9 +65,9 @@
 | **指南规范源 = `tools/svg_grid/docs/general-figure-guide/`**；`tools/manuscripts_skills/` 那份是复制件 | 用户 2026-09-28 裁决：只在这边维护，改完用 `rsync -a --delete` 覆盖过去（`diff -r` 必须为空） | `ARCHITECTURE/general-figure-guide.md` §3 |
 | 账本 / round-data 的读写契约：`record` 时 `--repo` 必须显式给、改名/移动/拆分后 `link`、复发轮必留可跑证据 | 见 `tools/pitfalls-manager`（工具）；账本由它管理、按项目目录定位（**不写具体位置**） | 跨领域约定 #4 |
 | **字体来源唯一 = `fontlib/`**（代码里没有 `load_system_fonts`，resvg 的 `system-fonts` feature 已去掉）；面板字母默认族 **Arial**；缺族 W8、空库 fail-closed | 同一份资产换台机器/CI 就会出现方字与换行差异；更要紧的是族名写错会**静默回退**（实测：不存在的族名与 `serif` 逐像素相同、无任何告警） | 用户期望；`ARCHITECTURE/fonts.md` |
-| **改完代码必须重跑 `install.sh`**：命令以 `~/.local/bin` 的 release 副本为准，字体装进数据根 `~/svg_grid/fontlib` | 之前没有装配步骤（二进制只在被 gitignore 的 `target/` 里），文档里那些 `svg_grid …` 命令在 PATH 里根本不存在；靠人记得"改了要装"必然出事 | `ARCHITECTURE/install.md` |
-| **CLI 契约**：退出码分档 0/1/2/3；`-h/--help` 在取值前特判（stdout、rc=0）；帮助文本覆盖全部 flag；**用户输入只走 `Result`，不许 `assert!`/`unwrap`** | 用户输入触发的 panic（`rc=101`）会被调用方读成"工具自己坏了"；`--help` 坏了则会逼着把参数语义抄进 skill（实测发生过） | `ARCHITECTURE/cli.md` |
-| **测试语料 = 真实绘图包的产物**（ggplot2 / matplotlib / seaborn，按图型穷举），不再用手写 SVG；**`doctor` 是默认回归入口**（两段管线 + 判据 + SKIP 必打印原因） | 手写 SVG 只能覆盖"我们想到的"；而只跑一遍真实语料就抓到了 paint server 被丢弃（rc 全 0、成品少一大块墨水）这类只有"看墨水/看悬空引用"才能发现的缺陷 | `ARCHITECTURE/testing.md` |
+| **改完代码必须重跑 `install.sh`**：命令以 `~/.local/bin` 的 release 副本为准，字体进数据根 `~/svg_grid/fontlib` | 以前没有装配步骤，文档里的 `svg_grid …` 在 PATH 里根本不存在；靠人记得"改了要装"必然出事 | `ARCHITECTURE/install.md` |
+| **CLI 契约**：退出码分档 0/1/2/3；`-h/--help` 在取值前特判（stdout、rc=0）；帮助文本覆盖全部 flag；用户输入只走 `Result`，不许 panic | panic（`rc=101`）会被调用方读成"工具坏了"；`--help` 坏了会逼着把参数语义抄进 skill | `ARCHITECTURE/cli.md` |
+| **测试语料 = 真实绘图包的产物**（ggplot2 / matplotlib / seaborn，按图型穷举），不用手写 SVG；**`doctor` 是默认回归入口** | 手写 SVG 只能覆盖"我们想到的"；真实语料抓到了 paint server 被丢弃这类只有"看墨水/看悬空引用"才能发现的缺陷 | `ARCHITECTURE/testing.md` |
 | **告警里必须有"引用完整性"这一关（W9）**：`url(#x)` 的 `x` 不在定义集里 ⇒ 出声 | 结构性丢失（defs 被丢、id 被改名）不会让 rc 变非零，只有把"定义集 vs 引用集"对一遍才看得见 | `ARCHITECTURE/warnings.md`、`round-data/R16` |
 
 # Structure

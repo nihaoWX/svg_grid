@@ -1,3 +1,6 @@
+
+本次测试对应的仓库commit id是`6e582be`
+
 我从`/home/nihao/bioagentforge/research/白藜芦醇胰腺癌/steps/02_分子对接/pandamap_all`选了一些图，然后convert到这里，命令是
 `svg_grid convert --input xxx.svg --output xxx.svg`
 然后我通过这种命令进行组图, width是我乱填的
