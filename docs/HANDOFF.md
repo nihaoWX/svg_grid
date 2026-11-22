@@ -11,7 +11,7 @@
 | D1 convert 填死字形孔 | ✅ 已修，对抗评审 PASS | `1e05ce1`→`3a9747a`，`1da48f0`→`64e4551`；R27/R28 |
 | D2 末行格子尺寸随行拉伸 | ✅ 已修，评审 PASS | `66fba3c`→`cf76029`→`f8be8ef`→`8b08524`；R29 |
 | D3 默认网格是单行 | ✅ 已修，评审 PASS | `e09c33b`→`dc9a900`；R30 |
-| D6 `rows×cols` 上界 + `--verbose` | ✅ 已修，评审 PASS | `3311eec`→`676d82d`；R31 |
+| D6 `rows×cols` 上界 + `--verbose` | ✅ 已修；D6b 关闭性复核通过（R4–R14 绿） | `3311eec`→`676d82d`；R31；连带面 `79cf9e5`/`dc0bda6` |
 | D4 `plot-grid` 自动 convert | ✅ 已修 | `162c0cd`→`79cf9e5`→`a2d5fb5`；R32 |
 | D5 `--labels` NULL/W3/W8 | ⏳ 进行中 | — |
 
@@ -100,7 +100,7 @@
 - W8（缺字体族、静默回退）也要改成**报错**。
 - 已验证：`--labels ,C` 对已带字母的输入**不触发 W3**，输出 `A、B（继承）+ C`——这就是用户 `plot_grid.R` 的写法。
 
-### D6 `--verbose` 未实现；`rows×cols` 上界没校验
+### D6（修前）`--verbose` 未实现；`rows×cols` 上界没校验
 
 - `--verbose`：现在 W1–W9 与聚合 `note:` 一律打 stderr（`src/warnings/mod.rs` 的 `emit`）。
   需要默认静音、`--verbose` 才展开；`--plan` 的 stdout `note:` 行不受影响（它是计划契约）。
