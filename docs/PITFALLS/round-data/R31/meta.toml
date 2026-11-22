@@ -5,6 +5,9 @@ family = ["显式网格允许最后一行整行全空", "非致命告警默认�
 closures = [
   { finding = "R31-F1", tier = "代码" },
   { finding = "R31-F2", tier = "代码" },
+  { finding = "R31-F3", tier = "代码" },
+  { finding = "R31-F4", tier = "代码" },
+  { finding = "R31-F5", tier = "代码" },
 ]
 run_before = ["R30"]
 touched = []
