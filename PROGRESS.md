@@ -105,9 +105,11 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
-1. **`--normalize-input-max-side` 路径对 obb 内容仍二次缩放**（R43 遗留）：`src/normalize.rs:scale_element`
-   按固定属性表盲缩放，`patternUnits`/`patternContentUnits` 为 `objectBoundingBox` 的 pattern 内容会被再乘一次。
-   transform 路径已在 R38–R43 修好，normalize 路径是独立实现、仍是同一处语义。
+1. **`--normalize-input-max-side` 路径对 obb 内容仍二次缩放**（`docs/PITFALLS/blocker-svg_grid-normalize-scales-obb-fractions.md`）：
+   `src/normalize.rs:scale_element` 按固定属性表盲缩放，`patternUnits`/`patternContentUnits` 为
+   `objectBoundingBox` 的 pattern 内容会被再乘一次 ⇒ 实测 hatch 暗像素 **4800→1200**（rc=0 静默）。
+   transform 路径已在 R38–R43 修好，normalize 是第二份实现（同一张表还盲缩放 `markerWidth/refX` 与
+   `mask`/`filter` 的 box）。
 2. **滤镜图元长度不随面板缩放**（`feMorphology radius`、`feGaussianBlur stdDeviation` 等；s=2 `xor 1136`）：
    `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
 3. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
