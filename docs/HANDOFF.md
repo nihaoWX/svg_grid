@@ -26,7 +26,7 @@
 | R45 doctor 告警码漂移（11 条里 5 条死码，W7 门禁 fail-open） | ✅ 已修（短语表搬到 `src/warnings/codes.rs`，W7 门禁复活） | `196da47`；R45 |
 | R46 `<defs>` 子树不继承引用者 `data-scale` + marker/viewBox + units 继承 + normalize 盲缩放 | ✅ 已修（按引用图传递地复制定义；mask 明确不继承） | `54fa2b6`；R46 |
 | R47 数字实体 / 未定义命名实体的文本路径 | ✅ 已修（`quick_xml::escape::unescape`，未定义实体 rc=1） | `8aca0d1`；R47 |
-| 字母重号检测漏判（tspan/g 包裹、实体、空白）与反向误伤（不可见字母） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md` |
+| 字母重号检测漏判（tspan/g 包裹、实体、空白）与反向误伤（不可见字母） | ✅ 已修（递归收集 + 规范化 + 跳过不可见子树 + O(n)） | `8aca0d1`→`9117335`；R48 |
 | `classify` 取表序第一个命中码（W9/W7 门禁可被用户内容打成 PASS） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md` |
 
 ## 1. 先读什么（按顺序）
