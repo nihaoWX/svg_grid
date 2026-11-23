@@ -20,10 +20,13 @@
 //!    several subpaths. The same module rectifies `<clipPath>` bodies
 //!    (`<path>` → `<rect>`).
 //! 3. **`<use>`/`<defs>` expansion** (`uses`) — each `<use>` becomes a `<g
-//!    translate>` wrapper around a copy of the referenced element; unreferenced
-//!    `<defs>` content is dropped (only what a `url(#…)` can point at survives:
-//!    `<clipPath>`, `<style>` and the paint servers `<linearGradient>` /
-//!    `<radialGradient>` / `<pattern>` — see `uses::REFERENCE_TARGETS`).
+//!    translate>` wrapper around a copy of the referenced element; `<defs>`
+//!    content nothing points at is dropped. What counts as a reference is read
+//!    from the tree (`url(#…)` in any attribute, `href="#…"`, transitively), not
+//!    from a list of element names, so `<mask>`/`<marker>`/`<filter>` survive
+//!    when used; `<style>` and the paint servers/clip paths in
+//!    `uses::REFERENCE_TARGETS` are kept unconditionally. A reference whose
+//!    target is missing is then a hard error (`uses::check_dangling_references`).
 //! 4. **`<image>` baking** (`image`) — a pure translation and any axis-aligned
 //!    scale (uniform or not, optionally with a flip) are baked into the box
 //!    `x`/`y`/`width`/`height`; a negative scale decodes the embedded PNG, flips
@@ -41,6 +44,8 @@
 //! individual rewrites.
 
 mod bake;
+#[cfg(test)]
+mod defs_tests;
 mod image;
 mod shapes;
 pub(crate) mod style;
@@ -57,6 +62,10 @@ pub(crate) fn translate_dialect(root: &mut Element) -> Result<(), ConvertError> 
     uses::collect_ids(root, &mut ids);
     uses::expand_uses(&mut root.children, &ids, 0)?;
     uses::prune_defs(root);
+    // Keeping a definition alive is only half the fix: a reference whose target
+    // nothing defines is a hard error here, before anything is written, instead
+    // of a shape the renderer silently drops or paints unmasked.
+    uses::check_dangling_references(root)?;
     // Rectify `<clipPath>` bodies (poppler writes them as `<path>`) before the
     // affine baking runs, so a referencing transform can still move the boxes.
     shapes::rectify_clip_paths(root)?;

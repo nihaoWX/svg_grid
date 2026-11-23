@@ -1,0 +1,52 @@
+id = "R37"
+date = "2026-11-23"
+verdict = "新领土"
+family = [
+  "prune_defs 按元素名白名单保留 <defs>，mask/marker/filter 被整块丢弃",
+  "剪完不检查引用是否还解析，悬空引用 rc=0 静默",
+  "bake 不递归进 mask/marker，其内容保持未翻译形态",
+  "合成期不区分 maskUnits/maskContentUnits/filterUnits 的单位",
+]
+closures = [
+  { finding = "R37-F1", tier = "代码" },   # uses.rs：prune_defs 引用式 + 传递闭包
+  { finding = "R37-F2", tier = "代码" },   # uses.rs：check_dangling_references
+  { finding = "R37-F3", tier = "代码" },   # bake.rs：mask/marker 递归
+  { finding = "R37-F4", tier = "检查" },   # self_check.rs：in_mask_or_marker 收窄到 filter
+  { finding = "R37-F5", tier = "代码" },   # transform/mod.rs：mask/filter 按单位缩放、marker 不重写
+]
+run_before = ["R28", "R16"]
+touched = ["R28"]
+note = """
+为什么认定新问题：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md` 报的是静默损坏——`prune_defs`
+按元素名白名单（`REFERENCE_TARGETS` 5 类）保留 `<defs>` 子项，`<mask>`/`<marker>`/`<filter>` 不在
+名单里就被整块删掉，而引用原样保留 ⇒ 遮罩静默失效、rc=0、stderr 0 字节。这不是 R16 的连带面：
+R16 建的是 paint server 白名单，本轮把判据从「元素名」换成「树里的引用」，是判据本身的替换。
+根因与修法：① `prune_defs` 先收 `<defs>` 之外的引用，再对已保留的定义做传递闭包，最后按集合保留；
+`url_ids` 支持 `url( #id )`/`url('#id')`，`href_id` 只认 `href`/`xlink:href` 且 `<a>` 不算渲染引用。
+② 新增 `check_dangling_references`，在剪完、bake 之前 fail-closed，点名元素+属性+id 并给修法；
+`clip-path` 也查存在性（`apply_clip_refs` 只看被变换上下文引用的 clip，未变换形状上的悬空 clip 会漏过）。
+③ `bake_element` 对 mask/marker 用 `Affine::IDENTITY` 递归（filter 故意不递归，其内 `<path>` 是真残渣），
+`self_check` 的 `in_mask_or_marker` 参数随之删除。④ 合成期 mask 的 box 只在 `maskUnits="userSpaceOnUse"`
+时缩放、内容只在 `maskContentUnits="userSpaceOnUse"`（默认）时缩放；filter 的 box 只在
+`filterUnits="userSpaceOnUse"` 时缩放；marker 两种单位都不重写。
+marker 为什么不重写（本轮唯一「看起来该缩放却没缩放」处）：渲染器把 marker 平移到顶点、按 `orient`
+旋转、再平移 `-refX,-refY`，body 被裁剪到 `(0,0,markerWidth,markerHeight)` 视口 ⇒ body 数字相对参考点，
+平移会把它移出视口、箭头整个消失（实测 ink 184→160、xor=264）。默认 `strokeWidth` 下渲染器按
+stroke-width 缩放 body，而 stroke-width 本身会被重写，箭头自然随面板缩放。
+怎么修才不弄坏前面：220 个 fixture 逐字节回归 `same=179 both_fail=41 newfail=0 diffs=0`；四组探针
+（mask 两种单位、marker 两种单位、filter、pattern 链）XOR=0、ink 相等；S36 真实语料 `<pattern>` 保留、
+convert 产物与基线逐字节相同、convert-only `xor=39 maxdiff=3`。
+旧证据适配：R28 的 ① 段原判「mask 内与展平产物同形的 `<path>` 仍判残渣」，R37 起 mask 内容会被翻译，
+该判据已被取代 ⇒ 改成「`<filter>` 内未翻译的 `<path>` 仍判残渣」（新 fixture `data/filter_path.svg`，
+删 `data/mask_path.svg`），R28 现 3 pass / 0 fail。
+未覆盖（交父裁决）：pattern 相位错位是 R16 时代遗留——resvg 把 pattern 内容当 tile 局部坐标
+（`resvg-0.47.0/src/path.rs:179-205`），而 composer 对 `patternUnits="userSpaceOnUse"` 的 pattern
+既平移 tile 又平移 body ⇒ 相位错 `24 mod tile`。基线 convert 产物与新 convert 产物逐字节相同、
+基线 binary 与新 binary 的 grid 产物也逐字节相同 ⇒ 本轮没有改变任何 pattern 渲染，故不在本轮修。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R37 && python3 test.py  # rc=0 = 75 PASS
+前置：`cd tools/svg_grid && cargo build && (cd convert && cargo build)`（用 debug 二进制）。
+渲染对照需要 resvg 探针 /tmp/d1_eval/render/target/release/d1render，缺失时该子项 SKIP。
+无参数；约 3 分钟（220 fixture 逐个 convert + 幂等复跑）；只写系统临时目录。
+"""

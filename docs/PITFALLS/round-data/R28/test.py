@@ -2,8 +2,10 @@
 """R28 —— D1 评审三项：自我检查的 provenance、拆分填充去净 stroke paint、`--report` 计 `<path>`。
 
 三族判据（黑盒，只调 CLI）：
-  ① provenance：mask 里的 `<path d='M 0,0 L 10,0 L 10,10 Z'>`（与展平产物同形）仍判残渣，rc=1 且无产物；
-     合法的展平填充路径（②③）仍放行；
+  ① provenance：`<filter>` 里的 `<path d='M 0 0 L 10 10'>`（未翻译、非展平形态）仍判残渣，rc=1 且无产物；
+     合法的展平填充路径（②③）仍放行。
+     R37 起 mask/marker 的内容会被翻译（bake 递归进去），所以原来「mask 内同形 path 判残渣」的
+     判据已被取代——provenance 的边界从「mask/marker 容器」收窄到「filter 容器」。
   ② 拆分：填充+描边三分支产出的填充 `<path>` 只有 `stroke="none"`，没有任何 `stroke-*` 属性或 style 声明；
   ③ 计数：`convert --report` 的 primitives 里 `path=1` 且不出现 `polygon=`。
 
@@ -58,16 +60,16 @@ def main():
     with tempfile.TemporaryDirectory() as scratch:
         tmp = pathlib.Path(scratch)
 
-        # ① mask 内的同形 path 仍是残渣。
-        out = tmp / "mask.svg"
-        done = convert(binary_path, DATA / "mask_path.svg", out)
+        # ① filter 内的未翻译 path 仍是残渣（R37 起 mask/marker 内容会被翻译）。
+        out = tmp / "filter.svg"
+        done = convert(binary_path, DATA / "filter_path.svg", out)
         produced = out.read_text() if out.exists() else None
         check(
             done.returncode == 1
             and "untranslated dialect nodes" in done.stderr
             and "path" in done.stderr
             and produced is None,
-            "mask 内与展平产物同形的 <path> 仍判残渣（rc=1、无产物）",
+            "filter 内未翻译的 <path> 仍判残渣（rc=1、无产物）",
             f"rc={done.returncode}\nstderr={done.stderr}\nproduced={produced!r}",
         )
 

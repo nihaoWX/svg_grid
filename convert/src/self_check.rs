@@ -27,7 +27,7 @@ pub fn self_check(root: &Element) -> Result<(), ConvertError> {
     }
 
     let mut residue = Vec::new();
-    check_residue(root, false, &mut residue);
+    check_residue(root, &mut residue);
     if !residue.is_empty() {
         return Err(ConvertError::SelfCheck(format!(
             "output still contains untranslated dialect nodes: {}",
@@ -46,29 +46,20 @@ pub fn self_check(root: &Element) -> Result<(), ConvertError> {
 
 /// The translation stage must leave none of these behind.
 ///
-/// `in_mask_or_marker` marks subtrees the `shapes` stage does not translate
-/// (mask/marker content is not part of a supported shape tree): a `<path>` there
-/// is untranslated residue even when its `d` uses the flattened form.
-///
-/// That mask/marker rule is a **deliberate fail-closed** decision (R28), not an
-/// oversight. A canonical flattened `<path>` inside a root- or `<g>`-level
-/// `<mask>`, or inside a root-level `<marker>`, makes `self_check` return `rc=1`:
-/// the serialization cannot prove provenance there, because the stage never
-/// emits such a path itself. None of the four supported dialects produces a
-/// root-level `<mask>`/`<marker>`, and the 220-fixture corpus showed 0
-/// regressions from tightening this check.
-///
 /// The whitelist is about *provenance*, not about container names: `<a>`,
-/// `<switch>` and `<text>` are ordinary traversed containers (as are nested
-/// `<g>`/`<defs>`), so a canonical flattened path inside them is accepted. It is
-/// not "everything else is residue" — only the untranslated mask/marker payload
-/// subtrees are excluded.
-fn check_residue(element: &Element, in_mask_or_marker: bool, problems: &mut Vec<String>) {
+/// `<switch>`, `<text>`, `<mask>` and `<marker>` are ordinary traversed
+/// containers (as are nested `<g>`/`<defs>`), so a canonical flattened path
+/// inside them is accepted. `<mask>`/`<marker>` used to be excluded wholesale
+/// (R28 fail-closed) because the `shapes` stage did not descend into them; since
+/// R37 it does (`bake` recurses with the accumulator reset), so the flattened
+/// serialization is again proof of provenance there. `<filter>` is *not*
+/// traversed by the stage, so a `<path>` inside one is still residue.
+fn check_residue(element: &Element, problems: &mut Vec<String>) {
     match element.name.as_str() {
         // The `shapes` stage emits a flattened multi-contour `<path>` for a fill
         // region with three or more subpaths (a `<polygon>` cannot keep its
         // holes); such a path is a finished product, not dialect residue.
-        "path" if !in_mask_or_marker && is_flattened_fill_path(element) => {}
+        "path" if is_flattened_fill_path(element) => {}
         "path" => problems.push("a <path>".to_string()),
         "use" => problems.push("a <use>".to_string()),
         "symbol" => problems.push("a <symbol>".to_string()),
@@ -89,11 +80,9 @@ fn check_residue(element: &Element, in_mask_or_marker: bool, problems: &mut Vec<
         }
         _ => {}
     }
-    let child_in_mask_or_marker =
-        in_mask_or_marker || matches!(element.name.as_str(), "mask" | "marker");
     for child in &element.children {
         if let Node::Element(child) = child {
-            check_residue(child, child_in_mask_or_marker, problems);
+            check_residue(child, problems);
         }
     }
 }
@@ -105,9 +94,8 @@ fn check_residue(element: &Element, in_mask_or_marker: bool, problems: &mut Vec<
 /// decimals), no other whitespace.
 ///
 /// A definition container cannot be rejected wholesale: the stage legitimately
-/// rewrites paths inside `<pattern>` (hatch fills), and those patterns sit in
-/// `<defs>`; mask/marker content, which the stage does not translate, is excluded
-/// separately by the caller. Within the shape tree the serialization is the
+/// rewrites paths inside `<pattern>` (hatch fills), `<mask>` and `<marker>`, and
+/// those sit in `<defs>`. Within the shape tree the serialization is the
 /// remaining provenance: a hand-written `d` that happens to match it is already a
 /// flattened fill region with straight segments, so accepting it is harmless.
 /// Anything else — spaces or newlines between coordinates, relative/mixed
@@ -269,11 +257,10 @@ mod tests {
     }
 
     #[test]
-    fn self_check_rejects_flattened_paths_inside_masks_and_markers() {
-        // The same `d` is a finished product in the shape tree but untranslated
-        // residue inside a mask/marker (the `shapes` stage does not translate
-        // their content): accepting it by serialization alone would hide a
-        // dropped/kept `<mask>`/`<marker>` payload.
+    fn self_check_accepts_flattened_paths_inside_masks_and_markers() {
+        // R37: the `bake` stage now descends into `<mask>`/`<marker>` with the
+        // accumulator reset, so a canonical flattened path in there is a finished
+        // product like anywhere else — the same `d` that used to be residue.
         for container in [
             "<defs><mask id='m'><path d='M 0,0 L 4,0 L 4,4 Z'/></mask></defs>",
             "<defs><marker id='k'><path d='M 0,0 L 4,0 L 4,4 Z'/></marker></defs>",
@@ -283,12 +270,26 @@ mod tests {
                  <g data-scale='xy'><rect x='0' y='0' width='1' height='1'/>{container}</g></svg>"
             ))
             .unwrap();
-            match self_check(&root) {
-                Err(ConvertError::SelfCheck(detail)) => {
-                    assert!(detail.contains("path"), "{container}: {detail}")
-                }
-                other => panic!("{container}: expected SelfCheck error, got {other:?}"),
+            if let Err(error) = self_check(&root) {
+                panic!("{container}: a flattened path in a mask/marker must pass, got {error:?}");
             }
+        }
+    }
+
+    #[test]
+    fn self_check_rejects_a_path_inside_a_filter() {
+        // `<filter>` is the one container the stage does *not* descend into: its
+        // children are filter primitives, so a `<path>` there is untranslated
+        // residue and must still fail closed.
+        let root = parse(
+            "<svg><rect data-panel-box='main' x='0' y='0' width='1' height='1'/>\
+             <g data-scale='xy'><rect x='0' y='0' width='1' height='1'/>\
+             <defs><filter id='f'><path d='M 0 0 L 10 10'/></filter></defs></g></svg>",
+        )
+        .unwrap();
+        match self_check(&root) {
+            Err(ConvertError::SelfCheck(detail)) => assert!(detail.contains("path"), "{detail}"),
+            other => panic!("expected SelfCheck error, got {other:?}"),
         }
     }
 

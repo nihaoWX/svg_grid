@@ -78,6 +78,18 @@ fn bake_element(
             bake_children(&mut element.children, Affine::IDENTITY, clip_refs)?;
             out.push(Node::Element(element.clone()));
         }
+        // `<mask>` and `<marker>` bodies are *not* drawn where they sit either:
+        // a mask is evaluated in the user space of the element it masks, and a
+        // marker's content lives in the marker's own coordinate system (scaled by
+        // `markerUnits`, which the composer handles). Both therefore get the same
+        // leaf rewrites with the accumulator reset — without this their `<path>`
+        // children stay untranslated and the self-check rejects the file
+        // (round-data/R37). `<filter>` is deliberately *not* recursed into: its
+        // primitives are not shapes, and a `<path>` inside one is real residue.
+        "mask" | "marker" => {
+            bake_children(&mut element.children, Affine::IDENTITY, clip_refs)?;
+            out.push(Node::Element(element.clone()));
+        }
         "g" => {
             element.remove_attr("transform");
             bake_children(&mut element.children, world, clip_refs)?;

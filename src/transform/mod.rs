@@ -81,6 +81,44 @@ fn transform_element(
         return Ok(());
     }
 
+    // A `<marker>` is never rewritten, in either unit mode (round-data/R37).
+    //
+    // The renderer places a marker by translating to the vertex, rotating by
+    // `orient`, and then translating by `-refX,-refY`; the body is clipped to the
+    // viewport `(0, 0, markerWidth, markerHeight)` in marker coordinates. So the
+    // body's numbers are *relative to the reference point*, and the clip box is
+    // anchored at the marker origin: translating the body by the panel offset
+    // moves it out of its own viewport and the arrowhead disappears (measured:
+    // ink 184 -> 160 px, the whole marker clipped away). Leaving the body alone
+    // keeps it attached to the vertex, which is exactly what the panel move
+    // needs. Under the default `markerUnits="strokeWidth"` the renderer also
+    // scales the body by the stroke width, and `stroke-width` *is* rewritten
+    // below, so the arrowhead scales with the panel for free.
+    if element.name == "marker" {
+        return Ok(());
+    }
+
+    // A `<mask>` body is user space by default (`maskContentUnits` defaults to
+    // `userSpaceOnUse`), so it is rewritten with the geometry. Only an explicit
+    // `objectBoundingBox` makes the numbers fractions of the masked element's
+    // box, and then they must stay untouched.
+    if element.name == "mask"
+        && matches!(
+            element.attr("maskContentUnits"),
+            Some(units) if units.trim() != "userSpaceOnUse"
+        )
+    {
+        return Ok(());
+    }
+
+    // A `<filter>`'s primitives are not shapes: their numbers are filter-region
+    // coordinates, and the composer never rewrites them. Descending would only
+    // rewrite a `<path>`/`<rect>` that happens to sit inside a primitive and
+    // break the filter's own geometry.
+    if element.name == "filter" {
+        return Ok(());
+    }
+
     for child in &mut element.children {
         if let Node::Element(child) = child {
             transform_element(child, policy, source, target, index, passthroughs)?;
@@ -299,6 +337,19 @@ fn rewrite_primitive(
         // The tile box follows the same rule as a `<rect>`: the tile grid repeats
         // with period `width`/`height` from `x`/`y`, and both scale with the axis.
         "pattern" if user_space_units(element, "patternUnits") => {
+            rewrite_rect(element, policy, source, target, index, passthroughs)?
+        }
+        // A mask region is a rectangle in the user space of the masked element
+        // only when `maskUnits="userSpaceOnUse"`; the `objectBoundingBox` default
+        // makes `x`/`y`/`width`/`height` fractions of that element's box, so they
+        // must stay untouched (round-data/R37).
+        "mask" if user_space_units(element, "maskUnits") => {
+            rewrite_rect(element, policy, source, target, index, passthroughs)?
+        }
+        // A filter region is likewise user-space only under
+        // `filterUnits="userSpaceOnUse"`; the primitives inside are never
+        // rewritten (see `transform_element`).
+        "filter" if user_space_units(element, "filterUnits") => {
             rewrite_rect(element, policy, source, target, index, passthroughs)?
         }
         _ => {}

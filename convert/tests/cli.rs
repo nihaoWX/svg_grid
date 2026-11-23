@@ -416,3 +416,86 @@ fn diagnostics_are_prefixed_with_the_standalone_name() {
     );
     let _ = fs::remove_file(input);
 }
+
+/// A dangling reference is a hard error at the CLI boundary too: exit 1, no
+/// output file, and a message that names the element, the attribute and the id
+/// (round-data/R37). `--force` only overrides the idempotency check, so it must
+/// not turn this into a success.
+#[test]
+fn a_dangling_reference_fails_without_writing_anything() {
+    let input = write_fixture(
+        "cli_dangling.svg",
+        r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<rect x='10' y='10' width='40' height='20' fill='black' mask='url(#nope)'/>
+</svg>"#,
+    );
+    for force in [false, true] {
+        let output = tmp(&format!("cli_dangling_out_{force}.svg"));
+        let _ = fs::remove_file(&output);
+        let mut command = Command::new(bin());
+        command
+            .args(["--input"])
+            .arg(&input)
+            .args(["--output"])
+            .arg(&output);
+        if force {
+            command.arg("--force");
+        }
+        let result = command.output().unwrap();
+        assert_eq!(
+            result.status.code(),
+            Some(1),
+            "--force must not paper over a dangling reference"
+        );
+        assert!(!output.exists(), "no output may be written");
+        let stderr = String::from_utf8_lossy(&result.stderr);
+        assert!(stderr.contains("<rect>"), "stderr:\n{stderr}");
+        assert!(stderr.contains("mask="), "stderr:\n{stderr}");
+        assert!(stderr.contains("#nope"), "stderr:\n{stderr}");
+        assert!(
+            stderr.contains("add the missing definition"),
+            "the message must say how to fix it:\n{stderr}"
+        );
+    }
+    let _ = fs::remove_file(input);
+}
+
+/// A used `<mask>`/`<marker>`/`<filter>` survives conversion; an unused one does
+/// not. This is the end-to-end shape of the pruning rule (round-data/R37).
+#[test]
+fn used_defs_survive_and_unused_ones_are_dropped() {
+    let input = write_fixture(
+        "cli_defs.svg",
+        r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<defs>
+<mask id='used' maskUnits='userSpaceOnUse' x='0' y='0' width='100' height='80'><rect x='0' y='0' width='50' height='80' fill='white'/></mask>
+<mask id='unused' maskUnits='userSpaceOnUse' x='0' y='0' width='100' height='80'><rect x='0' y='0' width='10' height='10' fill='white'/></mask>
+<marker id='k' markerWidth='6' markerHeight='6' refX='0' refY='3' orient='auto'><path d='M 0 0 L 6 3 L 0 6 Z' fill='black'/></marker>
+<filter id='f'><feMorphology operator='dilate' radius='2'/></filter>
+</defs>
+<rect x='10' y='10' width='40' height='20' fill='black' mask='url(#used)'/>
+<path d='M 10 60 L 90 60' stroke='black' marker-end='url(#k)'/>
+<rect x='60' y='10' width='20' height='20' fill='black' filter='url(#f)'/>
+</svg>"#,
+    );
+    let output = tmp("cli_defs_out.svg");
+    let result = Command::new(bin())
+        .args(["--input"])
+        .arg(&input)
+        .args(["--output"])
+        .arg(&output)
+        .output()
+        .unwrap();
+    assert_eq!(result.status.code(), Some(0));
+    let svg = fs::read_to_string(&output).unwrap();
+    for id in ["used", "k", "f"] {
+        assert!(svg.contains(&format!("id=\"{id}\"")), "{id} missing: {svg}");
+    }
+    assert!(
+        !svg.contains("id=\"unused\""),
+        "unused mask survived: {svg}"
+    );
+    assert!(svg.contains("<feMorphology"), "{svg}");
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}

@@ -18,6 +18,7 @@
 mod autoconvert;
 mod common;
 mod compose;
+mod defs;
 mod doctor;
 mod fonts;
 mod labels;
