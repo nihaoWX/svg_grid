@@ -2,22 +2,23 @@
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
-  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六个缺陷已全部修复（R27–R34）——
-  D1 字形孔、D2 末行格子尺寸、D3 默认网格、D6 网格校验 + `--verbose` 静音、D4 自动 convert、D5 labels/W3/W8
-  （含 D5b–D5d 的 W8 回退链与 200 字符硬上限收尾）。**
-  余下三项 pre-existing，均已开报告：`<defs>` 内 mask/marker 被丢弃、组合图字母重号静默、doctor 告警码漂移。
+  ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**，随后的
+  R37–R41 又收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`。
+  余下两项 pre-existing（均已开报告）：组合图字母重号静默、doctor 告警码漂移。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 245 项**（89 lib + 59 main + 97 selftest）全绿，`fmt`/`clippy -D warnings` 干净。
+  `textLength` 一起缩）。**测试 394 项**（211 lib + 59 main + 124 selftest，R42 起单 crate）全绿，
+  `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
   **W3（给已带字母的输入再加非空字母）rc=2**、**W8（缺标签字体族）rc=3**，两者都**不写产物**、不依赖 `--verbose`；
   正常路径 stderr 0 字节；`convert` 子命令同样受静音控制：
   契约与清单见 `ARCHITECTURE/warnings.md`。
-- **`convert/`**：R `svglite`/matplotlib/`pdftocairo -svg` 三种来源可入流水线；`<path>` 出形态决策表、
-  `clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、`style` 百分比解析。**测试 100 项**（88 lib + 12 CLI）全绿。
+- **`src/convert/`（R42 起并入主库，子命令 `svg_grid convert`）**：R `svglite`/matplotlib/`pdftocairo -svg`
+  三种来源可入流水线；`<path>` 出形态决策表、`clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、
+  `style` 百分比解析、`<defs>` mask/marker/filter 与 pattern 单位语义（R37–R41）。
   **2026-11-22 D1 已修**：≥3 子路径的填充 path 不再合并成 `<polygon>`，改为展平多轮廓 `<path>`（M/L/Z），
   字形孔不再填死（R27 + R28）。
 - **成品交付前检查**：`scripts/check_deliverable.py`（薄壳 + `deliverable_checks/` 包）两条检查
@@ -27,8 +28,8 @@
   回退 `02b` = cowplot；两副本 `diff -r` 为空）。**HARNESS 是两件套**（2026-10-06 起）：本文件
   + `ARCHITECTURE.md`（含 `# 已定型的决定` 与 `ARCHITECTURE/` 机制文档，索引见该文件）+ `docs/`；**不设 `DECISIONS.md`**。
   **`INSTRUCTIONS.md` 是用户手写、只由用户改**，与其余文件冲突时以它为准。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R36 已入账**；
-  `link` 组 L1–L56；`round-data/R3…R36` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R42 已入账**；
+  `link` 组 L1–L64；`round-data/R3…R42` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -47,46 +48,10 @@
   D5d 改为**按 `format!` 拼出的真实长度反推预算**，加 `AVAILABLE_OPEN`/`truncate_body`，链回显优先于库列表。
   根 245 tests（89+59+97）/ convert 100 / doctor 57/0/1；R8–R14 + R28–R36 全绿。提交 `e362c01`→`b55669e`（R34）、
   `e4660e8`→`5482421`（R35）、`98a173e`→`d32ab03`（R36）；STOP 后 4d737b2 压 PROGRESS 回 19990 B。
-- 2026-11-22 **D5 labels / W3 / W8 / margin 0（R33）**：裸 `--labels` 的 AUTO **跳过 NULL 槽**（5 槽 `A,B,–,C,D`）；
-  显式列表**按槽位**消费（给 NULL 槽写字母就画、`""` 跳过）。W3 升硬错误：给已带 `data-svg-grid-label`
-  的输入再赋非空字母 ⇒ rc=2、不写产物、文案点名 input#/字母，`--plan` 同 rc；`--labels ,C` 仍放行。
-  W8 升硬错误：缺标签字体族在 SVG/SVGZ/PNG/AVIF **一律 rc=3**、不写产物、文案列可用族与修法，`--plan` 不受影响。
-  `--plot-margin 0` 时字母 baseline 夹到画布内（`y ≥ 0.75em`），W5 改为"已内移"说明。顺带把 `src/lib.rs`
-  20182→18914 B、`tests/selftest/warnings/mod.rs` 20781→14156 B（拆 `src/label_conflicts.rs`、
-  `tests/selftest/warnings/ink.rs`），R8 体积门禁复绿。根 233 tests / convert 100 / doctor 57/0/1，
-  R8–R14 + R28–R32 全绿、R33 证据 19 PASS。提交 `e9425d2`→`398a21e`（删报告），证据 `docs/PITFALLS/round-data/R33/`。
-- 2026-11-22 **D4 自动 convert（R32）**：`plot-grid`/`--plan` 对缺 `data-panel-box="main"` 的输入进程内
-  `svg_grid_convert::convert`（纯内存、每条最多一次），未打标签 svglite/matplotlib 输入从 rc=2 变为 rc=0，
-  产物与"先手动 convert 再 plot-grid"逐字节相同；已带 panel-box 的输入输出与父提交逐字节相同
-  （SHA-256 `ca2f6503…`）；不支持的 `<symbol>` rc=2 且文案点名"auto-conversion failed"、不写输出；
-  原图 bytes/SHA-256/mtime 前后不变；自动转换诊断默认静音、`--verbose` 可见。
-  旧证据 R4–R9/R13 补 `--verbose`、R14 改测零宽 canvas 并新增"未打标签 ⇒ rc=0"断言。根 232 tests /
-  convert 100 / doctor 57/0/1；提交 `162c0cd`→`79cf9e5`→`a2d5fb5`（删报告），证据 `docs/PITFALLS/round-data/R32/`。
-- 2026-11-22 **D6 网格校验 + `--verbose`（R31）**：显式 `ncol/nrow` 时新增下界校验
-  `(rows-1)*cols < count`（`src/layout.rs:93-123`）——5 图 `--nrow 4`（4×2）、5/6/3 图 3×3 均 rc=2，
-  文案点名空行、给 `--nrow` 建议值与需补的 `--input NULL` 数；合法短末行（5 图 `--ncol 2`）、默认网格、
-  显式 NULL 补齐 4×2 仍 rc=0；`--plan` 同 rc/同文案且不写文件。`--verbose` 从零新增（`plot-grid` 与 `convert`
-  都接受）：默认 stderr 只留报错，W1–W9 与聚合 `note:` 静音，`--plan` 的 stdout `note:` 不受影响；
-  doctor 内部显式开诊断保持 57/0/1。根 223 tests（81+59+83）/ convert 100 / R31 证据 50 PASS。
-  提交 `3311eec`→`676d82d`（删报告），证据 `docs/PITFALLS/round-data/R31/`。
-- 2026-11-22 **D3 默认网格（R30）**：不给 `--ncol/--nrow` 时 `cols=ceil(sqrt(count))`、`rows=ceil(count/cols)`
-  （count 含显式 NULL：1→1×1、2→1×2、3/4→2×2、5/6→2×3、7–9→3×3、10–12→3×4、13–16→4×4、17→4×5），
-  末行不满合法、末槽不生成 cell。5 图默认 `1000×533.333`、格全 `333.333×266.667`；15 图默认 `1000×800`、格 `250×200`。
-  默认输出与显式近方形网格逐字节相同；1/2 图默认与旧 `--ncol 1`/`--ncol 2` 逐字节相同。
-  新增 4 条测试；根 217 tests / convert 100 / doctor 57/0/1。提交 `e09c33b`→`dc9a900`（删报告），证据 `docs/PITFALLS/round-data/R30/`。
-- 2026-11-22 **D2 末行格子尺寸（R29）**：`src/layout.rs` 行高信号改为 `available_w / Σ(全网格列权重)`
-  （列权重 = `--rel-widths` 或该列第一张非 NULL 面板的纵横比），删除按"本行实际图数"求和的 `row_aspect_sums`；
-  短末行与满行同尺寸（5 图 `--ncol 2` ⇒ `1000×1200`、全 `500×400`），满行形状几何逐字节不变
-  （4/2×2、6/2×3、9/3×3、16/4×4、15/5×3 与父提交 `cmp` 相同）。15 图 `--ncol 4`（4+4+4+3）为有意行为变更。
-  新增 6 条测试（含 `--rel-widths 1,2` vs `2,4` 等价与变异可捕获）；根 213 tests / convert 100 / doctor 57/0/1。
-  提交 `66fba3c`（D1 注释）→`cf76029`→`f8be8ef`→`8b08524`（删报告），证据 `docs/PITFALLS/round-data/R29/`。
-- 2026-11-22 **D1 字形孔（R27 + R28）**：convert 对 ≥3 子路径的填充路径不再合并成单 `<polygon>`
-  （隐式闭合把 bridge 连成闭环、内孔被填死），改为展平多轮廓 `<path>`；N≤2 保留原 polygon。
-  R28 收紧 self-check 白名单（只认与输出序列化一致的展平 path；mask/marker 内 `<path>` 一律判残渣）、
-  拆分填充半清干净 stroke 残留、`--report` 计入 `path`。
-  实测：`text_4` 标签组墨量 17,726 / 坏 28,637 / 新 17,731 px；220 fixture 仅 2 个等价 byte 变化（渲染 XOR=0）。
-  验证：根 207 tests、convert 100 tests、`doctor` 57/0/1。提交 `1e05ce1`→`3a9747a`（删报告）、
-  `1da48f0`→`64e4551`（删报告），证据 `docs/PITFALLS/round-data/R28/`。
+- 2026-11-22 **D1–D6 六缺陷（R27–R33）**：字形孔（≥3 子路径的填充 path 改展平多轮廓 `<path>`，R27/R28）、
+  末行格子尺寸（行高 = `available_w / Σ全网格列权重`，R29）、默认近方形网格（R30）、网格下界校验 +
+  `--verbose` 默认静音（R31）、`plot-grid` 自动 convert（R32）、labels 的 NULL/W3/W8/margin0（R33）。
+  机制见 `ARCHITECTURE/{layout,warnings,convert}.md`；数字、变异与复现见账本与 `round-data/R27…R33`。
 - 2026-11-22 **账本 reanchor**：`pitfalls-manager` 新增 `reanchor` 子命令（commit `bcb19c0`，已装）；
   锚点从 monorepo 改为 `[工具仓, monorepo]`，`check` 46 条悬空 → 0，`query`/`ids`/`record` 均验证通过；
   备份在 `/home/nihao/pitfalls-manager-backups/svg_grid-reanchor-20261122-221338/`。
@@ -117,10 +82,10 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩三项 pre-existing，均已开报告：
 
-1. **`<defs>` 内 mask/marker/filter 被丢弃**（待消费，下一轮 R37）：`convert/src/translate/uses.rs:176` 的 `prune_defs`
-   的 `REFERENCE_TARGETS` 不含 `mask`/`marker` ⇒ `<defs>` 内的 mask/marker 被整块丢弃、引用悬空、静默丢遮罩/箭头
-   （自测：半遮罩源图黑墨 6,396 px → 产物 12,800 px；marker 变体让 cairosvg 渲染时抛 AttributeError）。
-   报告：`docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（含 2026-11-23 追加的 maskUnits/markerUnits/self_check 三层实测）。
+1. **pattern 混合单位继承仍会静默错**（R41 遗留 P2，下一轮"单位语义收尾"）：`<pattern id="base" x/y/width/height
+   默认 objectBoundingBox>` + `<pattern id="p" href="#base" patternUnits="userSpaceOnUse" x="10">` ⇒ 继承来的
+   tile 数值未缩放，`xor 1104 / maxdiff 255`（源 192、产物 ink 1152），rc=0 无告警。同族还有 `maskContentUnits`
+   等 trim 宽松比较、`href` 前导空白/`id` 含空格的词法问题、`patternTransform` 长度量、嵌套 `<pattern>`。
 2. **组合图字母重号静默**：两个各自带字母的组合图直接组合（不给 `--labels`）⇒ rc=0、stderr 0 字节，
    产物出现两个 `data-svg-grid-label="0"`（渲染成 A、B、A）。W3 只覆盖"本次给非空字母"。
    报告：`docs/PITFALLS/blocker-svg_grid-duplicate-letters-across-composites.md`。
@@ -171,7 +136,7 @@
 - **版面可读性天花板**：一行 3 面板 + 固定画布宽 ⇒ 单面板 ~2.6 in、纸面字号 ~3.8 pt（低于 5–6 pt）；
   用户原版 S22 同行亦然，只能改版式或按目标尺寸重设计。
 - **matplotlib 之外的方言未覆盖**（Inkscape/Illustrator 导出等，仍 fail-closed）。
-- **path 双实现防漂移**（2026-09-28 R5）：主库 `src/path/` 与 `convert/src/path.rs` 各一份。
+- **path 双实现防漂移**（2026-09-28 R5）：主库 `src/path/` 与 `src/convert/path.rs` 各一份。
   缓解：同容差、同语义、注释互指；改一侧必须同时看另一侧。
 - **两副本指南**：**规范源 = `tools/svg_grid/docs/general-figure-guide/`**（改动只在这里做）；
   `tools/manuscripts_skills/general-figure-guide/` 是复制件、用 `rsync -a --delete` 覆盖过去
@@ -181,13 +146,14 @@
 
 # Next Steps
 
-1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接）——它把规则、六个缺陷
-   （D1–D6，带 `file:line` 与复现）、验证入口、账本锚点的坑和修复顺序都写全了。
-   **D1–D6 + D5b–D5d 已全部完成**（R27–R36）；下一步消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R37），
-   再做一次交付前全量复核（测试 / doctor / R8–R14 / 两副本 diff / 账本 check）。
-2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 → 删驱动文档 → 若本轮有改名/移动/拆分，
-   **提交后 `link`**（否则悬空自检会报出来）。取回已删报告：`query` 会打出
-   `git -C <repo> show <commit>:<path>`。
-3. **（用户定）** 上面 Known Issues 里的几项待裁决：W6 容差与嵌套假阳性、RDKit 方言重测、`research/` 两份旧
-   `DECISIONS.md` **未迁**、是否引入 span 能力。
+1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（2026-11-22 交接，§0 有 R27–R42 的提交表）。
+   六缺陷与 defs/pattern 语义均已收口；**下一轮 = 单位语义收尾**（上条 Known Issue 1 那族 P2/P3），
+   随后消费两份待排期报告（组合图字母重号、doctor 告警码漂移），最后做交付前全量复核：
+   `cargo test`（394）、`svg_grid doctor` 57/0/1、`pitfalls-manager verify` rc=0、两副本指南 `diff -r`。
+2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 →
+   删驱动文档 → 若本轮有改名/移动/拆分，**提交后 `link`**（否则悬空自检会报出来）。
+   **语义分支先证后写**：改判据前先读 `usvg` 源码 + 用参考渲染器（resvg/cairosvg）实测"哪一边对"，
+   再写代码与期望值（R38–R41 连栽三次的教训）。
+3. **（用户定）** 上面 Known Issues 里的几项待裁决：W6 容差与嵌套假阳性、RDKit 方言重测、
+   `research/` 两份旧 `DECISIONS.md` **未迁**、是否引入 span 能力。
 4. 需要时 root-cause 图级留白差异（S22 的 2.2%）；需要时补"文字条"能力。

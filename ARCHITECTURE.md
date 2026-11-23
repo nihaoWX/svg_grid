@@ -10,12 +10,14 @@
 - 协议的设计目标：**面板几何随格子缩放，而文字大小、点径、线宽保持不变**——即 R `grid`/`cowplot`
   的 grob 语义，在 SVG 层面用标签显式表达。普通 SVG 没有这个语义：整组 `transform="scale(s)"`
   会把文字和点一起缩放。
-- `convert/` 把**不带标签**的外源 SVG（R `svglite`/`ggplot2`、matplotlib、`pdftocairo -svg`）转成协议格式。
+- `svg_grid convert`（源码在 `src/convert/`）把**不带标签**的外源 SVG（R `svglite`/`ggplot2`、matplotlib、
+  `pdftocairo -svg`）转成协议格式；`plot-grid` 遇到未打标签的输入会自动调它。
 
 ## 用户期望
 
 1. **`src/` 保持纯净**：只做 SVG 组图，不引入栅格输入、去白边、混合栅格-矢量管线（2026-09-16 整体回退）。
-2. **外源 SVG 的适配隔离在 `convert/`**：与主库 `src/` 解耦（不改主库代码与依赖）。
+2. **外源 SVG 的适配隔离在 `src/convert/`**：它是一个模块（R42 起；此前是独立 crate），
+   与组图路径 `src/`（除 `src/convert/`）解耦，不进组图逻辑、不改组图依赖。
 3. **失败必须响亮（fail-closed）**：转换器遇到无法处理的构造必须**报错退出并列出位置**，不许静默产出错位的图。
 4. **先小批验证再铺开**：先跑通一张真实多面板图并与现有成品并排比对，再推广。
 5. **版面靠 CLI 参数迭代**（`--width/--height/--ncol/--nrow/--plot-margin`），调完看成品再微调；
@@ -51,7 +53,7 @@
 | 决定 | 为什么 | 细则在 |
 |---|---|---|
 | 主库只做 SVG 组图：**不收栅格输入、不去白边、不做混合栅格-矢量管线**；`adapters/`（MCP 风格）一并删 | 用户判定那批内容已无用处、且不希望后续工作被干扰（2026-09-16 整体回退 `98fd91e`） | 用户期望 #1；`ARCHITECTURE/tag-protocol.md` |
-| 外源 SVG 的适配**隔离在 `convert/`**；主库只多收"被画出来的图元"的**几何搬运** | 主库保持纯净；适配逻辑属外围、目标方言会变。R5 起主库纳入 `<path>`（其判据＝"最小的、完备的 SVG 表达能力"），但**改语义**的构造仍只在 `convert/` | 用户期望 #2；`ARCHITECTURE/tag-protocol.md` §3/§4 |
+| 外源 SVG 的适配**隔离在 `src/convert/` 模块**；主库只多收"被画出来的图元"的**几何搬运** | 主库保持纯净；适配逻辑属外围、目标方言会变。R5 起主库纳入 `<path>`（其判据＝"最小的、完备的 SVG 表达能力"），但**改语义**的构造仍只在 `convert/` | 用户期望 #2；`ARCHITECTURE/tag-protocol.md` §3/§4 |
 | **失败分层**：结构错 fail-closed（报错 + 位置）；数值/属性畸形 ⇒ 警告 + 原样保留 | 用户不信任静默错误的产物（cowplot 实测静默产出全白图）；浏览器对轻微畸形宽容，严格解析会把旧输入变成整图 `exit 1` | 用户期望 #3；`tag-protocol.md` §5 |
 | **不做 `--strict`**：告警一律非致命、不改退出码、不新增把越界变硬错误的开关 | 硬错误会打断既有流水线；判据取向是"**宁可漏报，不要误报**、正常路径零输出" | `ARCHITECTURE/warnings.md` |
 | 版面语义以用户既有 R 脚本 `plot_grid.R` 为**权威范本**（"注意是逻辑"）；**不做网格参数计算器** | 本工具的设计初衷就是复刻那套组图逻辑；且布局已按自然尺寸自动算，不需要调用方手算参数 | 用户期望 #5；`ARCHITECTURE/layout.md` §3/§5 |
@@ -86,7 +88,7 @@ tools/svg_grid/
 │   ├── fonts.md / cli.md / install.md / testing.md   # 字体、CLI 契约、安装、语料与 doctor
 │   ├── check-deliverable.md    # 交付前检查脚本：两条判据、不覆盖什么
 │   └── general-figure-guide.md # skill 怎么写：写作规则、owner 划分、两副本同步纪律
-├── PROGRESS.md                 # 只记当前状态（进度/问题/下一步），不记历史
+├── PROGRESS.md                 # 只记当前状态（进度/问题/下一步）
 ├── src/                        # 主库：纯 SVG 组图器
 │   ├── main.rs                 # 薄壳：只 `fn main()`，委托给 `cli`
 │   ├── cli/                    # 参数解析 / 帮助文本 / 执行 / 单测
@@ -100,7 +102,13 @@ tools/svg_grid/
 │   ├── dom.rs                  # 最小 XML DOM（parse/serialize）
 │   ├── labels.rs               # 面板字母的构造
 │   ├── input.rs / output.rs    # SVG 读写；error.rs / normalize.rs
-│   └── raster.rs               # PNG/AVIF 渲染；PNG 写 pHYs（dpi 元数据）
+│   ├── raster.rs               # PNG/AVIF 渲染；PNG 写 pHYs（dpi 元数据）
+│   └── convert/                # 外源方言 → 协议格式（R42 起并入本库，不再单独成 crate）
+│       ├── mod.rs              # 薄门面：mod + pub use（原 convert/src/lib.rs）
+│       ├── dom.rs error.rs options.rs geom.rs transform.rs   # DOM、类型、画布盒、transform 分类
+│       ├── scan.rs warnings.rs tag.rs self_check.rs pipeline.rs cli.rs
+│       ├── affine.rs path.rs base64.rs units.rs              # 仿射烘焙 / path 解析 / 位图编解码
+│       └── translate/{mod,bake,uses,image,style}.rs + translate/shapes/  # 翻译流水线
 ├── tests/selftest/             # **唯一**自检测试目标（R19 起；按主题分模块）
 ├── tests/fixtures/             # `doctor` 语料（ggplot2 / matplotlib / seaborn；MANIFEST.toml 登记）
 ├── tests/{mpl_dialect,rdkit_dialect}/  # 方言 fixture
@@ -110,14 +118,6 @@ tools/svg_grid/
 ├── docs/
 │   ├── general-figure-guide/   # 本工具自带的组图 skill（**规范源**；manuscripts_skills 那份是复制件）
 │   └── PITFALLS/               # 报告 + round-data/R4…R26（每轮可跑证据；账本由 pitfalls-manager 管理）
-└── convert/                    # 外源 SVG → 协议格式 的转换器（独立 crate，与 src/ 隔离）
-    ├── src/lib.rs / main.rs    # 薄入口：mod + pub use / fn main
-    ├── src/dom.rs error.rs options.rs geom.rs transform.rs   # DOM、类型、画布盒、transform 分类
-    ├── src/scan.rs warnings.rs tag.rs self_check.rs pipeline.rs cli.rs
-    ├── src/affine.rs path.rs base64.rs units.rs              # 方言翻译：仿射烘焙 / path 解析 / 位图编解码
-    ├── src/translate/{mod,bake,uses,image,style}.rs + translate/shapes/  # 翻译流水线（<path> 出形态 R8 拆成目录）
-    ├── tests/cli.rs            # 进程级测试（真实驱动二进制）
-    └── README.md               # 用法、两步流水线、缩放后果与配准建议
 ```
 
 > **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；根仓库 `.gitignore`
@@ -130,18 +130,18 @@ tools/svg_grid/
 |---|---|---|
 | `ARCHITECTURE/tag-protocol.md` | 输入契约（面板盒/`data-scale` 五策略）、支持图元、**分界原则与判据**、`<path>` 保真边界、失败口径 | 要改主库能搬什么、要判断某个构造该归主库还是 `convert` |
 | `ARCHITECTURE/layout.md` | 布局语义（`--height` 可省、`rel_*` 倍数、字母带、垫片）、几何约束、`s`/字号、**设计参照与对齐表** | 调版面、判断"该不该手算某个值"、核对与 R 的偏差 |
-| `ARCHITECTURE/convert.md` | 翻译手段、仍 fail-closed 的构造、**`<path>` 出形态决策表**、幂等语义、方言兼容性 | 动 `convert/`、遇到新方言、判断某构造成不成 |
+| `ARCHITECTURE/convert.md` | 翻译手段、仍 fail-closed 的构造、**`<path>` 出形态决策表**、幂等语义、方言兼容性 | 动 `src/convert/`、遇到新方言、判断某构造成不成 |
 | `ARCHITECTURE/warnings.md` | 告警怎么写（三要素/聚合/非致命/英文）、判据取向与容差理由、**W1–W7 表**、**与 skill 的配合契约** | 加/改告警、写指南里的"读 stderr"那句、判断某情形该不该出声 |
 | `ARCHITECTURE/fonts.md` | 字体来源唯一 = `fontlib/`、默认族 Arial、`--label-fontfamily` / `--font-dir` / `--list-fonts`、**W8**、空库 fail-closed、`fontlib/` 成员 | 动字体、加/改字体告警、换机器补字体、判断某族名为啥不生效 |
 | `ARCHITECTURE/cli.md` | 子命令与参数面、**退出码分档**、`--help` 契约、**字体目录的运行时解析顺序**、CLI 单测要求 | 加/改参数、改退出码、改帮助文本、改字体目录解析 |
-| `ARCHITECTURE/install.md` | `install.sh` 做什么（release 编译 + 装两个二进制 + 装字体到数据根）、幂等语义、**每次更新后必须重装**、`--doctor` 怎么用 | 改安装、发布/换机器、怀疑装完的二进制读了旧路径 |
+| `ARCHITECTURE/install.md` | `install.sh` 做什么（release 编译 + 装**一个**二进制 + 技能 + 字体到数据根）、幂等语义、**每次更新后必须重装**、`--doctor` 怎么用 | 改安装、发布/换机器、怀疑装完的二进制读了旧路径 |
 | `ARCHITECTURE/testing.md` | fixture 语料库（ggplot2 / matplotlib 生成、按图型穷举）+ `MANIFEST` 字段 + **`doctor` 的判据与输出** | 加 fixture、改自检判据、判断某图型没被覆盖 |
 | `ARCHITECTURE/check-deliverable.md` | 两条检查的判据与为什么、"无裁切"由谁承担、不覆盖什么、与 vision 的分工 | 改判据脚本、解释"为什么这条没抓出来" |
 | `ARCHITECTURE/general-figure-guide.md` | skill 的写作规则（只写现状/不列告警/薄入口）、**各部分 owner 划分**、规范源与复制件 | 改这个 skill 的任何文件之前 |
 
 ## 跨领域约定
 
-1. **体积口径（R8/R9 起）**：**每个文件 ≤ 20 KB（按 20000 B 从严）**——`src/`、`convert/src/`、
+1. **体积口径（R8/R9 起）**：**每个文件 ≤ 20 KB（按 20000 B 从严）**——`src/`、`src/convert/`、
    `tests/`、`scripts/` 的源文件**与** `ARCHITECTURE.md`、`ARCHITECTURE/*.md`、`PROGRESS.md`、指南各文件都适用。
    **唯一豁免：`docs/plot_grid.R`**——作者早先手写的组图范式脚本，只作参考、不参与构建与断言（用户 2026-10-06 定），
    不要再"顺手压缩"它。其余 `docs/` 下的文件仍按口径。

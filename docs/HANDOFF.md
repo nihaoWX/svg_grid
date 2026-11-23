@@ -17,6 +17,10 @@
 | D5b W8 把回退链当单族名 | ✅ 已修，评审 PASS | `e362c01`→`b55669e`；R34 |
 | D5c 病态输入的 W8 行超 200 字符 | ✅ 已修 | `e4660e8`→`5482421`；R35 |
 | D5d 预算手算少 1（丢 `available:`、回显塌 `"…"`） | ✅ 已修，对抗评审 PASS | `98a173e`→`d32ab03`；R36 |
+| R37 `<defs>` 内 mask/marker/filter 被丢弃 | ✅ 已修，对抗评审 PASS | `18102d8`→`756dfb2`；R37 |
+| R38 `<defs>` 嵌套定义被误丢 + pattern 相位（tile 与 body 双平移） | ✅ 已修（含 R39/R40/R41 收尾），对抗评审 PASS | `95698ca`→`75d59fb`；R38/R39/R40/R41 |
+| R39/R40/R41 pattern 单位语义（obb 双重缩放、viewBox、href 继承、重复 id） | ✅ 已修，R41 评审 PASS | `2a6a1ed`→`96dfeab`、`475894a`→`715ce48`、`0d3d758`→`3a8416e` |
+| R42 `convert/` crate 并入 `src/convert/` 模块（用户要求） | ⏳ 已搬迁，待评审 | `de1bfae`→`8f38435`；R42 |
 
 ## 1. 先读什么（按顺序）
 
@@ -51,7 +55,7 @@
 
 ### D1 `convert` 把 N≥3 子路径的字形孔填死（产物错，最优先）
 
-- 位置：`convert/src/translate/shapes/path_form.rs:52`（纯填充分支）、`:83`（填充+描边拆分分支），
+- 位置：`src/convert/translate/shapes/path_form.rs:52`（纯填充分支）、`:83`（填充+描边拆分分支），
   两者都调 `join_closed_points`（同文件 `:155-166`）。
 - 根因：N 条子路径首尾相接后，`<polygon>` 的**隐式闭合**又从末点连回整串首点 ⇒ N 条 bridge 成**闭环**。
   **N=2** 时两条 bridge 是同线段反向、面积 0；**N≥3** 时闭环是真多边形，圈内 winding ±1 ⇒ 内孔被填死。
@@ -87,8 +91,8 @@
 - 位置：`src/geom.rs:21`（`find_panel_box` 的报错）；唯一调用点 `src/plan.rs:144`
   （`plot_grid` 与 `plan_grid` 共用）。
 - 现象：未打标签输入 ⇒ `rc=2`，`input SVG must contain a <rect data-panel-box="main" .../> element`。
-- 现成钩子：`svg_grid_convert::convert(&str, bool)`（`convert/src/pipeline.rs:22`，纯字符串、无 I/O；
-  `Cargo.toml` 已依赖 `convert`，**无需新依赖**）。`doctor` 的进程内调用可作范式：
+- 现成钩子：`svg_grid::convert::convert(&str, bool)`（`src/convert/pipeline.rs:22`，纯字符串、无 I/O；
+  R42 起转换器已是同库模块，**无需新依赖**）。`doctor` 的进程内调用可作范式：
   `src/cli/doctor/run.rs:205` → `convert_in_process`（`:467-484`）→ `run_in`。
 - 注意：已组好的组合图有多个 panel-box，`convert` 会报 `Incomplete`——但这类输入本来就有 panel box，
   不会进自动分支。
@@ -114,8 +118,9 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（主 crate 74 lib + 59 selftest；`convert/` 81 lib + 12 CLI），
+- 回归：`cargo test`（**单 crate 394**：211 lib + 59 bin + 124 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
+  语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
   联网校验会卡 60 s 然后失败。cowplot 1.2.0 已装。
 - 本次会话留下的临时材料（重启后可能没了，需要就重建）：`/tmp/sgtest/`（ncol=2 复现、嵌套）、
@@ -138,7 +143,7 @@
 - 工具侧新增受支持的 **`reanchor`** 子命令（`tools/pitfalls-manager` commit `bcb19c0`，已装 `~/.local/bin`）。
 - 回滚备份：`/home/nihao/pitfalls-manager-backups/svg_grid-reanchor-20261122-221338/`（含迁移前 `history.db`、
   前后 `check/query/ids`、REPORT.md）。
-- **新轮次**：`where` 用工具仓相对路径（`src/layout.rs`、`convert/src/...`）；查询旧路径靠后缀匹配 + link。
+- **新轮次**：`where` 用工具仓相对路径（`src/layout.rs`、`src/convert/...`）；查询旧路径靠后缀匹配 + link。
 - `docs/PITFALLS/` 目前**没有待处理报告**（只剩 `round-data/R3…R26` 的可跑证据）。
 
 ## 6. 本次会话的提交（都在本目录的仓）
@@ -160,12 +165,13 @@
 2. ~~按 D1 → D2 → D3 → D6 → D4 → D5 动手~~ —— **六项全部完成（R27–R36）**，见 §0。
    每轮仍走 `query <位置> --repo .` → 改 → `cargo test` → `doctor` → `install.sh` → commit → `record`；
    若与旧轮同址（复发），在 `docs/PITFALLS/round-data/<新轮>/` 留可跑证据。
-3. **下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`**（`prune_defs` 丢 mask/marker，
-   报告已含 maskUnits/markerUnits/self_check 三层实测与修法口径）。
+3. ~~消费 `blocker-convert-defs-mask-dropped.md`~~ —— 已完成（R37），后续 R38–R41 收掉了嵌套 `<defs>`、
+   pattern 相位与 pattern 单位语义。**下一轮 = 单位语义收尾**（R41 遗留 P2：混合单位 tile 继承静默
+   `xor 1104`；`maskContentUnits`/`href` 词法的 trim 宽松；`patternTransform` 长度量；嵌套 pattern）。
    另有两份新报告待排期：`blocker-svg_grid-duplicate-letters-across-composites.md`、
    `suggestion-svg_grid-doctor-warning-codes-drift.md`。
-4. 交付前全量复核：`cargo test`（根 236 + convert 100）、`doctor` 57/0/1、`round-data/R8–R14`+`R28–R34`、
-   两副本指南 `diff -r`、`pitfalls-manager check`。
+4. 交付前全量复核：`cargo test`（单 crate **394**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
 

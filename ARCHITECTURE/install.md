@@ -23,7 +23,7 @@ install.sh [--prefix <dir>] [--project <dir>] [--no-skill] [--no-fixtures]
 
 | 步骤 | 做什么 | 判据 |
 |---|---|---|
-| 1. 编译 | `cargo build --release --offline`（主 crate；`convert/` 作为**库依赖**一起编进同一个二进制，不再单独装） | `target/release/svg_grid` 存在 |
+| 1. 编译 | `cargo build --release --offline`（单 crate；转换器是模块 `src/convert/`，一起编进同一个二进制） | `target/release/svg_grid` 存在 |
 | 2. 装二进制 | 复制 **`svg_grid` 一个**二进制到 `<prefix>`（默认 `~/.local/bin`），`chmod +x`，**同名覆盖** | `command -v svg_grid` 有输出 |
 | 3. 装 skill | **白名单拷贝** `SKILL.md` + `references/` → `~/.commandcode/skills/general-figure-guide/`（`--project <dir>` ⇒ `<dir>/.commandcode/skills/…`）。暂存目录 → `mv` 原子替换；目录名取 `SKILL.md` 的 `name:` | `diff -r` 与源逐字节一致；装好的目录里**没有** `ARCHITECTURE*/`、`src/`、`docs/`、`PROGRESS.md` |
 | 4. 装语料 | `rsync -a --delete tools/svg_grid/tests/fixtures/ ~/svg_grid/fixtures/`（`doctor` 默认读这个数据根，见 `testing.md` §语料目录怎么解析） | 数据根里有 58 个 `.svg` + `MANIFEST.toml` |

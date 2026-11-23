@@ -9,7 +9,7 @@ svg_grid plot-grid --input A.svg [...]      # 组图
 svg_grid plot-grid --input A.svg [...] --plan
                                             # 只报布局（画布 / 每格尺寸 / s），零写入
 svg_grid convert --input PANEL.svg [--output OUT.svg] [--check] [--report] [--force]
-                                            # 方言 → 协议格式（原独立二进制 svg_grid_convert，现为子命令）
+                                            # 方言 → 协议格式（R42 起是同一二进制里的模块）
 svg_grid doctor [--fixtures <dir>]          # 自检：把 fixture 集整体跑一遍（见 ARCHITECTURE/testing.md）
 svg_grid --help | -h                        # 用法，**stdout**，退出 0
 svg_grid --version                          # 版本，stdout，退出 0
@@ -22,10 +22,11 @@ svg_grid --version                          # 版本，stdout，退出 0
   且 `canonical()` **只读正名列**（别名列即便被填也不会被接受，单测 `no_flag_has_an_alias` 锁住它为空）；
   「帮助覆盖全部 flag」的单测直接走这张表。
 
-- **只有一个二进制 `svg_grid`**（用户 2026-10-06 裁决）：`convert` 是**子命令**，不是第二个可执行文件；
-  `convert/` 仍是独立 crate（为了结构清楚），但以**库依赖**被主 crate 用（`src/cli/convert.rs` 只是薄壳）。
-  `convert/` 自己的 `svg_grid_convert` 二进制留在工作区供其进程级测试用，**不再安装到 PATH**。
-  ⇒ `doctor` 不再需要"找外部 convert 二进制"，那个 `exit 3` 分支随之消失。
+- **只有一个二进制 `svg_grid`**（用户 2026-10-06 裁决）：`convert` 是**子命令**，不是第二个可执行文件。
+  R42 起转换器是主库的模块 `src/convert/`（此前是独立 crate + 独立 `svg_grid_convert` 二进制，已删除）：
+  `src/cli/convert.rs` 是薄壳（`svg_grid::convert::cli::run_args_as`），`plot-grid`/`doctor` 走进程内调用。
+  ⇒ `doctor` 不需要"找外部 convert 二进制"，那个 `exit 3` 分支早已消失；`install.sh` 只装一个二进制
+  （仍会清理旧机器上残留的 `svg_grid_convert` 并报告）。
 
 - 参数**有意保持少**，且每个参数都要么有智能默认、要么是"用户真要改才传"的旋钮；
   文档/skill 里**不再复述**参数语义（`--help` 是唯一权威）。

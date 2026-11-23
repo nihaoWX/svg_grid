@@ -78,7 +78,7 @@
 | W8 | `--labels` 要用的族**整条回退链都不可用**（generic 族算可用） | **硬错误 rc=3、不写产物**（2026-11-22 R33 起；此前是非致命告警 + 静默回退）。链里任一名字在库内即放行、`font-family` 原样保留；`--plan` 不读字体、不受影响 |
 | W9 | paint server 引用悬空（`fill="url(#x)"` 的渐变/pattern 不在产物里） | 2026-10-06 R16 起报；修法是让转换器保留该 defs 子项 |
 
-**上游还有一条转换器告警**（`svg_grid_convert`，与 W1–W9 无关）：CSS `<style>` 块不被解析。
+**上游还有一条转换器告警**（`src/convert/`，与 W1–W9 无关；`svg_grid convert` 与自动转换都可能出）：CSS `<style>` 块不被解析。
 它应当在报文里自带"要不要管、怎么判断"（块内只有 `stroke-linejoin`/`linecap` 这类装饰 ⇒ 无害；
 出现长度/`font-size` 才是真的没重算）——**与 W1–W7 同一条契约**。
 

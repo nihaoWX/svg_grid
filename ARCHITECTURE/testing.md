@@ -76,7 +76,7 @@ svg_grid doctor [--fixtures <dir>] [--only <glob>] [--jobs <n>] [--json] [--keep
 
 对每条 fixture **走完整链路**（真实管线是两段）：
 
-1. 转换（`svg_grid_convert` **库**，进程内调用；不再去找外部二进制）`<fixture.svg>` → `<tmp>/tagged.svg`（方言 → 协议格式）
+1. 转换（`src/convert/` **模块**，进程内调用；不找外部二进制）`<fixture.svg>` → `<tmp>/tagged.svg`（方言 → 协议格式）
 2. `svg_grid plot-grid --input <tmp>/tagged.svg --output <tmp>/fig.svg --output-png <tmp>/fig.png --png-dpi 300`
 3. 判据（任一不成立 = FAIL，报文说清是哪一步、卡在哪条判据）：
    - 两段都 `rc == 0`（`unsupported` 允许第 1 段非零，但必须打印原因且计 SKIP）

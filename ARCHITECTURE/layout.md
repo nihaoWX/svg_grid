@@ -54,7 +54,7 @@ R 端不存在这条耦合（字号与 margin 同为 pt、随 dpi 同步缩放�
   新 `1000×800`、全 `250×200`；同一列里纵横比不一致的面板会按格子拉伸（旧按本行 aspect 定行高），
   需要不同行高请用 `--rel-heights`；`--input NULL` 出现在任意行都按 1:1 占一列权重（旧只按本行实际面板算）。
 - **未打标签输入自动 convert（2026-11-22 D4 修复，R32）**：`plot-grid` 与 `--plan` 的每条输入解析后若**没有**
-  `data-panel-box="main"`，进程内调用 `svg_grid_convert::convert(&svg, false)`（纯字符串、不写原图、每条输入
+  `data-panel-box="main"`，进程内调用 `svg_grid::convert::convert(&svg, false)`（纯字符串、不写原图、每条输入
   最多一次），用转换产物继续 normalize 与取面板框；**已带 panel-box 的输入（组合图、嵌套中间产物）不转换**，
   产物字节不变。转换失败 ⇒ rc=2，文案点名输入、列前 3 条 finding 并建议 `svg_grid convert --report` 排查；
   自动转换的诊断（converter warnings）默认静音、`--verbose` 可见。原图只读：bytes / SHA-256 / mtime 不变。

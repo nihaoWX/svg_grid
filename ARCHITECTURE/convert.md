@@ -1,7 +1,10 @@
-# 转换器 `convert/`（外源方言 → 协议格式）
+# 转换器 `src/convert/`（外源方言 → 协议格式）
 
-> 独立 crate，与主库 `src/` **解耦**（不改主库代码与依赖）。协议与分界原则见 `tag-protocol.md`。
-> 主库的 path 只搬坐标，**"填充/描边 → polygon/polyline"这类语义定型只在 `convert/` 做**。
+> **R42 起是主库的一个模块**（此前是独立 crate `convert/`，随迁删除了它自己的 `[[bin]]`）：
+> 组图路径 `src/`（除 `src/convert/`）不依赖它，它也不改组图逻辑与依赖。入口是 `svg_grid convert`
+> 子命令（`src/cli/convert.rs` 薄壳）与 `plot-grid` 的自动转换（`src/plan.rs` 进程内调用）。
+> 协议与分界原则见 `tag-protocol.md`；主库的 path 只搬坐标，**"填充/描边 → polygon/polyline"
+> 这类语义定型只在 `src/convert/` 做**。
 
 ## 1. 职责与边界
 
@@ -16,7 +19,7 @@
 - `translate_dialect` 的阶段顺序：`normalize_transforms` **先于** bake，否则 svglite 的
   `translate(x,y) rotate(a)` 文本碰上平移祖先会先被写入 x/y、再也归一化不了。
 - **`<path>` 一项如今主库也能搬，但 convert 仍要转**——"填充/描边 → 形态"是 **paint 语义**（见 §3）。
-- **`convert/` 与主库各有一份 path 处理**（用户裁决"直接做进主库"）：同一容差常数（`0.02` 源单位）、
+- **`src/convert/` 与主库各有一份 path 处理**（用户裁决"直接做进主库"）：同一容差常数（`0.02` 源单位）、
   同一语义、两侧注释互指（防漂移，见 `tag-protocol.md` §4）。
 
 ## 2. 仍然 fail-closed 的构造（其余都已能进流水线）
@@ -31,7 +34,7 @@
 
 ## 3. `<path>` 的出形态决策表
 
-`convert/src/translate/shapes/`（原 `shapes.rs`，R8 拆成目录）。**这是"字形孔被填实"的关键。**
+`src/convert/translate/shapes/`（原 `shapes.rs`，R8 拆成目录）。**这是"字形孔被填实"的关键。**
 
 | 情形 | 出形态 |
 |---|---|
@@ -80,7 +83,7 @@
 
 | 来源 | 图元构成 | 结论 |
 |---|---|---|
-| R `svglite`/`ggplot2` | 绝对坐标、`<path>` = 0；circle/rect/line/polyline/polygon/text + `<clipPath>` | **已可适配**：`convert/` 后可直接组图（真实 panel 端到端跑通）；`textLength` 随归一化一起缩放 |
+| R `svglite`/`ggplot2` | 绝对坐标、`<path>` = 0；circle/rect/line/polyline/polygon/text + `<clipPath>` | **已可适配**：跑 `svg_grid convert` 后可直接组图（真实 panel 端到端跑通）；`textLength` 随归一化一起缩放 |
 | Python `matplotlib` | `<path>` 292、`<use>` 436、带 transform 的 `<g>` 42、`<image>` 6 | **已可适配**：由翻译层吸收（烘焙/展开/path 转换/位图翻转）；S22 端到端验证。**自动 mathtext**（对数轴/`LogNorm` 色标 → `<g translate><text><tspan x y>`，源码里一个 `$` 都没有也会出现）与**多行文本裸 `translate`** 也已支持（2026-09-20） |
 | 外源 PDF `pdftocairo -svg` | 字形轮廓 `<use>`→`<defs><g><path>`（无 `Z`/无自身 `fill`）、`<clipPath>` 内 `<path>`、非等比 `<image>` | **已可适配**（2026-09-20）：字形孔靠"单 polygon + 显式闭合"保留、clip `<path>` 矩形化、非等比 `<image>` 烘框。**仍须调用方处理**：`-x/-y/-W/-H` 对 `-svg` **静默失效**（poppler 行为，永远整页 viewBox）⇒ 事后按 viewBox/`<g transform>` 裁 |
 | 栅格（PNG/JPEG、ChimeraX 渲染） | — | 主库支持 `<image>` 坐标搬运，可随面板进入成品（矢量图内含一小块位图）；**保持 600 dpi 原分辨率、不降采样** |

@@ -57,12 +57,12 @@
 - 坐标按轴重写：`H` 只动 x、`V` 只动 y、`A` 的 `rx/ry` 按轴；**`A` 的 `x-axis-rotation` 与两个 flag
   一个字节都不许动**；小写（相对）命令当矢量按轴缩放；隐式重复照展。
 - **唯一不能保真的情形**：**非等比缩放（`sx ≠ sy`）撞上旋转的椭圆弧** ⇒ 该弧**展平成折线**
-  （容差 `DEFAULT_TOLERANCE = 0.02` 源单位 ≈ 0.2 px，与 `convert/src/path.rs` 同值、两侧注释互指）；
+  （容差 `DEFAULT_TOLERANCE = 0.02` 源单位 ≈ 0.2 px，与 `src/convert/path.rs` 同值、两侧注释互指）；
   其余命令保真重写。
 - **主库的 path 只搬、不改语义**：填充/描边 → polygon/polyline 形态（`fill-rule`、显式闭合、多子轮廓拆分）
   **仍只在 `convert/` 做**——走 convert 的链路一切照旧；**直接喂主库**的 path 保持原形态、只重写坐标，
   字形孔这类语义问题因此只在 convert 侧解决（见 `convert.md` 的出形态决策表）。
-- **双实现防漂移**：主库 `src/path/` 与 `convert/src/path.rs` 各有一份 path 处理（用户裁决"直接做进主库"）。
+- **双实现防漂移**：主库 `src/path/` 与 `src/convert/path.rs` 各有一份 path 处理（用户裁决"直接做进主库"）。
   缓解：**同一容差常数、同一语义、两侧模块注释互指**；任何一侧改 path 语义时**必须同时看另一侧**。
 - **镜像（负）等比 + 旋转弧**：单轴镜像会翻转弧的**手性**，必须翻转 `sweep` 并取反 `x-axis-rotation`；
   而守卫只判 `|sx| ≠ |sy|` ⇒ 该情形会漏掉、静默失真。**当前 CLI 不可达**（`sx,sy = cell/panel` 恒正；
