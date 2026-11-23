@@ -45,7 +45,7 @@ convert 产物与基线逐字节相同、convert-only `xor=39 maxdiff=3`。
 基线 binary 与新 binary 的 grid 产物也逐字节相同 ⇒ 本轮没有改变任何 pattern 渲染，故不在本轮修。
 """
 how_to_run = """
-cd tools/svg_grid/docs/PITFALLS/round-data/R37 && python3 test.py  # rc=0 = 75 PASS
+cd tools/svg_grid/docs/PITFALLS/round-data/R37 && python3 test.py  # rc=0 = 全部成立（R38 起 76 PASS）
 前置：`cd tools/svg_grid && cargo build && (cd convert && cargo build)`（用 debug 二进制）。
 渲染对照需要 resvg 探针 /tmp/d1_eval/render/target/release/d1render，缺失时该子项 SKIP。
 无参数；约 3 分钟（220 fixture 逐个 convert + 幂等复跑）；只写系统临时目录。
