@@ -56,6 +56,19 @@ nbsp: &#160; mdash: &#8212;          →   nbsp: &amp;#160; mdash: &amp;#8212;
 
 五个命名实体（`&amp; &lt; &gt; &quot; &apos;`）正常。
 
+## 两处实现都有（不是一处）
+
+`src/dom.rs:150-158`（主库）与 `src/convert/dom.rs:146-154`（转换器）各有一份**完全相同**的
+`resolve_reference`，所以 `svg_grid convert` 也中招：
+
+```bash
+~/.local/bin/svg_grid convert --input cent.svg --output cent.out.svg   # rc=0
+grep -o '<text[^>]*>[^<]*</text>' cent.out.svg
+# <text ...>37&amp;#176;C</text>
+```
+
+修的时候两处都要改（`ARCHITECTURE/tag-protocol.md` 已登记"path 双实现防漂移"，DOM 解析是第二对）。
+
 ## 影响面
 
 - `tests/fixtures/**/*.svg`：**0 个**含 `&#`（所以 220 fixture 回归抓不到）。
