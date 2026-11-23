@@ -1,0 +1,41 @@
+id = "R39"
+date = "2026-11-23"
+verdict = "复发"
+family = [
+  "`patternContentUnits=\"objectBoundingBox\"` 的 body 分数字面量以引用元素 bbox 为参照，bbox 已随 s 缩放；再乘 (sx,sy) ⇒ 双重缩放（R38 引入的回归）",
+  "旧证据 A2 的 body 落在 tile 外 ⇒ 源图本身 ink=0、三张全空 ⇒ diff 0 空洞通过；cairosvg 侧又用 SKIP 掩盖",
+  "账本把 R19「独立 svg_grid_convert 已合并/不存在」写成 retire 依据，与仓库事实相反；R38-F7 的 symptom 也把 base 的正确期望值说成错误行为",
+]
+closures = [
+  { finding = "R39-F1", tier = "代码" },   # transform/mod.rs：transform_element 按 patternContentUnits 分流
+  { finding = "R39-F2", tier = "代码" },   # transform/mod.rs：rewrite_primitive 早返回，继承长度不二次缩放
+  { finding = "R39-F3", tier = "测试" },   # transform/tests.rs：obb 逐字保留 3 单测
+  { finding = "R39-F4", tier = "测试" },   # selftest/transform/pattern.rs：obb s=1/s=2 双尺度
+  { finding = "R39-F5", tier = "检查" },   # round-data/R38/test.py：A2/A6A2 非退化 + cairo 只判 ink 量级
+  { finding = "R39-F6", tier = "检查" },   # 账本更正 R19/R20/R38；转换器计数 106+14=120
+]
+run_before = ["R38", "R37", "R16"]
+touched = ["R38", "R37", "R20", "R19", "R18"]
+note = """
+为什么认定复发：pattern 坐标域是 R16 建立、R37/R38 连续改写的同一处映射；R38 为了修
+userSpaceOnUse 相位，把 `ScalePolicy::Scale` 无差别套到所有 pattern children，没按
+`patternContentUnits` 分流 ⇒ 同一处映射再次错位，只隔一轮（已证，复现与数字见报告）。
+根因：obb 内容的参照系是「引用元素 bbox（已含 s）」而不是「tile 用户空间」，两者只差
+一次乘 (sx,sy)；R38 的 A2 又因为 body 恰在 tile 右缘外（0.1×40=4 == tile 宽 - 4）导致
+源图 ink=0，三张全空 diff 0 空洞通过，cairosvg 分支再用 SKIP 绕过（已证）。
+怎么修才不弄坏前面：未写/`userSpaceOnUse` 仍走 `ScalePolicy::Scale`（R38 行为逐字保留）；
+显式其它值（obb）整棵 body 原样跳过、不递归、连继承的 stroke-width 也不缩放。
+回归：R8/R9/R16/R25/R28/R31/R35/R36/R37/R38 逐个顶层复跑全绿；220 fixture 转换字节不变、
+幂等 0、悬空 0；58 fixture 组合只有 bars_grouped.svg 变字节（R38 既有）。
+账本更正（append-only）：R19 的 retire ③ 与事实相反（独立二进制仍可构建、--help 仍自称
+svg_grid_convert，只是 install.sh 不再装）；R20 的 modify 文本重复该错句；R38-F7 的
+symptom 与 base 内容不符；R38 报告的「104 lib + 14 CLI = 118」实测应为 106 + 14 = 120。
+未覆盖：obb 内容在 cairosvg 下本就不实现（分数被当 user unit），按裁决以 resvg 为准。
+"""
+how_to_run = """
+cd tools/svg_grid && python3 docs/PITFALLS/round-data/R39/test.py   # rc=0 = 全部成立
+前置：`cargo build --offline`（根 crate）与 `cd convert && cargo build --offline`（debug 二进制）。
+渲染对照需要 resvg 探针 /tmp/d1_eval/render/target/release/d1render（缺失 ⇒ FAIL；确实要跳过传
+--allow-skip）；cairosvg 对照默认用 ~/.venv/bin/python（缺失时打 SKIP）。`--with-old` 额外复跑
+R38 证据（数分钟）。可用 SVG_GRID_BIN / SVG_GRID_CONVERT_BIN / SVG_GRID_RENDER_BIN 覆盖。
+"""

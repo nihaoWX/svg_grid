@@ -79,14 +79,16 @@ fn pattern_body_scales_but_keeps_its_tile_local_origin() {
     let _ = fs::remove_file(output);
 }
 
-/// `patternContentUnits="objectBoundingBox"` makes the body a fraction of the
-/// referencing box. The two renderers disagree on what that fraction *means*
-/// (round-data/R37), so the composer does not try to unify it — but the body must
-/// still not be translated: only the scale applies (round-data/R38).
+/// `patternContentUnits="objectBoundingBox"` makes every body number a fraction of
+/// the **referencing element's box**, and that box already scales with the panel.
+/// Scaling the fractions by `(sx, sy)` again is a double scaling: at s=0.5 the
+/// hatch shrank from ink 16 to 4 while the R38 base still rendered xor 0
+/// (round-data/R39). So the whole body stays verbatim at every scale — the numbers
+/// must not even be reformatted (`0.1` must not become `0.200` at s=2 or `0.05` at
+/// s=0.5), while the tile box keeps mapping into the cell.
 #[test]
-fn object_bounding_box_pattern_body_is_scaled_but_not_translated() {
+fn object_bounding_box_pattern_body_is_verbatim_at_every_scale() {
     let input = temp_path("pattern_obb.svg");
-    let output = temp_path("pattern_obb_combined.svg");
     fs::write(
         &input,
         r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
@@ -103,33 +105,48 @@ fn object_bounding_box_pattern_body_is_scaled_but_not_translated() {
     )
     .unwrap();
 
-    plot_grid(PlotGridSpec {
-        inputs: vec![SvgInput::Path(input.clone())],
-        output_svg: output.clone(),
-        output_svgz: None,
-        width: 200.0,
-        height: Some(160.0),
-        nrow: None,
-        ncol: Some(1),
-        rel_widths: vec![],
-        rel_heights: vec![],
-        gap: 0.0,
-        margin: Margins::zero(),
-        align: AlignMode::Panels,
-        labels: None,
-        normalize: None,
-        font_families: None,
-    })
-    .unwrap();
+    // s=1 and s=2 differ by a factor of two, so an accidental re-scale is visible
+    // in the numbers (`0.1` would read `0.200`); the body must read the same.
+    for (width, height, tag) in [(100.0, 80.0, "identity"), (200.0, 160.0, "double")] {
+        let output = temp_path(&format!("pattern_obb_{tag}_combined.svg"));
+        plot_grid(PlotGridSpec {
+            inputs: vec![SvgInput::Path(input.clone())],
+            output_svg: output.clone(),
+            output_svgz: None,
+            width,
+            height: Some(height),
+            nrow: None,
+            ncol: Some(1),
+            rel_widths: vec![],
+            rel_heights: vec![],
+            gap: 0.0,
+            margin: Margins::zero(),
+            align: AlignMode::Panels,
+            labels: None,
+            normalize: None,
+            font_families: None,
+        })
+        .unwrap();
 
-    let svg = fs::read_to_string(&output).unwrap();
-    assert!(
-        svg.contains(r##"<rect x="0.200" y="0.400" width="1" height="0.500" fill="#000000"/>"##),
-        "an objectBoundingBox body scales about the tile origin, not with the tile: {svg}"
-    );
+        let svg = fs::read_to_string(&output).unwrap();
+        assert!(
+            svg.contains(r##"<rect x="0.1" y="0.2" width="0.5" height="0.25" fill="#000000"/>"##),
+            "an objectBoundingBox body must stay verbatim at {tag} scale: {svg}"
+        );
+        // The tile box is user-space geometry and still maps like a `<rect>`.
+        let (x, y, w, h) = if tag == "identity" {
+            ("10", "10", "4", "6")
+        } else {
+            ("20", "20", "8", "12")
+        };
+        assert!(
+            svg.contains(&format!(r#"x="{x}" y="{y}" width="{w}" height="{h}""#)),
+            "the tile box must still follow the panel at {tag} scale: {svg}"
+        );
 
+        let _ = fs::remove_file(output);
+    }
     let _ = fs::remove_file(input);
-    let _ = fs::remove_file(output);
 }
 
 /// A panel that lands in a cell of exactly its own size must leave the pattern body

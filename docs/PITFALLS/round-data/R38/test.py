@@ -219,18 +219,31 @@ def family_a():
           '<rect x="0" y="0" width="16.667" height="16.667"' in svg,
           "A1 userSpaceOnUse：tile 平移、body 停在 tile 原点", svg[:900] if len(svg) < 200000 else "")
 
-    # A2 objectBoundingBox 内容：只缩放、不平移（不统一 obb 语义）。
+    # A2 objectBoundingBox 内容：分数字面量以**引用元素的 bbox** 为参照，而 bbox 已随 s
+    # 缩放 ⇒ 再乘 (sx,sy) 就是双重缩放。正确行为是**原样保留**。
+    #
+    # 旧形态是空洞的：tile 4×6、body x=0.1（0.1×40=4 恰好落在 tile 右缘外）⇒ 源图在
+    # resvg 下 ink=0，三张图全空，diff 0 什么也证明不了（R39 的 blocker）。现在 tile
+    # 与引用矩形同尺寸（40×30），body 完整落在 tile 内；且判据同时跑 s=1 与 s=2——
+    # 若 body 被缩放，0.1 会变成 0.200（s=2）或 0.050（s=0.5），两次读数不可能同时原样。
     src2 = write_svg("a2_obb.svg", panel(100, 80) + (
         '<g data-scale="xy"><defs>'
         '<pattern id="p" patternUnits="userSpaceOnUse" patternContentUnits="objectBoundingBox" '
-        'x="10" y="10" width="4" height="6">'
+        'x="10" y="10" width="40" height="30">'
         '<rect x="0.1" y="0.2" width="0.5" height="0.25" fill="#000000"/></pattern></defs>'
         '<rect x="10" y="10" width="40" height="30" fill="url(#p)"/></g></svg>'))
-    svg2 = compose(src2, "a2_obb_grid.svg", "--width", "200", "--height", "160", "--ncol", "1",
-            "--plot-margin", "0")
-    check('<rect x="0.200" y="0.400" width="1" height="0.500" fill="#000000"/>' in svg2,
-          "A2 objectBoundingBox 内容：body 只缩放（0.1→0.200）不平移",
-          svg2[:900] if len(svg2) < 200000 else "")
+    a2_outputs = {}
+    for w, h, tag in ((100, 80, "s1"), (200, 160, "s2")):
+        name = f"a2_obb_grid_{tag}.svg"
+        svg2 = compose(src2, name, "--width", str(w), "--height", str(h), "--ncol", "1",
+                       "--plot-margin", "0")
+        a2_outputs[tag] = TMP / name
+        check('<rect x="0.1" y="0.2" width="0.5" height="0.25" fill="#000000"/>' in svg2,
+              f"A2 obb 内容 @{tag}：分数字面量逐字保留（不被 (sx,sy) 二次缩放）",
+              svg2[:900] if len(svg2) < 200000 else "")
+    a2_tile = 'x="10" y="10" width="40" height="30"' in a2_outputs["s1"].read_text()
+    a2_tile = a2_tile and 'x="20" y="20" width="80" height="60"' in a2_outputs["s2"].read_text()
+    check(a2_tile, "A2b obb tile（userSpaceOnUse）仍随 s 平移缩放", "")
 
     # A3 非对称 body + s≠1：每个数字都按 s 缩放，x/y 保持 tile 局部。
     src3 = write_svg("a3_asym.svg", panel(120, 80) + (
@@ -270,27 +283,41 @@ def family_a():
         skip_render("A6 pattern 相位渲染对照（resvg 0 / cairosvg ink）", f"渲染器不存在：{RENDER}")
         return
     cases = [("A1", src, out, 100 / 120, 24, 24),
-             ("A2", src2, TMP / "a2_obb_grid.svg", 2.0, 0, 0),
+             ("A2s1", src2, a2_outputs["s1"], 1.0, 0, 0),
+             ("A2s2", src2, a2_outputs["s2"], 2.0, 0, 0),
              ("A3", src3, TMP / "a3_asym_grid.svg", 100 / 120, 24, 24)]
+    # `ink == 0` 是 R38 自己的空洞：三张全空同样 xor 0。渲染对照必须同时要求
+    # 源图与产物**真的有墨**，否则「diff 0」只证明了两块白布相同。
     for tag, s, o, scale, dx, dy in cases:
         src_img = render(s, f"{tag}_src_resvg", scale)
         out_img = render(o, f"{tag}_out_resvg", 1.0)
         pasted = paste_at(src_img, dx, dy, (out_img[0], out_img[1]))
         xor, md = diff(pasted, out_img)
-        check(xor == 0 and md == 0, f"A6{tag} resvg：源图×s 贴到面板原点 ⇒ diff 0",
+        check(xor == 0 and md == 0 and ink(src_img) > 0 and ink(out_img) > 0,
+              f"A6{tag} resvg：源图×s 贴到面板原点 ⇒ diff 0（且非空洞）",
               f"xor={xor} maxdiff={md} ink_src={ink(src_img)}/ink_out={ink(out_img)}")
 
     if CAIRO_PYTHON.exists() and subprocess.run(
             [str(CAIRO_PYTHON), "-c", "import cairosvg"], capture_output=True).returncode == 0:
         # cairosvg 的 hatch 相位与 resvg 有系统差（源图就存在），所以这里不判逐像素，
-        # 只判「hatch 没有整块消失」（ink 同量级）；objectBoundingBox 内容两渲染器语义
-        # 本身不一致，无法用 cairo 判 body 是否平移（见报告「非阻断遗留」）。
+        # 只判「hatch 没有整块消失」（ink 同量级）。objectBoundingBox 内容两渲染器的
+        # **相位**语义本身不一致，所以 obb 的逐像素判据只认 resvg（A6）；cairo 只判
+        # ink 量级，不再用 SKIP 掩盖（R39）。
         for tag, s, o, scale, dx, dy in cases:
-            if tag == "A2":
-                skip("A7A2 cairosvg", "obb 内容语义两渲染器不一致，cairo 判不了 body 是否平移")
+            out_img = render(o, f"{tag}_out_cairo", 1.0, cairo=True)
+            if tag.startswith("A2"):
+                # cairosvg 没有实现 `patternContentUnits="objectBoundingBox"`：它把
+                # 分数字面量当 user unit（实测 body 只有 0.5×0.25 用户单位 ⇒ 亚像素
+                # 点，ink 恒为 1），相位与像素都不可判。obb 的逐像素判据以 resvg
+                # 为准（A6A2s1/A6A2s2）；cairo 侧只判 ink 量级——源图按 1:1 渲染
+                # （与产物的 user unit 对齐）后必须与产物同量级、且两边都有墨。
+                src_img = render(s, f"{tag}_src_cairo1", 1.0, cairo=True)
+                si, oi = ink(src_img), ink(out_img)
+                check(si > 0 and oi > 0 and oi <= 4 * si and si <= 4 * oi,
+                      f"A7{tag} cairosvg：obb 只判 ink 量级（亚像素点，判定以 resvg 为准）",
+                      f"ink_src_1to1={si} ink_out={oi}")
                 continue
             src_img = render(s, f"{tag}_src_cairo", scale, cairo=True)
-            out_img = render(o, f"{tag}_out_cairo", 1.0, cairo=True)
             pasted = paste_at(src_img, dx, dy, (out_img[0], out_img[1]))
             si = ink(pasted)
             oi = ink(out_img)

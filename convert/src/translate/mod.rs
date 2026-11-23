@@ -240,6 +240,34 @@ mod tests {
         assert!(done.svg.contains("<polyline"), "{}", done.svg);
     }
 
+    #[test]
+    fn object_bounding_box_pattern_body_keeps_its_fractions() {
+        // A `patternContentUnits='objectBoundingBox'` body is a fraction of the
+        // *referencing* box, so conversion must only change the shape's syntax
+        // (`<path>` -> `<polygon>`), never its numbers: the composer scales the
+        // referencing box, and rescaling the fractions here as well would double
+        // scale the hatch (round-data/R39).
+        let done = converted(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<defs><pattern id='p' patternUnits='userSpaceOnUse' patternContentUnits='objectBoundingBox' x='10' y='10' width='40' height='30'>
+<rect x='0.1' y='0.2' width='0.5' height='0.25' fill='#000000'/>
+<path d='M 0.1 0.1 L 0.9 0.2 L 0.5 0.9 Z' style='fill: #ff0000'/></pattern></defs>
+<rect x='10' y='10' width='40' height='30' fill='url(#p)'/></svg>"#,
+        );
+        assert!(
+            done.svg
+                .contains(r#"<rect x="0.1" y="0.2" width="0.5" height="0.25""#),
+            "{}",
+            done.svg
+        );
+        assert!(
+            done.svg
+                .contains(r#"points="0.100,0.100 0.900,0.200 0.500,0.900 0.100,0.100""#),
+            "{}",
+            done.svg
+        );
+    }
+
     /// 8x4 RGB PNG with a red top row and a blue bottom row (a clear vertical
     /// pattern, so a baked flip is observable).
     const SRC_B64: &str = "iVBORw0KGgoAAAANSUhEUgAAAAgAAAAECAIAAAA8r+mnAAAAFUlEQVR4nGP4z8CAFeEQ/o9PAocMADp+H+E2jTGuAAAAAElFTkSuQmCC";

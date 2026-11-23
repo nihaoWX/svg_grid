@@ -80,14 +80,28 @@ fn transform_element(
     // numbers are placed relative to the tile origin. Translating the body by the
     // panel offset as well would move it out of its own tile window, and the fill
     // disappears with no error at all (measured: ink 9600 -> 0 under both resvg and
-    // cairosvg, round-data/R38). So the body is scaled but never translated, in
-    // *both* unit modes — `patternContentUnits="objectBoundingBox"` is a fraction of
-    // the referencing box and must not move either.
+    // cairosvg, round-data/R38).
+    //
+    // What the body's numbers *mean* depends on `patternContentUnits`:
+    //
+    // * unset or `userSpaceOnUse` (the default) — user units of the tile, so they
+    //   scale with the panel but keep the tile's own origin (`Scale`);
+    // * an explicit `objectBoundingBox` — fractions of the **referencing element's
+    //   bbox**, and that box already scales with the panel. Multiplying the
+    //   fractions by `(sx, sy)` on top of that is a double scaling: the motif
+    //   shrinks/expands and the output stops matching the source (measured at
+    //   s=0.5: ink 4 vs 16, xor 16 md 255; the base commit rendered xor 0 —
+    //   round-data/R39). The whole body is therefore left verbatim, no recursion.
     //
     // `patternTransform` is deliberately left verbatim: it is already relative to
     // the tile, so it keeps working, and the corpus uses it nowhere (0 of 220
     // fixtures). If it ever needs rewriting, it must be *accumulated*, not replaced.
     if element.name == "pattern" {
+        // `patternContentUnits` defaults to `userSpaceOnUse`; any explicit other
+        // value means the fractions are bbox relative and must stay untouched.
+        if pattern_content_is_object_bounding_box(element) {
+            return Ok(());
+        }
         for child in &mut element.children {
             if let Node::Element(child) = child {
                 transform_element(
@@ -158,6 +172,17 @@ fn user_space_units(element: &Element, attr: &str) -> bool {
     matches!(
         element.attr(attr),
         Some(units) if units.trim() == "userSpaceOnUse"
+    )
+}
+
+/// Whether a `<pattern>`'s body numbers are fractions of the referencing element's
+/// box rather than user units. `patternContentUnits` defaults to `userSpaceOnUse`,
+/// so only an explicit other value counts; an unknown value is treated the same way
+/// (leaving the body verbatim can never *add* a wrong scaling, round-data/R39).
+fn pattern_content_is_object_bounding_box(element: &Element) -> bool {
+    matches!(
+        element.attr("patternContentUnits"),
+        Some(units) if units.trim() != "userSpaceOnUse"
     )
 }
 fn parse_policy(value: &str) -> ScalePolicy {
@@ -376,6 +401,12 @@ fn rewrite_primitive(
         }
         _ => {}
     }
+    // An `objectBoundingBox` pattern body stays verbatim, and so do the lengths it
+    // inherits from the `<pattern>` element: `stroke-width` there is a fraction of
+    // the same box, so scaling it would double-scale the body's outline too.
+    if element.name == "pattern" && pattern_content_is_object_bounding_box(element) {
+        return Ok(());
+    }
     rewrite_scaled_length(
         element,
         "stroke-width",
@@ -390,3 +421,6 @@ fn rewrite_primitive(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests;
