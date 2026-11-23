@@ -1,0 +1,36 @@
+id = "R42"
+date = "2026-11-23"
+verdict = "新领土"
+family = [
+  "转换器从独立 crate（`convert/`，二进制 `svg_grid_convert`）并入主库 `src/convert/`：搬迁后必须只有 `svg_grid` 一个 target、`convert/` 目录消失、`svg_grid convert` 仍可用——这三条最容易只在文档里声称",
+  "名字收敛：诊断/帮助不再出现 `svg_grid_convert:` 前缀或独立二进制名，残留只允许是历史说明、证据文本与 install.sh 的 stale 清理",
+]
+closures = [
+  { finding = "R42-F1", tier = "代码" },   # src/convert/mod.rs：模块化后的 crate 文档/导出
+  { finding = "R42-F2", tier = "代码" },   # src/convert/cli.rs：去掉 standalone 入口，前缀由调用方给
+  { finding = "R42-F3", tier = "代码" },   # src/cli/convert.rs：子命令转发 svg_grid::convert
+  { finding = "R42-F4", tier = "代码" },   # src/plan.rs：auto_convert 走进程内模块
+  { finding = "R42-F5", tier = "测试" },   # tests/selftest/convert_cli：14 条 CLI 测试插 `convert`
+  { finding = "R42-F6", tier = "检查" },   # install.sh：dry-run/why 文案改模块口径
+  { finding = "R42-F7", tier = "检查" },   # round-data/R18/test.py：①组支持 SVG_GRID_OLD_BIN
+]
+run_before = ["R41", "R40", "R39"]
+touched = ["R42", "R41", "R40", "R39", "R38", "R37", "R25", "R20", "R19", "R18", "R17", "R16", "R15"]
+note = """
+为什么算新领土：前 41 轮都在改合成器语义，这是第一次动"构建形态"，之前没有任何证据脚本覆盖
+"只有一个二进制"这个事实（R18 ① 只对照装机版与本仓库构建，搬迁后两者同代，守卫变弱）。
+根因（已证）：`convert/` 是被根 crate 依赖的独立 package，自带 `[[bin]]`，于是构建出第二个可执行文件；
+并入 `src/convert/` 后 `src/main.rs` 是唯一 target，`src/cli/**` 必须走 `svg_grid::convert::…`（bin crate
+里没有 `crate::convert`），standalone 的 `main()/STANDALONE` 必须删掉，否则前缀会退回旧名。
+证据（已证）：本脚本 A 族钉结构、B 族钉子命令真能跑、C/D 族钉名字、E 族钉 `git grep` 残余只允许
+历史文本/注释/stale 清理；行为等价另见 R42 报告（220 fixture、58 组合、`--plan`/`--report` 逐字节）。
+连带面：`install.sh` 的 stale 清理必须留（还装过旧版的机器）；`ARCHITECTURE/*`/`PROGRESS.md`/
+`docs/HANDOFF.md` 由 Arranger 维护，脚本不判它们的内容。
+怎么不弄坏前面：语义零变化——只改调用面与路径；R15..R41 的证据脚本一律只替换"独立二进制/前缀"这一
+前提，断言语义不放宽（逐轮 `modify` 记录）。
+"""
+how_to_run = """
+cd tools/svg_grid && python3 docs/PITFALLS/round-data/R42/test.py      # rc=0 = 全部成立
+前置：`cargo build --offline`（根 crate，debug 二进制）；`git` 可用（E 族要 `git grep`）。
+只读、离线：不写仓库，临时文件在系统临时目录；可用 SVG_GRID_BIN 覆盖二进制定位。
+"""

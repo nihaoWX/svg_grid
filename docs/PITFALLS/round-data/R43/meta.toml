@@ -1,0 +1,42 @@
+id = "R43"
+date = "2026-11-23"
+verdict = "混合"
+family = [
+  "单位属性是**类型化**的：`convert_units` 只认两个精确 token（不 trim、区分大小写），非法/缺省回退各自默认值——`trim()` 比较与『任何非 userSpaceOnUse 都是 bbox』都属于同一族（R39 宽松判据的复发）",
+  "内容域与尺寸域分开：mask 的 `maskUnits` 只管区域、`maskContentUnits` 管内容；marker 的 `markerUnits=userSpaceOnUse` 让视口/参考点/内容都变成用户长度；gradient 的坐标是 bbox 分数——按『改了 stroke-width 就都自动缩放』是错的",
+  "引用的词法：IRI 允许前后字面空格（`\" #base\"`/`\"#base \"`），改 id 命名空间时必须一起改；pattern tile 的每个属性沿 href 链继承、按解析后的 units 解释",
+]
+closures = [
+  { finding = "R43-F1", tier = "代码" },   # src/transform/units.rs：convert_units/units_of/marker_units_are_user_space
+  { finding = "R43-F2", tier = "代码" },   # src/transform/mod.rs：mask/gradient/marker/pattern 分支改用类型化 units
+  { finding = "R43-F3", tier = "代码" },   # src/transform/patterns.rs：tile 逐属性解析 + 继承 units + 严格 IRI
+  { finding = "R43-F4", tier = "代码" },   # src/transform/primitives.rs：rewrite_marker_box
+  { finding = "R43-F5", tier = "代码" },   # src/ns.rs：namespace_iri / namespace_iri_references
+  { finding = "R43-F6", tier = "测试" },   # src/transform/tests/units.rs：7 条
+  { finding = "R43-F7", tier = "测试" },   # tests/selftest/{transform/pattern,defs}：3 条
+  { finding = "R43-F8", tier = "检查" },   # round-data/R43：12 用例 × s=1/s=2 + fail-closed
+  { finding = "R43-F9", tier = "检查" },   # round-data/R42：搬迁形态的常驻证据
+  { finding = "R43-F10", tier = "检查" },  # round-data/R18：①组支持 SVG_GRID_OLD_BIN
+]
+run_before = ["R42", "R41", "R40"]
+touched = ["R43", "R42", "R41", "R40", "R39", "R38", "R37", "R20", "R19", "R18", "R17", "R16", "R15", "R8"]
+note = """
+为什么是复发+新领土：单位解析是 R39 宽松判据的同一族（第三次动这段），tile 继承是 R41 留的 P2；
+marker/mask 的内容域和 IRI 命名空间是第一次覆盖。
+根因（已证）：usvg `convert_units` 是类型化解析（`paint_server.rs:230-233`），默认值按属性而异；
+mask 两项不走 href 链；marker 的 `markerUnits` 也是字面比较（`marker.rs:222`）；IRI 允许前后空格
+（`svgtypes` `parse_iri`），而 `namespace_ids` 只在 `starts_with('#')` 时改名。
+证据（已证）：resvg 逐像素 12 用例 × 2 尺度全 0；旧二进制 s=2 红 7 条（fail-closed ≥5）。
+存量（已证）：220 convert + 58 compose + `--plan` + `--report` 与 755ad5b 逐字节相同。
+连带面：`src/normalize.rs:scale_element` 仍是盲缩放（`--normalize-input-max-side` 路径），本轮未动；
+滤镜图元长度、嵌套 pattern、`patternTransform`、pattern 外 clip-path、pattern 内 text 仍是遗留。
+怎么不弄坏前面：R15..R42 的证据脚本只把"独立二进制/前缀"前提换掉，断言语义未放宽。
+"""
+how_to_run = """
+cd tools/svg_grid && cargo build --offline
+python3 docs/PITFALLS/round-data/R43/test.py                          # rc=0 = 全部成立
+SVG_GRID_OLD_BIN=/path/to/755ad5b/svg_grid \\
+  python3 docs/PITFALLS/round-data/R43/test.py                        # fail-closed：旧二进制红 ≥5
+前置：参考渲染器 `/tmp/d1_eval/render/target/release/d1render`（可用 SVG_GRID_RENDER_BIN 覆盖）。
+只读、离线：不写仓库；临时文件在系统临时目录。
+"""

@@ -442,3 +442,59 @@ fn pattern_href_chain_follows_the_renderers_inheritance() {
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
 }
+
+/// A reference may carry spaces around the fragment (`href=" #base"`), and the
+/// renderer accepts it. Id namespacing has to rewrite that form too, or the
+/// reference keeps pointing at the un-prefixed id while `id` itself gained the
+/// cell prefix — the fill then silently disappears (measured: ink 2160 -> 0,
+/// round-data/R43).
+#[test]
+fn a_space_padded_pattern_reference_survives_id_namespacing() {
+    let input = temp_path("pattern_space_padded_href.svg");
+    let output = temp_path("pattern_space_padded_href_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="xy">
+<defs>
+<pattern id="base" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="1" y="2" width="3" height="4" fill="black"/>
+</pattern>
+<pattern id="p" href=" #base"/>
+</defs>
+<rect x="10" y="10" width="40" height="30" fill="url(#p)"/>
+</g>
+</svg>"##,
+    )
+    .unwrap();
+
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 200.0,
+        height: Some(160.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+        font_families: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    assert!(
+        svg.contains(r##"href=" #svg-grid-cell0-base""##),
+        "the padded reference must be namespaced like the id it points at: {svg}"
+    );
+    assert!(svg.contains(r##"id="svg-grid-cell0-p""##), "{svg}");
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}

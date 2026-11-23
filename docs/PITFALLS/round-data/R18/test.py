@@ -33,7 +33,8 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                        # round-data/R18 → PITFALLS → docs → svg_grid
 BIN = SVG_GRID / "target/debug/svg_grid"          # 仓库内 debug（与旧二进制的对照组同代）
-WORKSPACE = SVG_GRID / "target/debug/svg_grid"     # R42：仓库构建，对照组（旧独立二进制已删除）
+WORKSPACE = SVG_GRID / "target/debug/svg_grid"     # R42：仓库构建；没有 SVG_GRID_OLD_BIN 时的对照
+OLD_BIN = pathlib.Path(os.environ["SVG_GRID_OLD_BIN"]) if os.environ.get("SVG_GRID_OLD_BIN") else None
 FIXTURES = SVG_GRID / "tests/fixtures"
 MANIFEST = FIXTURES / "MANIFEST.toml"
 PREFIX = pathlib.Path.home() / ".local/bin"
@@ -123,7 +124,8 @@ def same(label, args, verbose=False):
     for path in (old_out, new_out):
         if path.exists():
             path.unlink()
-    old = run([WORKSPACE, "convert", *[a.replace("{out}", str(old_out)) for a in args]])
+    old_cmd = ([str(OLD_BIN)] if OLD_BIN else [str(WORKSPACE), "convert"])
+    old = run([*old_cmd, *[a.replace("{out}", str(old_out)) for a in args]])
     new = run([INSTALLED, "convert", *[a.replace("{out}", str(new_out)) for a in args]])
 
     def norm(text, out_path):
@@ -161,6 +163,18 @@ def family_one():
     check(not (PREFIX / "svg_grid_convert").exists(),
           "`~/.local/bin` 里只有 `svg_grid`：没有 `svg_grid_convert`",
           sorted(p.name for p in PREFIX.iterdir() if "svg_grid" in p.name))
+    # 对照组：没有 `SVG_GRID_OLD_BIN` 时只能拿仓库构建对照（同代，守卫弱）；给了就换成
+    # 真正独立的 `svg_grid_convert` 二进制——那才是"搬迁前后行为等价"的证据。
+    if OLD_BIN:
+        old_help = run([str(OLD_BIN), "--help"])
+        check(OLD_BIN.exists() and os.access(OLD_BIN, os.X_OK),
+              "SVG_GRID_OLD_BIN 指向可执行的旧二进制", str(OLD_BIN))
+        check("svg_grid_convert" in old_help.stdout,
+              "SVG_GRID_OLD_BIN 确实是被迁走的独立 svg_grid_convert（--help 自称）",
+              old_help.stdout[:200])
+    else:
+        print("SKIP  ①旧独立二进制对照（未设 SVG_GRID_OLD_BIN，只对照仓库构建——建议设成 3a8416e 的 convert/target/release/svg_grid_convert）")
+
     which = subprocess.run(["/usr/bin/env", "sh", "-c", "command -v svg_grid_convert"],
                            capture_output=True, text=True,
                            env=clean_env([PREFIX, "/usr/bin", "/bin"]))

@@ -37,7 +37,18 @@
 
 use std::collections::{HashMap, HashSet};
 
+use super::lengths::{length_scale_factor, map_point, LengthAxis};
+use super::units::{convert_units, Units};
+use super::ScalePolicy;
 use crate::dom::{Element, Node};
+use crate::error::Result;
+use crate::geom::Rect;
+
+/// `patternUnits` defaults to `objectBoundingBox` (`usvg-0.47.0/src/parser/
+/// paint_server.rs:168`).
+const PATTERN_UNITS_DEFAULT: Units = Units::ObjectBoundingBox;
+/// `patternContentUnits` defaults to `userSpaceOnUse` (`paint_server.rs:169`).
+const PATTERN_CONTENT_UNITS_DEFAULT: Units = Units::UserSpaceOnUse;
 
 /// The attributes that decide how a `<pattern>` body and tile are read, read off
 /// one `<pattern>`.
@@ -46,6 +57,39 @@ struct PatternSource {
     content_units: Option<String>,
     view_box: Option<String>,
     pattern_units: Option<String>,
+    x: Option<String>,
+    y: Option<String>,
+    width: Option<String>,
+    height: Option<String>,
+}
+
+impl PatternSource {
+    fn new(element: &Element) -> Self {
+        Self {
+            href: link_of(element).map(str::to_string),
+            content_units: element.attr("patternContentUnits").map(str::to_string),
+            view_box: element.attr("viewBox").map(str::to_string),
+            pattern_units: element.attr("patternUnits").map(str::to_string),
+            x: element.attr("x").map(str::to_string),
+            y: element.attr("y").map(str::to_string),
+            width: element.attr("width").map(str::to_string),
+            height: element.attr("height").map(str::to_string),
+        }
+    }
+
+    /// The tile and unit attributes this pattern declares itself.
+    fn attr(&self, name: &str) -> Option<&String> {
+        match name {
+            "x" => self.x.as_ref(),
+            "y" => self.y.as_ref(),
+            "width" => self.width.as_ref(),
+            "height" => self.height.as_ref(),
+            "patternContentUnits" => self.content_units.as_ref(),
+            "patternUnits" => self.pattern_units.as_ref(),
+            "viewBox" => self.view_box.as_ref(),
+            _ => None,
+        }
+    }
 }
 
 /// Document-wide `<pattern>` inheritance data, collected once per transform.
@@ -61,7 +105,8 @@ pub(super) struct PatternIndex {
 impl PatternIndex {
     /// Index every `<pattern>` reachable through `href`.
     ///
-    /// Duplicate ids keep the **last** occurrence, like the renderer's id map.
+    /// Duplicate ids keep the **last** occurrence, like the renderer's id map
+    /// (`usvg-0.47.0/src/parser/svgtree/parse.rs:117-121`).
     pub(super) fn collect(root: &Element) -> Self {
         let mut index = Self::default();
         index.walk(root);
@@ -71,15 +116,8 @@ impl PatternIndex {
     fn walk(&mut self, element: &Element) {
         if element.name == "pattern" {
             if let Some(id) = element.attr("id") {
-                self.patterns.insert(
-                    id.to_string(),
-                    PatternSource {
-                        href: link_of(element).map(str::to_string),
-                        content_units: element.attr("patternContentUnits").map(str::to_string),
-                        view_box: element.attr("viewBox").map(str::to_string),
-                        pattern_units: element.attr("patternUnits").map(str::to_string),
-                    },
-                );
+                self.patterns
+                    .insert(id.to_string(), PatternSource::new(element));
             }
         }
         for child in &element.children {
@@ -90,45 +128,87 @@ impl PatternIndex {
     }
 }
 
-/// The first explicit value of each inherited attribute along the `href` chain.
+/// The first explicit value of each inherited attribute along the `href` chain,
+/// with the unit attributes already parsed by [`convert_units`].
 #[derive(Default)]
 struct Resolved {
-    content_units: Option<String>,
+    content_units: Option<Units>,
     view_box: Option<String>,
-    pattern_units: Option<String>,
+    pattern_units: Option<Units>,
 }
 
 impl Resolved {
-    fn complete(&self) -> bool {
-        self.content_units.is_some() && self.view_box.is_some() && self.pattern_units.is_some()
+    fn of(element: &Element) -> Self {
+        let mut resolved = Self::default();
+        resolved.absorb_owner(element);
+        resolved
     }
 
-    fn absorb(&mut self, source: &PatternSource) {
+    /// Record what `element` itself declares.
+    ///
+    /// A declared-but-invalid unit value still shadows the inherited one:
+    /// `resolve_pattern_attr` returns the first link that merely *has* the
+    /// attribute, and only then does `convert_units` parse it — an unparseable
+    /// value falls back to the default instead of continuing down the chain.
+    fn absorb_owner(&mut self, element: &Element) {
         if self.content_units.is_none() {
-            self.content_units.clone_from(&source.content_units);
+            if let Some(value) = element.attr("patternContentUnits") {
+                self.content_units =
+                    Some(convert_units(Some(value), PATTERN_CONTENT_UNITS_DEFAULT));
+            }
+        }
+        if self.view_box.is_none() {
+            self.view_box = element.attr("viewBox").map(str::to_string);
+        }
+        if self.pattern_units.is_none() {
+            if let Some(value) = element.attr("patternUnits") {
+                self.pattern_units = Some(convert_units(Some(value), PATTERN_UNITS_DEFAULT));
+            }
+        }
+    }
+
+    fn absorb_source(&mut self, source: &PatternSource) {
+        if self.content_units.is_none() {
+            if let Some(value) = source.content_units.as_deref() {
+                self.content_units =
+                    Some(convert_units(Some(value), PATTERN_CONTENT_UNITS_DEFAULT));
+            }
         }
         if self.view_box.is_none() {
             self.view_box.clone_from(&source.view_box);
         }
         if self.pattern_units.is_none() {
-            self.pattern_units.clone_from(&source.pattern_units);
+            if let Some(value) = source.pattern_units.as_deref() {
+                self.pattern_units = Some(convert_units(Some(value), PATTERN_UNITS_DEFAULT));
+            }
         }
+    }
+
+    fn complete(&self) -> bool {
+        // `viewBox` is optional by design: its absence is itself an answer, so it
+        // must be looked for along the whole chain before the body is judged.
+        self.content_units.is_some() && self.pattern_units.is_some()
+    }
+
+    fn content_units(&self) -> Units {
+        self.content_units.unwrap_or(PATTERN_CONTENT_UNITS_DEFAULT)
+    }
+
+    fn pattern_units(&self) -> Units {
+        self.pattern_units.unwrap_or(PATTERN_UNITS_DEFAULT)
     }
 }
 
 fn resolve(element: &Element, index: &PatternIndex) -> Resolved {
-    let mut resolved = Resolved {
-        content_units: element.attr("patternContentUnits").map(str::to_string),
-        view_box: element.attr("viewBox").map(str::to_string),
-        pattern_units: element.attr("patternUnits").map(str::to_string),
-    };
+    let mut resolved = Resolved::of(element);
     let mut link = link_of(element);
     let mut visited: HashSet<String> = HashSet::new();
 
-    while !resolved.complete() {
+    while !resolved.complete() || resolved.view_box.is_none() {
         let Some(href) = link else { break };
-        // Not an id of this document (another file, a bare URL, garbage): usvg's
-        // `HrefIter` cannot follow it, so inheritance stops and the defaults win.
+        // Not an id of this document (another file, a bare URL, garbage, or an
+        // IRI the grammar rejects): `HrefIter` cannot follow it, so inheritance
+        // stops and the defaults win.
         let Some(id) = internal_target(href) else {
             break;
         };
@@ -142,7 +222,7 @@ fn resolve(element: &Element, index: &PatternIndex) -> Resolved {
         let Some(source) = index.patterns.get(id) else {
             break;
         };
-        resolved.absorb(source);
+        resolved.absorb_source(source);
         link = source.href.as_deref();
     }
 
@@ -153,7 +233,7 @@ fn resolve(element: &Element, index: &PatternIndex) -> Resolved {
 /// bbox fractions or viewBox units, as opposed to user units of the tile.
 pub(super) fn pattern_body_is_verbatim(element: &Element, index: &PatternIndex) -> bool {
     let resolved = resolve(element, index);
-    resolved.content_units.as_deref() == Some("objectBoundingBox")
+    resolved.content_units() == Units::ObjectBoundingBox
         || resolved.view_box.as_deref().is_some_and(valid_view_box)
 }
 
@@ -161,7 +241,83 @@ pub(super) fn pattern_body_is_verbatim(element: &Element, index: &PatternIndex) 
 /// follows the panel and must be rewritten. `patternUnits` defaults to
 /// `objectBoundingBox`, whose fractions are relative to the (already scaled) box.
 pub(super) fn pattern_units_is_user_space(element: &Element, index: &PatternIndex) -> bool {
-    resolve(element, index).pattern_units.as_deref() == Some("userSpaceOnUse")
+    resolve(element, index).pattern_units() == Units::UserSpaceOnUse
+}
+
+/// Rewrite the tile of a `<pattern>` whose **resolved** `patternUnits` is user
+/// space, so every number of the tile follows the panel.
+///
+/// Unlike a `<rect>`, a missing `x`/`y`/`width`/`height` here is not a zero: the
+/// renderer resolves each one along the `href` chain (`usvg` calls
+/// `resolve_number` for every attribute), so the value that has to be scaled may
+/// live on another element — and the units that apply to it are the *resolved*
+/// units, no matter which element spelled the number. The scaled value is written
+/// onto this pattern, which shadows the inherited one with exactly the same
+/// meaning (round-data/R43; R41 fixed the older bug where the `0` defaults were
+/// written out and erased an inherited tile).
+pub(super) fn rewrite_pattern_tile(
+    element: &mut Element,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+    patterns: &PatternIndex,
+) -> Result<()> {
+    // Resolve first, mutate after: the values may live on another pattern.
+    let x = tile_number(element, patterns, "x");
+    let y = tile_number(element, patterns, "y");
+    let width = tile_number(element, patterns, "width");
+    let height = tile_number(element, patterns, "height");
+
+    // `x` and `y` move as a **point** (the tile is placed in the cell), unlike a
+    // plain length, so they are mapped together. `usvg` defaults a missing tile
+    // coordinate to zero, and zero maps to the panel offset under `Xy`; writing the
+    // mapped value is therefore equivalent to the default, not a change of meaning.
+    if x.is_some() || y.is_some() {
+        let (mapped_x, mapped_y) =
+            map_point(x.unwrap_or(0.0), y.unwrap_or(0.0), policy, source, target);
+        element.set_attr("x", crate::format_number(mapped_x));
+        element.set_attr("y", crate::format_number(mapped_y));
+    }
+    for (attr, value, axis) in [
+        ("width", width, LengthAxis::X),
+        ("height", height, LengthAxis::Y),
+    ] {
+        let Some(value) = value else { continue };
+        if !value.is_finite() {
+            continue;
+        }
+        if let Some(factor) = length_scale_factor(policy, source, target, axis) {
+            element.set_attr(attr, crate::format_number(value * factor));
+        }
+    }
+    Ok(())
+}
+
+/// A tile coordinate resolved along the `href` chain, if it is a plain number.
+fn tile_number(element: &Element, patterns: &PatternIndex, name: &str) -> Option<f32> {
+    resolved_attr(element, patterns, name).and_then(|raw| raw.parse::<f32>().ok())
+}
+
+/// The value the renderer reads for `name` on this `<pattern>`: the element's own
+/// attribute first, then the first `href`-chain link that declares it.
+fn resolved_attr(element: &Element, index: &PatternIndex, name: &str) -> Option<String> {
+    if let Some(value) = element.attr(name) {
+        return Some(value.to_string());
+    }
+    let mut link = link_of(element).map(str::to_string);
+    let mut visited: HashSet<String> = HashSet::new();
+    while let Some(href) = link {
+        let id = internal_target(&href)?;
+        if !visited.insert(id.to_string()) {
+            return None;
+        }
+        let source = index.patterns.get(id)?;
+        if let Some(value) = source.attr(name) {
+            return Some(value.clone());
+        }
+        link = source.href.clone();
+    }
+    None
 }
 
 /// The raw `href` of a `<pattern>`, in either spelling.
@@ -169,9 +325,24 @@ fn link_of(element: &Element) -> Option<&str> {
     element.attr("href").or_else(|| element.attr("xlink:href"))
 }
 
-/// The `#id` a link points at, if it stays inside this document.
+/// The `#id` a link points at, if the link is an internal IRI that the renderer
+/// can follow, parsed like `svgtypes::Stream::parse_iri`:
+///
+/// * leading and trailing **spaces** are skipped (`' '` only: a tab belongs to
+///   the id, so `"#\tbase"` names a different, unresolvable element);
+/// * the fragment runs to the first literal space;
+/// * whatever follows it must be spaces only.
+///
+/// A URI with a scheme or a path (`other.svg#q`, `http://example.com/#p`) is not
+/// an internal target, and neither is an empty fragment (round-data/R43).
 fn internal_target(href: &str) -> Option<&str> {
-    href.trim().strip_prefix('#').filter(|id| !id.is_empty())
+    let fragment = href.trim_start_matches(' ').strip_prefix('#')?;
+    let end = fragment.find(' ').unwrap_or(fragment.len());
+    let (id, tail) = fragment.split_at(end);
+    if id.is_empty() || !tail.bytes().all(|byte| byte == b' ') {
+        return None;
+    }
+    Some(id)
 }
 
 /// Whether `value` parses as the `viewBox` attribute (`svgtypes::ViewBox`): four

@@ -15,7 +15,7 @@
 //!   *nearest* ancestor policy (or the primitive's own), defaulting to `none`
 //!   (translate only, no scaling).
 //!
-//! This crate guarantees three properties:
+//! This module guarantees three properties:
 //!
 //! 1. **fail closed, validation first** — the root element, the canvas box and
 //!    the whole tree are validated *before* anything else happens. If the

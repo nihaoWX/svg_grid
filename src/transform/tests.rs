@@ -384,3 +384,5 @@ fn pattern_href_to_non_pattern_ends_the_chain() {
         "a non-pattern target ends the chain and leaves user units: {out}"
     );
 }
+
+mod units;

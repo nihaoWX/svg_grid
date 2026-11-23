@@ -105,13 +105,16 @@ pub(super) fn rewrite_rect(
     Ok(())
 }
 
-/// The tile rectangle of a `<pattern>`, which differs from a `<rect>`: an absent
-/// `x`/`y`/`width`/`height` is resolved along the `href` chain by the renderer
-/// (`usvg` calls `resolve_number` for every one of them), so only attributes this
-/// element actually carries may be rewritten. Writing the `0` defaults here would
-/// override an inherited tile — and for a pattern that declares no tile at all it
-/// would produce a zero-sized tile and erase the motif (round-data/R41).
-pub(super) fn rewrite_pattern_tile(
+/// The viewport of a `<marker>` whose `markerUnits` is `userSpaceOnUse`: the
+/// reference box and the reference point are user lengths, so they follow the
+/// panel like any other shape coordinate.
+///
+/// `usvg-0.47.0/src/parser/marker.rs:458-465` defaults `markerWidth`/
+/// `markerHeight` to `3` and `refX`/`refY` to `0`, so an absent width/height is
+/// not "nothing to scale": the renderer still clips the body to a 3×3 box, and
+/// that box has to grow with the panel or the arrowhead is cut off. `refX`/`refY`
+/// default to zero, and zero needs no rewriting.
+pub(super) fn rewrite_marker_box(
     element: &mut Element,
     policy: ScalePolicy,
     source: Rect,
@@ -119,17 +122,11 @@ pub(super) fn rewrite_pattern_tile(
     index: usize,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
-    if ["x", "y", "width", "height"]
-        .iter()
-        .all(|attr| element.attr(attr).is_some())
-    {
-        return rewrite_rect(element, policy, source, target, index, passthroughs);
-    }
-    for (attr, axis) in [
-        ("x", LengthAxis::X),
-        ("y", LengthAxis::Y),
-        ("width", LengthAxis::X),
-        ("height", LengthAxis::Y),
+    for (attr, axis, default) in [
+        ("markerWidth", LengthAxis::X, Some(3.0_f32)),
+        ("markerHeight", LengthAxis::Y, Some(3.0_f32)),
+        ("refX", LengthAxis::X, None),
+        ("refY", LengthAxis::Y, None),
     ] {
         if element.attr(attr).is_some() {
             rewrite_scaled_length(
@@ -142,6 +139,11 @@ pub(super) fn rewrite_pattern_tile(
                 index,
                 passthroughs,
             )?;
+        } else if let (Some(default), Some(factor)) = (
+            default,
+            super::lengths::length_scale_factor(policy, source, target, axis),
+        ) {
+            element.set_attr(attr, crate::format_number(default * factor));
         }
     }
     Ok(())

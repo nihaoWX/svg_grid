@@ -119,33 +119,57 @@ fn a_mask_with_fractional_content_units_keeps_its_body() {
 }
 
 #[test]
-fn a_marker_is_never_remapped_in_either_unit_mode() {
-    // A marker body lives in the marker's own viewport `(0,0,markerWidth,
-    // markerHeight)` and is placed at the vertex with `refX`/`refY` subtracted, so
-    // its numbers are relative to the reference point, not to the panel. Moving
-    // them pushes the arrow out of its own viewport and it disappears.
-    for units in ["", " markerUnits='userSpaceOnUse'"] {
-        let svg = compose(
-            &format!("marker{}.svg", units.len()),
-            &format!(
-                "<defs><marker id='k'{units} markerWidth='6' markerHeight='6' refX='0' refY='3' \
-                 orient='auto'><path d='M 0 0 L 6 3 L 0 6 Z' fill='black'/></marker></defs>\
-                 <path d='M 10 30 L 90 30' stroke='black' marker-end='url(#k)'/>"
-            ),
-            200.0,
-            160.0,
-        );
-        assert!(
-            svg.contains(r#"markerWidth="6" markerHeight="6" refX="0" refY="3""#),
-            "marker geometry is relative to its reference point ({units:?}): {svg}"
-        );
-        assert!(
-            svg.contains(r#"<path d="M 0 0 L 6 3 L 0 6 Z" fill="black"/>"#),
-            "the marker body must stay in marker coordinates ({units:?}): {svg}"
-        );
-        // The referencing path *is* panel geometry and does move.
-        assert!(svg.contains(r#"d="M 20 60 L 180 60""#), "{svg}");
-    }
+fn a_default_marker_body_is_relative_to_its_reference_point() {
+    // Under the default `markerUnits='strokeWidth'` a marker body lives in the
+    // marker's own viewport `(0,0,markerWidth,markerHeight)` and is placed at the
+    // vertex with `refX`/`refY` subtracted, so its numbers are relative to the
+    // reference point, not to the panel. Moving them pushes the arrow out of its
+    // own viewport and it disappears; the renderer already scales the body by the
+    // stroke width, and `stroke-width` is rewritten, so it follows the panel for
+    // free.
+    let svg = compose(
+        "marker_default.svg",
+        "<defs><marker id='k' markerWidth='6' markerHeight='6' refX='0' refY='3' \
+         orient='auto'><path d='M 0 0 L 6 3 L 0 6 Z' fill='black'/></marker></defs>\
+         <path d='M 10 30 L 90 30' stroke='black' marker-end='url(#k)'/>",
+        200.0,
+        160.0,
+    );
+    assert!(
+        svg.contains(r#"markerWidth="6" markerHeight="6" refX="0" refY="3""#),
+        "default marker geometry is relative to its reference point: {svg}"
+    );
+    assert!(
+        svg.contains(r#"<path d="M 0 0 L 6 3 L 0 6 Z" fill="black"/>"#),
+        "the marker body must stay in marker coordinates: {svg}"
+    );
+    // The referencing path *is* panel geometry and does move.
+    assert!(svg.contains(r#"d="M 20 60 L 180 60""#), "{svg}");
+}
+
+#[test]
+fn a_user_space_marker_follows_the_panel() {
+    // `markerUnits='userSpaceOnUse'` makes the viewport, the reference point and
+    // the body plain user lengths: nothing else rewrites them, so the composer has
+    // to. Measured through the renderer at s=2: xor 622, ink 1952 -> 1459 before
+    // the fix (round-data/R43).
+    let svg = compose(
+        "marker_user_space.svg",
+        "<defs><marker id='k' markerUnits='userSpaceOnUse' markerWidth='6' markerHeight='6' \
+         refX='0' refY='3' orient='auto'><path d='M 0 0 L 6 3 L 0 6 Z' fill='black'/></marker></defs>\
+         <path d='M 10 30 L 90 30' stroke='black' marker-end='url(#k)'/>",
+        200.0,
+        160.0,
+    );
+    assert!(
+        svg.contains(r#"markerWidth="12" markerHeight="12" refX="0" refY="6""#),
+        "a user-space marker viewport follows the panel: {svg}"
+    );
+    assert!(
+        svg.contains(r#"<path d="M 0 0 L 12 6 L 0 12 Z" fill="black"/>"#),
+        "a user-space marker body is panel geometry: {svg}"
+    );
+    assert!(svg.contains(r#"d="M 20 60 L 180 60""#), "{svg}");
 }
 
 #[test]

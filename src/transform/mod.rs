@@ -4,13 +4,15 @@
 //! Split by responsibility (R14, `ARCHITECTURE.md` §跨领域约定 体积口径):
 //! this module walks the tree and dispatches, [`lengths`] owns the scale factors and
 //! the lengths they apply to, [`primitives`] rewrites the plain shapes, [`paths`]
-//! rewrites `<path d>`, and [`patterns`] decides what a `<pattern>` body's numbers
-//! mean (its `patternContentUnits`/`viewBox`, inherited along `href`).
+//! rewrites `<path d>`, [`patterns`] decides what a `<pattern>` body's numbers mean
+//! (its `patternContentUnits`/`viewBox`, inherited along `href`), and [`units`]
+//! parses the `*Units` attributes the way the renderer does.
 
 mod lengths;
 mod paths;
 mod patterns;
 mod primitives;
+mod units;
 
 use crate::dom::{Element, Node};
 use crate::error::Result;
@@ -19,11 +21,14 @@ use crate::warnings::Passthroughs;
 
 use lengths::{rewrite_scaled_length, LengthAxis};
 use paths::rewrite_path;
-use patterns::{pattern_body_is_verbatim, pattern_units_is_user_space, PatternIndex};
+use patterns::{
+    pattern_body_is_verbatim, pattern_units_is_user_space, rewrite_pattern_tile, PatternIndex,
+};
 use primitives::{
-    rewrite_axis_coordinates, rewrite_pair, rewrite_pattern_tile, rewrite_points, rewrite_rect,
+    rewrite_axis_coordinates, rewrite_marker_box, rewrite_pair, rewrite_points, rewrite_rect,
     rewrite_rotate_transform,
 };
+use units::{marker_units_are_user_space, units_of, Units};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(super) enum ScalePolicy {
@@ -140,32 +145,55 @@ fn transform_element(
         return Ok(());
     }
 
-    // A `<marker>` is never rewritten, in either unit mode (round-data/R37).
+    // A `<marker>` body is relative to the reference point (round-data/R37): the
+    // renderer translates to the vertex, rotates, then translates by
+    // `-refX,-refY`, and clips the body to `(0, 0, markerWidth, markerHeight)`.
     //
-    // The renderer places a marker by translating to the vertex, rotating by
-    // `orient`, and then translating by `-refX,-refY`; the body is clipped to the
-    // viewport `(0, 0, markerWidth, markerHeight)` in marker coordinates. So the
-    // body's numbers are *relative to the reference point*, and the clip box is
-    // anchored at the marker origin: translating the body by the panel offset
-    // moves it out of its own viewport and the arrowhead disappears (measured:
-    // ink 184 -> 160 px, the whole marker clipped away). Leaving the body alone
-    // keeps it attached to the vertex, which is exactly what the panel move
-    // needs. Under the default `markerUnits="strokeWidth"` the renderer also
-    // scales the body by the stroke width, and `stroke-width` *is* rewritten
-    // below, so the arrowhead scales with the panel for free.
+    // Under the default `markerUnits="strokeWidth"` the body is scaled by the
+    // stroke width, and `stroke-width` *is* rewritten below, so the arrowhead
+    // follows the panel for free: leaving the body alone is correct. Under
+    // `markerUnits="userSpaceOnUse"` the body, the viewport and the reference
+    // point are all plain user lengths instead, and nothing else rewrites them —
+    // so they have to be scaled here (round-data/R43; measured at s=2:
+    // xor 622, ink 1952 -> 1459). The units attribute is compared literally:
+    // every other value means the `strokeWidth` default.
     if element.name == "marker" {
+        if !marker_units_are_user_space(element) {
+            return Ok(());
+        }
+        rewrite_marker_box(
+            element,
+            ScalePolicy::Scale,
+            source,
+            target,
+            index,
+            passthroughs,
+        )?;
+        for child in &mut element.children {
+            if let Node::Element(child) = child {
+                transform_element(
+                    child,
+                    ScalePolicy::Scale,
+                    source,
+                    target,
+                    index,
+                    patterns,
+                    passthroughs,
+                )?;
+            }
+        }
         return Ok(());
     }
 
     // A `<mask>` body is user space by default (`maskContentUnits` defaults to
-    // `userSpaceOnUse`), so it is rewritten with the geometry. Only an explicit
+    // `userSpaceOnUse`), so it is rewritten with the geometry. Only a **valid**
     // `objectBoundingBox` makes the numbers fractions of the masked element's
-    // box, and then they must stay untouched.
+    // box, and then they must stay untouched. An invalid value (a stray space, a
+    // typo) is not a synonym for `objectBoundingBox`: the renderer falls back to
+    // the `userSpaceOnUse` default and the body must be scaled (round-data/R43;
+    // `maskContentUnits="foo"` measured at s=2: xor 6800, ink 6400 -> 1600).
     if element.name == "mask"
-        && matches!(
-            element.attr("maskContentUnits"),
-            Some(units) if units.trim() != "userSpaceOnUse"
-        )
+        && units_of(element, "maskContentUnits", Units::UserSpaceOnUse) == Units::ObjectBoundingBox
     {
         return Ok(());
     }
@@ -185,17 +213,6 @@ fn transform_element(
     }
 
     Ok(())
-}
-
-/// A paint server's coordinates only live in the panel's user space when the units
-/// say so. `objectBoundingBox` (the SVG default) makes every number a fraction of
-/// the referencing element's own box, so remapping it would move the paint away
-/// from the shape.
-fn user_space_units(element: &Element, attr: &str) -> bool {
-    matches!(
-        element.attr(attr),
-        Some(units) if units.trim() == "userSpaceOnUse"
-    )
 }
 
 fn parse_policy(value: &str) -> ScalePolicy {
@@ -336,7 +353,10 @@ fn rewrite_primitive(
         // painted, just with the wrong part of the gradient, or with the wrong tile
         // size — a silent, hard-to-see change). The `objectBoundingBox` default is
         // left untouched: those numbers are fractions of the referencing box.
-        "linearGradient" if user_space_units(element, "gradientUnits") => {
+        "linearGradient"
+            if units_of(element, "gradientUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
             rewrite_pair(
                 element,
                 "x1",
@@ -361,7 +381,10 @@ fn rewrite_primitive(
         // `r`/`fr` are radii: under a non-uniform scale a circle would become an
         // ellipse, which `r` cannot express, so they follow `<circle r>`'s rule
         // (uniform factor).
-        "radialGradient" if user_space_units(element, "gradientUnits") => {
+        "radialGradient"
+            if units_of(element, "gradientUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
             rewrite_pair(
                 element,
                 "cx",
@@ -401,19 +424,25 @@ fn rewrite_primitive(
         // `objectBoundingBox`, whose fractions already follow the box
         // (round-data/R41).
         "pattern" if pattern_units_is_user_space(element, patterns) => {
-            rewrite_pattern_tile(element, policy, source, target, index, passthroughs)?
+            rewrite_pattern_tile(element, policy, source, target, patterns)?
         }
         // A mask region is a rectangle in the user space of the masked element
         // only when `maskUnits="userSpaceOnUse"`; the `objectBoundingBox` default
         // makes `x`/`y`/`width`/`height` fractions of that element's box, so they
         // must stay untouched (round-data/R37).
-        "mask" if user_space_units(element, "maskUnits") => {
+        "mask"
+            if units_of(element, "maskUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
             rewrite_rect(element, policy, source, target, index, passthroughs)?
         }
         // A filter region is likewise user-space only under
         // `filterUnits="userSpaceOnUse"`; the primitives inside are never
         // rewritten (see `transform_element`).
-        "filter" if user_space_units(element, "filterUnits") => {
+        "filter"
+            if units_of(element, "filterUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
             rewrite_rect(element, policy, source, target, index, passthroughs)?
         }
         _ => {}

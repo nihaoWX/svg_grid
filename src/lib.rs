@@ -9,6 +9,7 @@ mod label_conflicts;
 mod labels;
 mod layout;
 mod normalize;
+mod ns;
 mod output;
 mod path;
 mod plan;
@@ -286,7 +287,7 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
         // W9 is checked on the input's own subtree, before the ids are namespaced,
         // so the message names the id exactly as the source file spells it.
         dangling.extend(warnings::dangling_references(&root, index));
-        namespace_ids(&mut root, &format!("svg-grid-cell{index}-"));
+        ns::namespace_ids(&mut root, &format!("svg-grid-cell{index}-"));
 
         root.name = "g".to_string();
         root.set_attr("data-svg-grid-cell", index.to_string());
@@ -469,22 +470,5 @@ fn label_ink_box(
         y: y - LABEL_CAP_HEIGHT_RATIO * size,
         width: LABEL_INK_WIDTH_RATIO * size * characters,
         height: (LABEL_CAP_HEIGHT_RATIO + LABEL_BAND_PAD_RATIO) * size,
-    }
-}
-
-fn namespace_ids(element: &mut dom::Element, prefix: &str) {
-    for (name, value) in &mut element.attrs {
-        if name == "id" {
-            *value = format!("{prefix}{value}");
-        } else if (name == "href" || name == "xlink:href") && value.starts_with('#') {
-            *value = format!("#{prefix}{}", &value[1..]);
-        } else if value.contains("url(#") {
-            *value = value.replace("url(#", &format!("url(#{prefix}"));
-        }
-    }
-    for child in &mut element.children {
-        if let dom::Node::Element(child) = child {
-            namespace_ids(child, prefix);
-        }
     }
 }
