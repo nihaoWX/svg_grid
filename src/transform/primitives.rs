@@ -6,7 +6,7 @@ use crate::error::Result;
 use crate::geom::{parse_f32, Rect};
 use crate::warnings::Passthroughs;
 
-use super::lengths::{map_point, note_non_finite};
+use super::lengths::{map_point, note_non_finite, rewrite_scaled_length, LengthAxis};
 use super::ScalePolicy;
 
 #[allow(clippy::too_many_arguments)]
@@ -102,6 +102,48 @@ pub(super) fn rewrite_rect(
     element.set_attr("width", crate::format_number((x1 - x0).abs()));
     element.set_attr("height", crate::format_number((y1 - y0).abs()));
 
+    Ok(())
+}
+
+/// The tile rectangle of a `<pattern>`, which differs from a `<rect>`: an absent
+/// `x`/`y`/`width`/`height` is resolved along the `href` chain by the renderer
+/// (`usvg` calls `resolve_number` for every one of them), so only attributes this
+/// element actually carries may be rewritten. Writing the `0` defaults here would
+/// override an inherited tile — and for a pattern that declares no tile at all it
+/// would produce a zero-sized tile and erase the motif (round-data/R41).
+pub(super) fn rewrite_pattern_tile(
+    element: &mut Element,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
+    if ["x", "y", "width", "height"]
+        .iter()
+        .all(|attr| element.attr(attr).is_some())
+    {
+        return rewrite_rect(element, policy, source, target, index, passthroughs);
+    }
+    for (attr, axis) in [
+        ("x", LengthAxis::X),
+        ("y", LengthAxis::Y),
+        ("width", LengthAxis::X),
+        ("height", LengthAxis::Y),
+    ] {
+        if element.attr(attr).is_some() {
+            rewrite_scaled_length(
+                element,
+                attr,
+                policy,
+                source,
+                target,
+                axis,
+                index,
+                passthroughs,
+            )?;
+        }
+    }
     Ok(())
 }
 

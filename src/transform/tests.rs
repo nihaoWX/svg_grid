@@ -298,11 +298,11 @@ fn pattern_href_cycle_stops_instead_of_panicking() {
     );
 }
 
-/// A link the composer cannot resolve keeps the body verbatim: adding no scaling
-/// can never double-scale an inherited bbox body (fail safe, documented in the
-/// report).
+/// A link the composer cannot resolve ends inheritance, so the defaults apply:
+/// content units fall back to `userSpaceOnUse` and the body **does** scale
+/// (round-data/R41; usvg's `HrefIter` simply stops, it does not keep bbox units).
 #[test]
-fn unresolvable_pattern_href_keeps_body_verbatim() {
+fn unresolvable_pattern_href_falls_back_to_user_space() {
     for link in ["#missing", "other.svg#p", "", "http://example.com/#p"] {
         let svg = doc(
             &format!(
@@ -313,10 +313,60 @@ fn unresolvable_pattern_href_keeps_body_verbatim() {
         let out = run_in(&svg, DOUBLED);
         assert_eq!(
             body_rect(pattern(&out, "b")),
-            r##"<rect x="2" y="3" width="6" height="4" fill="#000000"/>"##,
-            "href={link:?} is unresolvable, so the body stays verbatim: {out}"
+            r##"<rect x="4" y="6" width="12" height="8" fill="#000000"/>"##,
+            "href={link:?} is unresolvable, so the body stays user space: {out}"
         );
     }
+}
+
+/// usvg builds its id map with `links.insert(...)` in document order, so a
+/// duplicate id resolves to the **last** definition (round-data/R41).
+#[test]
+fn duplicate_pattern_ids_resolve_to_the_last_definition() {
+    let svg = doc(
+        r##"<pattern id="a" patternContentUnits="objectBoundingBox"/><pattern id="a" patternContentUnits="userSpaceOnUse"/><pattern id="b" href="#a" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20"><rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern>"##,
+        r##"<rect x="10" y="10" width="40" height="30" fill="url(#b)"/>"##,
+    );
+    let out = run_in(&svg, DOUBLED);
+    assert_eq!(
+        body_rect(pattern(&out, "b")),
+        r##"<rect x="4" y="6" width="12" height="8" fill="#000000"/>"##,
+        "the last duplicate declares user units, so the body scales: {out}"
+    );
+}
+
+/// `patternUnits` inherits along `href` as well; without the tile's own attribute
+/// usvg reads the linked value, and its default is `objectBoundingBox` (round-data/R41).
+#[test]
+fn pattern_units_is_inherited_through_href() {
+    let svg = doc(
+        r##"<pattern id="base" patternUnits="userSpaceOnUse"/><pattern id="p" href="#base" x="10" y="10" width="20" height="20"><rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern>"##,
+        r##"<rect x="10" y="10" width="40" height="30" fill="url(#p)"/>"##,
+    );
+    let out = run_in(&svg, DOUBLED);
+    let tile = pattern(&out, "p");
+    for expected in [r#"x="20""#, r#"y="20""#, r#"width="40""#, r#"height="40""#] {
+        assert!(
+            tile.contains(expected),
+            "an inherited userSpaceOnUse tile follows the panel, missing {expected}: {out}"
+        );
+    }
+    assert_eq!(
+        body_rect(tile),
+        r##"<rect x="4" y="6" width="12" height="8" fill="#000000"/>"##,
+        "the body is plain user space: {out}"
+    );
+
+    let svg = doc(
+        r##"<pattern id="base" patternUnits="objectBoundingBox"/><pattern id="p" href="#base" x="0.1" y="0.2" width="0.5" height="0.5"><rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern>"##,
+        r##"<rect x="10" y="10" width="40" height="30" fill="url(#p)"/>"##,
+    );
+    let out = run_in(&svg, DOUBLED);
+    let tile = pattern(&out, "p");
+    assert!(
+        tile.contains(r#"x="0.1""#) && tile.contains(r#"width="0.5""#),
+        "an inherited objectBoundingBox tile keeps its fractions: {out}"
+    );
 }
 
 /// A link that lands on something which is not a `<pattern>` ends the chain, like

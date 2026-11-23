@@ -1,12 +1,12 @@
-//! What a `<pattern>` body's numbers mean: `patternContentUnits` and `viewBox`,
-//! including the ones inherited along the `href` chain (round-data/R40).
+//! What a `<pattern>` body's numbers mean: `patternContentUnits`, `viewBox` and
+//! `patternUnits`, including the ones inherited along the `href` chain
+//! (round-data/R40, corrected in round-data/R41).
 //!
 //! The composer has to know this before it rewrites any child of a `<pattern>`,
-//! because the same literal `0.1` means three different things:
+//! because the same literal `0.1` can mean three different things:
 //!
 //! * `0.1` user units of the tile — the `patternContentUnits="userSpaceOnUse"`
-//!   default. The tile scales with the panel, so the body scales too
-//!   ([`PatternBody::UserSpace`]).
+//!   default. The tile scales with the panel, so the body scales too.
 //! * `0.1` × the **referencing element's box** — `patternContentUnits` set to
 //!   `objectBoundingBox`. That box already scales with the panel, so scaling the
 //!   fraction again double-scales the motif (measured in R39: ink 4 instead of 16
@@ -16,39 +16,36 @@
 //!   must stay verbatim as well (measured in R40: `2 2 6 6` became `4 4 12 12`,
 //!   xor 1792 against the reference).
 //!
-//! Both attributes follow the `href`/`xlink:href` chain in usvg
-//! (`resolve_pattern_attr`), with the first explicit occurrence winning. The
-//! resolution below mirrors that rule, including its strictly typed reading of the
-//! values: only the exact token `objectBoundingBox` and a `viewBox` that actually
-//! parses select [`PatternBody::Verbatim`]. Anything else — a missing attribute, a
-//! different case, surrounding whitespace, an unknown token or an empty string —
-//! falls back to user space, exactly like `usvg::parser::paint_server::convert_units`
-//! (`attribute(...).unwrap_or(default)`, no trimming, case sensitive).
+//! All three attributes follow the `href`/`xlink:href` chain in usvg
+//! (`resolve_pattern_attr`), first explicit occurrence winning. The resolution
+//! below mirrors `usvg::parser::paint_server`:
 //!
-//! A chain the composer cannot resolve (a dangling `#id`, a link to another
-//! document, a cycle) is treated as [`PatternBody::Verbatim`]: leaving the body
-//! alone can never *add* a scaling the renderer did not ask for, while guessing
-//! user space could double-scale an inherited bbox body.
+//! * `patternContentUnits` and `patternUnits` are read with `convert_units`:
+//!   a typed parse, so only the exact token counts (no trimming, case sensitive);
+//!   a value that does not parse falls back to the attribute's **default** —
+//!   `userSpaceOnUse` for the content units, `objectBoundingBox` for the units.
+//! * `viewBox` counts only when it actually parses (`svgtypes::ViewBox`).
+//! * `HrefIter` stops at the first link that does not resolve to an element of
+//!   this document (a dangling `#id`, `other.svg#q`, a bare URL), and
+//!   `resolve_pattern_attr` stops at the first link that is not a `<pattern>`.
+//!   Inheritance then ends and the defaults above apply, so an unresolvable
+//!   chain is **user space**, not verbatim: the renderer really does scale such a
+//!   body (measured in R41: xor 448 / ink 96 against ink 384 when left verbatim).
+//!
+//! Duplicate ids resolve to the **last** definition: usvg fills its id map with
+//! `links.insert(...)` in document order (`parser/svgtree/parse.rs`).
 
 use std::collections::{HashMap, HashSet};
 
 use crate::dom::{Element, Node};
 
-/// How the renderer interprets the numbers inside a `<pattern>` body.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum PatternBody {
-    /// Relative to a box that already follows the panel (bbox fractions or viewBox
-    /// units): the body keeps every number.
-    Verbatim,
-    /// User units of the tile: scale them about the tile origin, never translate.
-    UserSpace,
-}
-
-/// The attributes that decide [`PatternBody`], read off one `<pattern>`.
+/// The attributes that decide how a `<pattern>` body and tile are read, read off
+/// one `<pattern>`.
 struct PatternSource {
     href: Option<String>,
     content_units: Option<String>,
     view_box: Option<String>,
+    pattern_units: Option<String>,
 }
 
 /// Document-wide `<pattern>` inheritance data, collected once per transform.
@@ -59,15 +56,12 @@ struct PatternSource {
 #[derive(Default)]
 pub(super) struct PatternIndex {
     patterns: HashMap<String, PatternSource>,
-    /// Every id in the document, so a link to a non-`<pattern>` can be told apart
-    /// from a dangling one.
-    ids: HashSet<String>,
 }
 
 impl PatternIndex {
-    /// Index every element id plus the pattern attributes reachable through `href`.
+    /// Index every `<pattern>` reachable through `href`.
     ///
-    /// Duplicate ids keep the first occurrence, like the renderer's id map.
+    /// Duplicate ids keep the **last** occurrence, like the renderer's id map.
     pub(super) fn collect(root: &Element) -> Self {
         let mut index = Self::default();
         index.walk(root);
@@ -77,19 +71,16 @@ impl PatternIndex {
     fn walk(&mut self, element: &Element) {
         if element.name == "pattern" {
             if let Some(id) = element.attr("id") {
-                if self.ids.insert(id.to_string()) {
-                    self.patterns.insert(
-                        id.to_string(),
-                        PatternSource {
-                            href: link_of(element).map(str::to_string),
-                            content_units: element.attr("patternContentUnits").map(str::to_string),
-                            view_box: element.attr("viewBox").map(str::to_string),
-                        },
-                    );
-                }
+                self.patterns.insert(
+                    id.to_string(),
+                    PatternSource {
+                        href: link_of(element).map(str::to_string),
+                        content_units: element.attr("patternContentUnits").map(str::to_string),
+                        view_box: element.attr("viewBox").map(str::to_string),
+                        pattern_units: element.attr("patternUnits").map(str::to_string),
+                    },
+                );
             }
-        } else if let Some(id) = element.attr("id") {
-            self.ids.insert(id.to_string());
         }
         for child in &element.children {
             if let Node::Element(child) = child {
@@ -99,54 +90,78 @@ impl PatternIndex {
     }
 }
 
-/// Whether the body of `element` (a `<pattern>`) must keep its numbers verbatim.
-pub(super) fn pattern_body_is_verbatim(element: &Element, index: &PatternIndex) -> bool {
-    matches!(pattern_body(element, index), PatternBody::Verbatim)
+/// The first explicit value of each inherited attribute along the `href` chain.
+#[derive(Default)]
+struct Resolved {
+    content_units: Option<String>,
+    view_box: Option<String>,
+    pattern_units: Option<String>,
 }
 
-fn pattern_body(element: &Element, index: &PatternIndex) -> PatternBody {
-    let mut content_units = element.attr("patternContentUnits");
-    let mut view_box = element.attr("viewBox");
-    let mut link = link_of(element);
-    let mut visited: HashSet<&str> = HashSet::new();
+impl Resolved {
+    fn complete(&self) -> bool {
+        self.content_units.is_some() && self.view_box.is_some() && self.pattern_units.is_some()
+    }
 
-    loop {
-        if content_units.is_some() && view_box.is_some() {
-            break;
+    fn absorb(&mut self, source: &PatternSource) {
+        if self.content_units.is_none() {
+            self.content_units.clone_from(&source.content_units);
         }
+        if self.view_box.is_none() {
+            self.view_box.clone_from(&source.view_box);
+        }
+        if self.pattern_units.is_none() {
+            self.pattern_units.clone_from(&source.pattern_units);
+        }
+    }
+}
+
+fn resolve(element: &Element, index: &PatternIndex) -> Resolved {
+    let mut resolved = Resolved {
+        content_units: element.attr("patternContentUnits").map(str::to_string),
+        view_box: element.attr("viewBox").map(str::to_string),
+        pattern_units: element.attr("patternUnits").map(str::to_string),
+    };
+    let mut link = link_of(element);
+    let mut visited: HashSet<String> = HashSet::new();
+
+    while !resolved.complete() {
         let Some(href) = link else { break };
+        // Not an id of this document (another file, a bare URL, garbage): usvg's
+        // `HrefIter` cannot follow it, so inheritance stops and the defaults win.
         let Some(id) = internal_target(href) else {
-            // Not an id in this document (another file, a bare URL, garbage): the
-            // chain cannot be resolved here, so play safe and add no scaling.
-            return PatternBody::Verbatim;
+            break;
         };
-        if !visited.insert(id) {
-            // `href` cycle. The renderer does not loop either, so stop here and
-            // decide with what has been collected so far.
+        if !visited.insert(id.to_string()) {
+            // `href` cycle. The renderer does not loop either, so decide with what
+            // has been collected so far.
             break;
         }
+        // A dangling id, or an id owned by a non-`<pattern>` element: `href_iter`
+        // stops at the first link that is not a pattern, so the chain ends here.
         let Some(source) = index.patterns.get(id) else {
-            if index.ids.contains(id) {
-                // The link points at some other element: `href_iter` stops at the
-                // first non-`<pattern>`, so the chain ends here as well.
-                break;
-            }
-            return PatternBody::Verbatim;
+            break;
         };
-        if content_units.is_none() {
-            content_units = source.content_units.as_deref();
-        }
-        if view_box.is_none() {
-            view_box = source.view_box.as_deref();
-        }
+        resolved.absorb(source);
         link = source.href.as_deref();
     }
 
-    if content_units == Some("objectBoundingBox") || view_box.is_some_and(valid_view_box) {
-        PatternBody::Verbatim
-    } else {
-        PatternBody::UserSpace
-    }
+    resolved
+}
+
+/// Whether the body of `element` (a `<pattern>`) must keep its numbers verbatim:
+/// bbox fractions or viewBox units, as opposed to user units of the tile.
+pub(super) fn pattern_body_is_verbatim(element: &Element, index: &PatternIndex) -> bool {
+    let resolved = resolve(element, index);
+    resolved.content_units.as_deref() == Some("objectBoundingBox")
+        || resolved.view_box.as_deref().is_some_and(valid_view_box)
+}
+
+/// Whether the tile rectangle of `element` is expressed in user units, i.e. it
+/// follows the panel and must be rewritten. `patternUnits` defaults to
+/// `objectBoundingBox`, whose fractions are relative to the (already scaled) box.
+pub(super) fn pattern_units_is_user_space(element: &Element, index: &PatternIndex) -> bool {
+    resolve(element, index).pattern_units.as_deref() == Some("userSpaceOnUse")
 }
 
 /// The raw `href` of a `<pattern>`, in either spelling.

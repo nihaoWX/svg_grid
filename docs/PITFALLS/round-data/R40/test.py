@@ -10,6 +10,12 @@ usvg 0.47 的权威实现：`convert_units` = `attribute(...).unwrap_or(default)
 不 trim），`resolve_pattern_attr` 沿 `href` 取第一个显式值，`viewBox` 解析成功即
 `push_pattern_transform` 且内容单位强制为 user space。
 
+R41 更正了本脚本原先写成期望的两个分支：`HrefIter` 在链接解析不出**本文件内元素**时
+（`#missing`、`other.svg#p`）只是停止继承，于是 `convert_units` 落到默认
+`userSpaceOnUse`，body **必须**缩放（原先把「原样」写成期望，实测 resvg xor 448）；
+重复 id 时 usvg 的 id map 是 `links.insert`
+顺序覆盖 ⇒ **后者胜**（原注释写「首个胜」）。C4/C5 现已改成渲染对照，二者在 R40 二进制上必须红。
+
 契约（`pitfalls-manager/references/02_consume.md` §4.3）：无参只跑快断言；退出码即结论
 （0＝全过）；每族一行 PASS/FAIL；只有 FAIL 才给细节；跳过必须打出来并给原因；幂等、离线、
 不写仓库。渲染对照缺失即 FAIL，确实要跳过请显式传 `--allow-skip`。
@@ -298,18 +304,30 @@ def family_c():
     except RuntimeError as exc:
         check(False, "C3 href 环：停机且按 user 单位处理（不 panic）", str(exc))
 
-    # 悬空 id / 外部链接 / 非 pattern 目标：fail-safe 与原样保留的取舍。
+    # 悬空 id / 外部链接 / 非 pattern 目标：usvg 的 `HrefIter` 链断即停止继承，
+    # 单位回退默认 `userSpaceOnUse` ⇒ body 必须缩放（R41 更正 R40 的反向取舍）。
     for link, want, label in (
-        ("#missing", USER_BODY, "C4 悬空 href ⇒ fail-safe 原样（不额外加缩放）"),
-        ("other.svg#p", USER_BODY, "C5 外部 href ⇒ fail-safe 原样"),
+        ("#missing", SCALED_BODY, "C4 悬空 href ⇒ 回退 userSpaceOnUse（body 缩放）"),
+        ("other.svg#p", SCALED_BODY, "C5 外部 href ⇒ 回退 userSpaceOnUse（body 缩放）"),
         ("#notpattern", SCALED_BODY, "C6 链指向非 pattern ⇒ 按 usvg 截断，body 仍缩放"),
     ):
-        doc = write_svg(f"c_link_{abs(hash(link))}.svg", pattern_doc(
+        tag = f"c_link_{abs(hash(link))}"
+        doc = write_svg(f"{tag}.svg", pattern_doc(
             '<rect id="notpattern" x="0" y="0" width="1" height="1"/>'
             f'<pattern id="p" href="{link}" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">'
             + USER_BODY + '</pattern>'))
-        out = compose_doubled(doc, f"c_link_{abs(hash(link))}_out.svg")
+        out = compose_doubled(doc, f"{tag}_out.svg")
         check(want in out, f"{label}（{link!r}）", out[:900])
+        if not RENDER.exists():
+            skip_render(f"{label} resvg 对照", f"渲染器不存在：{RENDER}")
+            continue
+        src_img = render(doc, f"{tag}_src", 2.0)
+        out_img = render(TMP / f"{tag}_out.svg", f"{tag}_out", 1.0)
+        xor, md = diff(src_img, out_img)
+        si, oi = ink(src_img), ink(out_img)
+        check(xor == 0 and md == 0 and si > 0 and oi > 0,
+              f"{label} resvg：源图×2 vs 产物 ⇒ diff 0（两边真有墨）",
+              f"xor={xor} maxdiff={md} ink_src={si} ink_out={oi}")
 
 
 # ── D. userSpaceOnUse 内容不回退（R38 的修法原样保留） ────────────────────────────────
@@ -352,7 +370,18 @@ def family_e():
                   "--ncol", "1", "--plot-margin", "0")
     if USER_BODY not in svg:
         red.append("viewBox 内容原样")
-    check(len(red) >= 6, "E1 上一轮二进制在 B1 五种非法值 + viewBox 上全部为红（断言有牙）",
+    for link in ("#missing", "other.svg#p"):
+        src = write_svg(f"e_link_{abs(hash(link))}.svg", pattern_doc(
+            f'<pattern id="p" href="{link}" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">'
+            + USER_BODY + '</pattern>'))
+        svg = compose(OLD_BIN, src, f"e_link_{abs(hash(link))}_out.svg", "--width", "200",
+                      "--height", "160", "--ncol", "1", "--plot-margin", "0")
+        if SCALED_BODY not in svg:
+            red.append(f"不可解析 href {link!r} 仍需缩放")
+    # 传 96dfeab 的二进制时这里应红 9 项（B1 五种非法值 + viewBox + 不可解析 href）；
+    # 传本轮 base 715ce48 时 B1/viewBox 已由 R40 修好，只剩 href 分支（2 项）。
+    check(any("href" in item for item in red) or len(red) >= 6,
+          "E1 旧二进制在不可解析 href 上必须红（断言有牙；B1/viewBox 的有牙性见 R40 记录）",
           f"只红了 {len(red)} 项：{red}")
 
 

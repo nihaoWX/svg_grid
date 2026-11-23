@@ -19,9 +19,10 @@ use crate::warnings::Passthroughs;
 
 use lengths::{rewrite_scaled_length, LengthAxis};
 use paths::rewrite_path;
-use patterns::{pattern_body_is_verbatim, PatternIndex};
+use patterns::{pattern_body_is_verbatim, pattern_units_is_user_space, PatternIndex};
 use primitives::{
-    rewrite_axis_coordinates, rewrite_pair, rewrite_points, rewrite_rect, rewrite_rotate_transform,
+    rewrite_axis_coordinates, rewrite_pair, rewrite_pattern_tile, rewrite_points, rewrite_rect,
+    rewrite_rotate_transform,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -396,8 +397,11 @@ fn rewrite_primitive(
         }
         // The tile box follows the same rule as a `<rect>`: the tile grid repeats
         // with period `width`/`height` from `x`/`y`, and both scale with the axis.
-        "pattern" if user_space_units(element, "patternUnits") => {
-            rewrite_rect(element, policy, source, target, index, passthroughs)?
+        // `patternUnits` also inherits along `href` and defaults to
+        // `objectBoundingBox`, whose fractions already follow the box
+        // (round-data/R41).
+        "pattern" if pattern_units_is_user_space(element, patterns) => {
+            rewrite_pattern_tile(element, policy, source, target, index, passthroughs)?
         }
         // A mask region is a rectangle in the user space of the masked element
         // only when `maskUnits="userSpaceOnUse"`; the `objectBoundingBox` default

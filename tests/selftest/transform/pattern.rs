@@ -349,3 +349,96 @@ fn pattern_body_units_are_strict_and_inherited_through_href() {
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
 }
+
+/// The `href` chain also decides *how much* a `<pattern>` scales (round-data/R41):
+///
+/// * a link that does not resolve inside this document ends inheritance, so the
+///   defaults apply and the body scales like plain user space;
+/// * duplicate ids resolve to the last definition, like usvg's id map;
+/// * `patternUnits` inherits too, and its `objectBoundingBox` default keeps the
+///   tile fractions relative to the (already scaled) box.
+#[test]
+fn pattern_href_chain_follows_the_renderers_inheritance() {
+    let input = temp_path("pattern_href_chain.svg");
+    let output = temp_path("pattern_href_chain_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="xy">
+<defs>
+<pattern id="broken" href="other.svg#p" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="3" y="4" width="5" height="2" fill="#000000"/>
+</pattern>
+<pattern id="dup" patternContentUnits="objectBoundingBox"/>
+<pattern id="dup" patternContentUnits="userSpaceOnUse"/>
+<pattern id="last_wins" href="#dup" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="4" y="5" width="6" height="3" fill="#000000"/>
+</pattern>
+<pattern id="tile_user" patternUnits="userSpaceOnUse"/>
+<pattern id="inherited_tile" href="#tile_user" x="12" y="14" width="16" height="18">
+<rect x="5" y="6" width="7" height="4" fill="#000000"/>
+</pattern>
+<pattern id="tile_box" patternUnits="objectBoundingBox"/>
+<pattern id="inherited_box" href="#tile_box" x="0.1" y="0.2" width="0.5" height="0.5">
+<rect x="5" y="6" width="7" height="4" fill="#000000"/>
+</pattern>
+</defs>
+<rect x="10" y="10" width="40" height="30" fill="url(#broken)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#last_wins)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#inherited_tile)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#inherited_box)"/>
+</g>
+</svg>"##,
+    )
+    .unwrap();
+
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 200.0,
+        height: Some(160.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+        font_families: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    // The link leaves the document, so the content units fall back to the
+    // `userSpaceOnUse` default and the body scales.
+    assert!(
+        svg.contains(r##"<rect x="6" y="8" width="10" height="4" fill="#000000"/>"##),
+        "a broken href falls back to user space: {svg}"
+    );
+    // The last `<pattern id="dup">` declares user units, so the inherited body scales.
+    assert!(
+        svg.contains(r##"<rect x="8" y="10" width="12" height="6" fill="#000000"/>"##),
+        "a duplicate id resolves to the last definition: {svg}"
+    );
+    // `patternUnits` is inherited: the tile follows the panel and its body is user space.
+    assert!(
+        svg.contains(r#"x="24" y="28" width="32" height="36""#),
+        "the inherited userSpaceOnUse tile scales: {svg}"
+    );
+    assert!(
+        svg.contains(r##"<rect x="10" y="12" width="14" height="8" fill="#000000"/>"##),
+        "the inherited userSpaceOnUse body scales: {svg}"
+    );
+    // The bbox default keeps tile fractions and body numbers.
+    assert!(
+        svg.contains(r#"x="0.1" y="0.2" width="0.5" height="0.5""#),
+        "an inherited objectBoundingBox tile keeps its fractions: {svg}"
+    );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}

@@ -1,0 +1,43 @@
+id = "R41"
+date = "2026-11-23"
+verdict = "复发"
+family = [
+  "不可解析的 `href`（悬空 `#id`、`other.svg#q`、空串、裸 URL）被 R40 判成 `Verbatim`（「不加缩放最安全」），而 usvg 的 `HrefIter` 只是停止继承、`convert_units` 落到默认 `userSpaceOnUse` ⇒ body **必须**缩放（s=2 实测 xor 448、ink 96 vs 参考 384）",
+  "重复 id 在 R40 里「首个胜」，而 usvg 的 id map 是 `parser/svgtree/parse.rs` 的 `links.insert` 顺序覆盖 ⇒ **最后**定义胜（实测 xor 448、ink 96）",
+  "`patternUnits` 同样沿 `href` 继承、且默认 `objectBoundingBox`，此前完全没解析；R40 的 tile 重写还会把缺失的 `x/y/width/height` 写成 `0`，覆盖 href 继承来的 tile（实测 ink 0）",
+]
+closures = [
+  { finding = "R41-F1", tier = "代码" },   # transform/mod.rs：transform_element 用链解析结果分流
+  { finding = "R41-F2", tier = "代码" },   # transform/mod.rs：rewrite_primitive 用 pattern_units_is_user_space 守卫 tile
+  { finding = "R41-F3", tier = "代码" },   # transform/patterns.rs：断链 ⇒ user space、重复 id 后者胜、patternUnits 继承
+  { finding = "R41-F4", tier = "代码" },   # transform/primitives.rs：rewrite_pattern_tile 只重写自身存在的属性
+  { finding = "R41-F5", tier = "测试" },   # transform/tests.rs：断链缩放 + 重复 id + patternUnits 继承
+  { finding = "R41-F6", tier = "测试" },   # selftest/transform/pattern.rs：端到端 href 链语义
+  { finding = "R41-F7", tier = "检查" },   # round-data/R41/test.py：B-1 四种断链 / B-2 重复 id / patternUnits 继承 + fail-closed
+  { finding = "R41-F8", tier = "检查" },   # round-data/R40/test.py：C4/C5 改成渲染对照并断言缩放
+  { finding = "R41-F9", tier = "检查" },   # round-data/R41/meta.toml：连带面与 how_to_run
+]
+run_before = ["R40", "R39", "R38"]
+touched = ["R40", "R39", "R38", "R37", "R36", "R35", "R31", "R28", "R25", "R16", "R9", "R8"]
+note = """
+为什么认定复发：同一处 pattern 坐标域已连续四轮改写（R16 映射、R38 相位、R39 判据、R40 继承），
+本轮修的是 R40 自己写反的方向，只隔一轮（已证）。
+根因（已证，读 usvg 0.47 + d1render 实测）：`HrefIter` 解析不出本文件元素就停止继承；
+`convert_units` = `attribute(...).unwrap_or(default)` 区分大小写、不 trim；`patternUnits` 默认
+objectBoundingBox；id map `links.insert` 顺序覆盖 ⇒ 后者胜；tile 的 x/y/width/height 也逐个
+`resolve_number` 沿链继承。
+怎么修才不弄坏前面：断链一律回退 user space；重复 id 用后者；tile 只重写元素自身声明的属性，
+缺失的留给 href 继承（写死 0 会把继承 tile 归零，实测 ink 0→192）；严格 obb/viewBox 行为逐字保留。
+证据：族 A/B/C 全部 resvg 像素对照；R40 的 C4/C5 改成渲染对照；旧二进制 715ce48 在族 E 必须红。
+评审 probe_units_inherit 的 896 是各向异性合成（sx=2.4/sy=2.0 对参考 @2.0）造成的假象，三版皆
+896、不能判分歧；真实判别用例（自身声明 tile、继承 units）实测 1992→0，见报告。
+未修：maskContentUnits/patternUnits/maskUnits/filterUnits 的 trim 宽松比较（mask 路径另有独立问题、
+基线亦错）；嵌套 pattern、patternTransform 长度量、pattern 外 clip-path、pattern 内 text 照旧。
+"""
+how_to_run = """
+cd tools/svg_grid && python3 docs/PITFALLS/round-data/R41/test.py    # rc=0 = 全部成立
+前置：`cargo build --offline`（根 crate，debug 二进制）。
+渲染对照需要 /tmp/d1_eval/render/target/release/d1render（缺失 ⇒ FAIL；确实要跳过传 --allow-skip）。
+fail-closed 段：SVG_GRID_OLD_BIN=<715ce48 的 svg_grid> 时，断链/重复 id/patternUnits 继承必须全红，
+否则 FAIL；不给则打 SKIP。可用 SVG_GRID_BIN / SVG_GRID_RENDER_BIN 覆盖二进制定位。
+"""
