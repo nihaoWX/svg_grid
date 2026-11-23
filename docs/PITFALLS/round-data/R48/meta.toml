@@ -1,0 +1,58 @@
+id = "R48"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "组合图字母查重只取 marker 的直接 Text 子节点：`<text data-svg-grid-label=\"0\"><tspan>A</tspan></text>` ×2、`<g data-svg-grid-label=\"0\"><text>A</text></g>` ×2 都 rc=0 静默重号（matplotlib mathtext / R ggplot2 会把字母拆进 tspan）",
+  "字母未规范化：`A` 与 `' A '` 单独渲染 ink 均 1200、像素 diff (0,0)，但查重按原始字符串比较 ⇒ rc=0",
+  "不渲染子树里的 marker 也参与查重：`<defs>` / `<symbol>` / `display:none` / `visibility:hidden` / `opacity=\"0\"` 五种形态全 rc=2，而渲染 diff 为 0",
+  "`collisions` 用 `groups.iter_mut().find` 线性找组 ⇒ O(n²)：40000 个互不相同字母 release 1.590 s（base 0.075 s）",
+  "`LetterSite.cell` 恒等于 `input`，报错里的 `cell` 是假字段；≥5 个撞号站点被折叠成裸 `\"A\"`（122 字节 stderr 丢明细）；`Fix: ... pass unique --labels here` 不可执行（任何非空 `--labels` 都会触发 W3 rc=2）",
+]
+
+closures = [
+  { finding = "R48-F1", tier = "代码" },
+  { finding = "R48-F2", tier = "代码" },
+  { finding = "R48-F3", tier = "代码" },
+  { finding = "R48-F4", tier = "代码" },
+  { finding = "R48-F5", tier = "代码" },
+  { finding = "R48-F6", tier = "代码" },
+  { finding = "R48-F7", tier = "代码" },
+  { finding = "R48-F8", tier = "检查" },
+  { finding = "R48-F9", tier = "测试" },
+  { finding = "R48-F10", tier = "检查" },
+]
+
+run_before = ["R33", "R44", "R47"]
+touched = []
+
+note = """
+根因（已证）：`collect_letters` 只遍历 marker 的直接 `Node::Text` 子节点，
+`Node::Element(_) => None` 把 tspan / `<g>` 包装整棵丢掉；空串时连 marker 一起丢。
+查重键是原始字符串，没有和显式 `--labels` 路径共用规范化；`collisions` 用线性 find 分组；
+`LetterSite.cell` 在构造时直接抄了 `input`；`describe_duplicate_panel_letters` 在
+`MAX_ERROR_BODY` 压力下退化成裸字母，且 fix 文案指向不可执行的 `--labels`。
+修法：`walk_letters` / `collect_text` 按文档顺序递归拼接子树文本（实体已在 R47 的 DOM
+解析阶段解码，本轮不再解）；`enter` 按 SVG 语义跳过不渲染子树（`NON_RENDERED` 12 标签、
+`display:none` 不可被后代覆盖、`visibility:hidden` 可被后代 `visible` 覆盖、`opacity:0`
+按祖先继承）；`normalize_label`（trim + 内部空白折叠）同时用于继承字母与显式 `--labels`；
+`HashMap<&str, usize>` 分组 O(n)；`LetterSite.cell: Option<usize>` 记录 marker 的
+`data-svg-grid-label` 值（显式标签记槽位）；`fit_within` + 逐站点折叠，放不下时用
+「前 N 个 + 其余 M 个」明确计数；fix 文案改为「去掉输入自带的 marker，或让每个字母只出现一次」。
+口径决定：P6「spacer 字母不渲染」前提为假 —— `--input none` 槽位上的显式 `--labels`
+确实渲染（d1render 25 px、cairosvg 94 px；`[ab, none] --labels ,A` 右半 ink 328），
+故 spacer 的显式字母仍参与查重，不按 P6 改。378 对语料组合修前 227 对被拒、修后仍 227 对，
+集合完全相同：该语料没有 tspan / 不可见 marker，227 对全是真重号；误伤面的修复由五种
+不可见形态的端到端用例与证据 C 段覆盖，不以语料对数下降作为判据。
+R19 是既有失效（写死 190 用例，8 条红），照实记为 pre-existing，未改其期望值。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R48/test.py
+# 有牙（fail-closed）：指向修复前的二进制（1b7ef3d），A/B/C/D/F 段必须红
+SVG_GRID_OLD_BIN=/tmp/r48old/target/release/svg_grid python3 docs/PITFALLS/round-data/R48/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R48/run_old_evidence.sh $(seq -f 'R%g' 3 47 | grep -vE '^R(12|27)$')
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""

@@ -76,6 +76,7 @@ mod uses;
 mod walk;
 
 pub use walk::ink_bbox;
+pub(crate) use walk::{parse_number, style_prop, NON_RENDERED};
 
 #[cfg(test)]
 mod tests;

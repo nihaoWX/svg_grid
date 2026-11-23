@@ -37,6 +37,14 @@ pub use raster::{
 };
 pub use warnings::{classify, describe_passthrough, Passthrough, WARNING_CODES};
 
+/// Trim a panel letter and collapse internal whitespace runs to one space.
+///
+/// An inherited `data-svg-grid-label` text and an explicit `--labels` entry must
+/// compare the same way: `A`, `" A "` and `"A  B"` are `A`, `A` and `A B`.
+pub fn normalize_label(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
 #[derive(Debug, Clone)]
 pub enum SvgInput {
     Path(PathBuf),

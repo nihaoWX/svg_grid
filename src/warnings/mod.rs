@@ -284,9 +284,15 @@ pub(crate) fn assemble_within(
 
 /// Return the first candidate that fits [`MAX_BODY`], else the shortest one.
 pub(crate) fn fit(variants: &[String]) -> String {
+    fit_within(variants, MAX_BODY)
+}
+
+/// [`fit`] with an explicit body budget: hard errors print under a longer prefix
+/// (`svg_grid: invalid input: `), so they must fit [`MAX_ERROR_BODY`].
+pub(crate) fn fit_within(variants: &[String], budget: usize) -> String {
     if let Some(fitting) = variants
         .iter()
-        .find(|candidate| candidate.chars().count() <= MAX_BODY)
+        .find(|candidate| candidate.chars().count() <= budget)
     {
         return fitting.clone();
     }

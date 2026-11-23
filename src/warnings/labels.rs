@@ -152,8 +152,11 @@ pub fn describe_clipped_label(
 pub struct LetterSite {
     /// Input index (0-based), i.e. the cell it lands in.
     pub input: usize,
-    /// Cell index in the finished grid.
-    pub cell: usize,
+    /// Cell index the letter belongs to: the input's own
+    /// `data-svg-grid-label` value for an inherited letter (the cell *inside*
+    /// that input), or the slot this call writes for an explicit `--labels`
+    /// entry. `None` when a hand-edited marker is not a number.
+    pub cell: Option<usize>,
     /// `Some(marker)` when the letter comes from the input's own
     /// `data-svg-grid-label`; `None` when this call writes it.
     pub inner: Option<String>,
@@ -165,7 +168,10 @@ impl LetterSite {
     }
 
     fn place(&self) -> String {
-        format!("#{} (cell {})", self.input, self.cell)
+        match self.cell {
+            Some(cell) => format!("#{} (cell {})", self.input, cell),
+            None => format!("#{}", self.input),
+        }
     }
 }
 
@@ -173,42 +179,63 @@ impl LetterSite {
 /// those places is an input's own letter (an explicit `--labels A,A` collision is
 /// W4b's warning, not this error).
 ///
-/// The message names the letter, every input/cell pair it lands in, and the fix:
-/// letter only the outer layer, or give this call unique `--labels`.
+/// The message names the letter and every input/cell pair it lands in. A figure
+/// with many colliding sites is folded to "first N + `+M more`" so the omitted
+/// count is always explicit; the count-only fallback (`"A" (6 places)`) is used
+/// only when even one site per letter does not fit the 200-character line.
 pub fn describe_duplicate_panel_letters(
     collisions: &[(String, Vec<LetterSite>)],
 ) -> Option<String> {
     if collisions.is_empty() {
         return None;
     }
-    let detailed: Vec<String> = collisions
+    let head = "duplicate panel letters: ";
+    let tail = ". Fix: drop the inputs' data-svg-grid-label markers, or letter each panel once.";
+    let max_sites = collisions
         .iter()
-        .map(|(letter, sites)| {
-            // One input can carry the same letter twice; then there is only one
-            // place to name and the count is what explains the collision.
-            let mut places: Vec<String> = Vec::new();
-            for site in sites {
-                let place = site.place();
-                if !places.contains(&place) {
-                    places.push(place);
-                }
-            }
-            if places.len() == 1 {
-                format!("{letter:?} {} times inside {}", sites.len(), places[0])
-            } else {
-                format!("{letter:?} at {}", places.join(" and "))
-            }
-        })
-        .collect();
-    let plain: Vec<String> = collisions
+        .map(|(_, sites)| sites.len())
+        .max()
+        .unwrap_or(1);
+    let mut variants: Vec<String> = Vec::new();
+    // Richest first: list every site of every letter, then fold the site lists
+    // one place at a time. `describe_sites` keeps the omitted count explicit.
+    for shown in (1..=max_sites).rev() {
+        let parts: Vec<String> = collisions
+            .iter()
+            .map(|(letter, sites)| describe_sites(letter, sites, shown))
+            .collect();
+        variants.push(format!("{head}{}{tail}", parts.join("; ")));
+    }
+    // Still too long: fold whole letters, but keep each letter's place count.
+    let counts: Vec<String> = collisions
         .iter()
-        .map(|(letter, _)| format!("{letter:?}"))
+        .map(|(letter, sites)| format!("{letter:?} ({} places)", sites.len()))
         .collect();
-    Some(assemble_within(
-        "duplicate panel letters: ",
-        &detailed,
-        &plain,
-        &[". Fix: letter only at the outer layer, or pass unique --labels here."],
-        super::MAX_ERROR_BODY,
-    ))
+    for shown in (1..=counts.len()).rev() {
+        variants.push(format!("{head}{}{tail}", super::fold(&counts, shown)));
+    }
+    Some(super::fit_within(&variants, super::MAX_ERROR_BODY))
+}
+
+/// One letter's sites, listing at most `shown` distinct places and naming the
+/// number of places left out.
+fn describe_sites(letter: &str, sites: &[LetterSite], shown: usize) -> String {
+    // One input can carry the same letter twice at the same marker value; then
+    // there is only one place to name and the count is what explains it.
+    let mut places: Vec<String> = Vec::new();
+    for site in sites {
+        let place = site.place();
+        if !places.contains(&place) {
+            places.push(place);
+        }
+    }
+    if places.len() == 1 {
+        return format!("{letter:?} {} times inside {}", sites.len(), places[0]);
+    }
+    let listed = places[..shown.min(places.len())].join(" and ");
+    if shown < places.len() {
+        format!("{letter:?} at {listed}; +{} more", places.len() - shown)
+    } else {
+        format!("{letter:?} at {listed}")
+    }
 }

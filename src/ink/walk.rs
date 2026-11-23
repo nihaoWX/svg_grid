@@ -16,7 +16,7 @@ const DEFAULT_FONT_SIZE: f64 = 16.0;
 /// Containers whose subtree is not drawn where it sits: `<defs>` content is
 /// pulled in by a `<use>` (resolved separately against [`collect_ids`]), while
 /// the rest is never drawn at all. None of their geometry is counted in place.
-const NON_RENDERED: [&str; 12] = [
+pub(crate) const NON_RENDERED: [&str; 12] = [
     "defs", "clipPath", "mask", "symbol", "pattern", "marker", "metadata", "title", "desc",
     "style", "script", "filter",
 ];
@@ -132,7 +132,7 @@ fn is_display_none(element: &Element) -> bool {
 /// Read a presentation property, honouring the inline `style="..."` declaration
 /// list first (it outranks a same-named presentation attribute) and falling back
 /// to the attribute itself.
-pub(super) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<&'a str> {
+pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<&'a str> {
     if let Some(style) = element.attr("style") {
         for declaration in style.split(';') {
             if let Some((name, value)) = declaration.split_once(':') {
@@ -151,7 +151,7 @@ pub(super) fn number_attr(element: &Element, name: &str) -> Option<f64> {
 
 /// Parse a length's numeric prefix (`"12"`, `"12px"`, `"1.5em"`), mirroring the
 /// leniency of `style::scale_token`. Returns `None` when no numeric prefix exists.
-pub(super) fn parse_number(value: &str) -> Option<f64> {
+pub(crate) fn parse_number(value: &str) -> Option<f64> {
     let value = value.trim();
     if let Ok(number) = value.parse::<f64>() {
         return Some(number);

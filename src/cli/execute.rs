@@ -181,11 +181,7 @@ fn parse_labels(value: &str, spacers: &[bool]) -> Vec<String> {
                 })
                 .collect()
         }
-        _ => value
-            .split(',')
-            .map(str::trim)
-            .map(str::to_string)
-            .collect(),
+        _ => value.split(',').map(svg_grid::normalize_label).collect(),
     }
 }
 

@@ -19,7 +19,10 @@
 //! Both the render path and `--plan` call this before writing or printing
 //! anything, so a rejected call leaves no output file and no plan behind.
 
+use std::collections::HashMap;
+
 use crate::dom;
+use crate::ink::{parse_number, style_prop, NON_RENDERED};
 use crate::plan::PreparedInput;
 use crate::warnings::LetterSite;
 use crate::{warnings, LabelSpec, Result, SvgGridError};
@@ -76,7 +79,10 @@ fn collisions(
                 marker.letter,
                 LetterSite {
                     input: index,
-                    cell: index,
+                    // The marker value is the cell index *inside* this input, so
+                    // a nested composite reports the real cell instead of the
+                    // input's own index (R48).
+                    cell: marker.marker.parse::<usize>().ok(),
                     inner: Some(marker.marker),
                 },
             ));
@@ -84,14 +90,15 @@ fn collisions(
     }
     if let Some(labels) = labels {
         for (index, label) in labels.labels.iter().enumerate().take(prepared.len()) {
-            if label.is_empty() {
+            let letter = crate::normalize_label(label);
+            if letter.is_empty() {
                 continue;
             }
             sites.push((
-                label.clone(),
+                letter,
                 LetterSite {
                     input: index,
-                    cell: index,
+                    cell: Some(index),
                     inner: None,
                 },
             ));
@@ -99,12 +106,17 @@ fn collisions(
     }
 
     // First-seen order keeps the message deterministic (input order, then the
-    // order the letters appear in the file).
+    // order the letters appear in the file). The map makes grouping O(n): the
+    // old linear `find` was O(n²) and took 1.6 s for 40000 distinct letters.
     let mut groups: Vec<(String, Vec<LetterSite>)> = Vec::new();
-    for (letter, site) in sites {
-        match groups.iter_mut().find(|(seen, _)| *seen == letter) {
-            Some((_, places)) => places.push(site),
-            None => groups.push((letter, vec![site])),
+    let mut index: HashMap<&str, usize> = HashMap::new();
+    for (letter, site) in &sites {
+        match index.get(letter.as_str()) {
+            Some(&group) => groups[group].1.push(site.clone()),
+            None => {
+                index.insert(letter.as_str(), groups.len());
+                groups.push((letter.clone(), vec![site.clone()]));
+            }
         }
     }
     groups
@@ -122,15 +134,21 @@ struct InheritedLetter {
 /// Walk an input subtree and collect every `data-svg-grid-label` marker with its
 /// letter text. Nested composites may carry several inside a single input.
 fn collect_letters(element: &dom::Element, out: &mut Vec<InheritedLetter>) {
+    walk_letters(element, true, out);
+}
+
+/// Recursive half of [`collect_letters`]: `visible` is the effective
+/// `visibility` inherited from the ancestors.
+fn walk_letters(element: &dom::Element, inherited_visible: bool, out: &mut Vec<InheritedLetter>) {
+    let Some(visible) = enter(element, inherited_visible) else {
+        return;
+    };
     if let Some(marker) = element.attr("data-svg-grid-label") {
-        let letter = element
-            .children
-            .iter()
-            .filter_map(|child| match child {
-                dom::Node::Text(text) => Some(text.as_str()),
-                dom::Node::Element(_) => None,
-            })
-            .collect::<String>();
+        let mut text = String::new();
+        collect_text(element, visible, &mut text);
+        let letter = crate::normalize_label(&text);
+        // An empty (or whitespace-only) marker is not an "empty letter": it
+        // draws nothing, so it must not take part in the collision check.
         if !letter.is_empty() {
             out.push(InheritedLetter {
                 marker: marker.to_string(),
@@ -140,9 +158,53 @@ fn collect_letters(element: &dom::Element, out: &mut Vec<InheritedLetter>) {
     }
     for child in &element.children {
         if let dom::Node::Element(child) = child {
-            collect_letters(child, out);
+            walk_letters(child, visible, out);
         }
     }
+}
+
+/// Concatenate the text of a marker's subtree in document order, skipping
+/// subtrees that are not rendered. `<text>A<tspan>B</tspan></text>` and
+/// `<text><tspan>A</tspan><tspan>B</tspan></text>` both yield `AB`.
+fn collect_text(element: &dom::Element, visible: bool, out: &mut String) {
+    for child in &element.children {
+        match child {
+            dom::Node::Text(text) => {
+                if visible {
+                    out.push_str(text);
+                }
+            }
+            dom::Node::Element(child) => {
+                if let Some(child_visible) = enter(child, visible) {
+                    collect_text(child, child_visible, out);
+                }
+            }
+        }
+    }
+}
+
+/// Fold one element's own `display` / `opacity` / `visibility` onto the inherited
+/// visibility. `None` means the element and its whole subtree are not rendered:
+/// `display:none` and `opacity:0` cannot be undone by a descendant, while
+/// `visibility:hidden` can (`visibility="visible"` on a child wins).
+fn enter(element: &dom::Element, inherited_visible: bool) -> Option<bool> {
+    if NON_RENDERED.contains(&element.name.as_str()) {
+        return None;
+    }
+    if matches!(style_prop(element, "display").map(str::trim), Some("none")) {
+        return None;
+    }
+    if style_prop(element, "opacity")
+        .and_then(parse_number)
+        .is_some_and(|opacity| opacity <= 0.0)
+    {
+        return None;
+    }
+    Some(match style_prop(element, "visibility").map(str::trim) {
+        Some("hidden") | Some("collapse") => false,
+        Some("visible") => true,
+        _ => inherited_visible,
+    })
 }
 
 /// Whether an input subtree already contains a `data-svg-grid-label` marker.
@@ -252,6 +314,122 @@ mod tests {
         // W4b's case: the user wrote `--labels A,A` on two plain inputs.
         validate_label_conflicts(&prepared(&[plain(), plain()]), Some(&spec(&["A", "A"])))
             .expect("--labels A,A is the user's own choice (W4b warns, rc=0)");
+    }
+
+    #[test]
+    fn tspan_wrapped_letters_are_collected_recursively() {
+        let tspan = "<g><text data-svg-grid-label=\"0\"><tspan>A</tspan></text></g>";
+        let err = validate_label_conflicts(&prepared(&[tspan, tspan]), None)
+            .expect_err("matplotlib/ggplot2 split the letter into a tspan");
+        assert!(err.to_string().contains("\"A\""), "{err}");
+    }
+
+    #[test]
+    fn a_group_marker_collects_the_text_below_it() {
+        let group = "<g data-svg-grid-label=\"0\"><text>A</text></g>";
+        let err = validate_label_conflicts(&prepared(&[group, group]), None)
+            .expect_err("a marker on a <g> must read the text inside it");
+        assert!(err.to_string().contains("\"A\""), "{err}");
+    }
+
+    #[test]
+    fn text_is_concatenated_in_document_order() {
+        let inline = "<g><text data-svg-grid-label=\"0\">A<tspan>B</tspan></text></g>";
+        let nested =
+            "<g><text data-svg-grid-label=\"0\"><tspan>A</tspan><tspan>B</tspan></text></g>";
+        let err = validate_label_conflicts(&prepared(&[inline, nested]), None)
+            .expect_err("both spell AB");
+        assert!(err.to_string().contains("\"AB\""), "{err}");
+    }
+
+    #[test]
+    fn surrounding_whitespace_is_normalized_away() {
+        let padded = "<g><text data-svg-grid-label=\"0\"> A </text></g>";
+        let err = validate_label_conflicts(&prepared(&[&lettered("A"), padded]), None)
+            .expect_err("A and ' A ' render identically");
+        assert!(err.to_string().contains("\"A\""), "{err}");
+    }
+
+    #[test]
+    fn an_empty_marker_is_not_a_letter() {
+        let empty = "<g><text data-svg-grid-label=\"0\">   </text></g>";
+        validate_label_conflicts(&prepared(&[empty, &lettered("A")]), None)
+            .expect("a marker that draws nothing must not collide");
+    }
+
+    #[test]
+    fn markers_in_non_rendered_subtrees_are_ignored() {
+        for wrapper in [
+            "<defs><text data-svg-grid-label=\"0\">A</text></defs>",
+            "<symbol><text data-svg-grid-label=\"0\">A</text></symbol>",
+            "<g display=\"none\"><text data-svg-grid-label=\"0\">A</text></g>",
+            "<g visibility=\"hidden\"><text data-svg-grid-label=\"0\">A</text></g>",
+            "<g opacity=\"0\"><text data-svg-grid-label=\"0\">A</text></g>",
+        ] {
+            validate_label_conflicts(&prepared(&[wrapper, &lettered("A")]), None)
+                .unwrap_or_else(|err| panic!("{wrapper} is not rendered: {err}"));
+        }
+    }
+
+    #[test]
+    fn visibility_can_be_restored_by_a_descendant() {
+        let restored = "<g visibility=\"hidden\"><text data-svg-grid-label=\"0\" \
+                        visibility=\"visible\">A</text></g>";
+        let err = validate_label_conflicts(&prepared(&[restored, &lettered("A")]), None)
+            .expect_err("visibility=visible on the text makes it render");
+        assert!(err.to_string().contains("\"A\""), "{err}");
+    }
+
+    #[test]
+    fn display_none_cannot_be_restored_by_a_descendant() {
+        let hidden = "<g display=\"none\"><text data-svg-grid-label=\"0\" \
+                      display=\"inline\">A</text></g>";
+        validate_label_conflicts(&prepared(&[hidden, &lettered("A")]), None)
+            .expect("display:none removes the subtree, whatever the child says");
+    }
+
+    #[test]
+    fn the_reported_cell_is_the_marker_value_not_the_input_index() {
+        let nested = "<g><text data-svg-grid-label=\"1\">A</text></g>";
+        let err = validate_label_conflicts(&prepared(&[nested, &lettered("A")]), None)
+            .expect_err("A at cell 1 and A at cell 0 collide");
+        let message = err.to_string();
+        assert!(message.contains("#0 (cell 1)"), "{message}");
+        assert!(message.contains("#1 (cell 0)"), "{message}");
+    }
+
+    #[test]
+    fn many_colliding_sites_keep_an_explicit_remainder() {
+        let inputs: Vec<String> = (0..6).map(|_| lettered("A")).collect();
+        let refs: Vec<&str> = inputs.iter().map(String::as_str).collect();
+        let err = validate_label_conflicts(&prepared(&refs), None).expect_err("six A's collide");
+        let message = err.to_string();
+        assert!(message.chars().count() <= 200, "{message}");
+        assert!(
+            message.contains("+3 more") || message.contains("(6 places)"),
+            "the omitted sites must be counted, not dropped: {message}"
+        );
+    }
+
+    #[test]
+    fn explicit_labels_are_normalized_like_inherited_ones() {
+        let err = validate_label_conflicts(
+            &prepared(&[&lettered("A"), plain()]),
+            Some(&spec(&["", " A "])),
+        )
+        .expect_err("' A ' is the same letter as A");
+        assert!(err.to_string().contains("\"A\""), "{err}");
+    }
+
+    #[test]
+    fn an_explicit_letter_on_a_spacer_still_collides() {
+        // A spacer draws no letter of its own, but an explicit --labels entry
+        // for that cell is drawn (R48 verified with d1render: 25 ink pixels).
+        let mut inputs = prepared(&[&lettered("A")]);
+        inputs.push(None);
+        let err = validate_label_conflicts(&inputs, Some(&spec(&["", "A"])))
+            .expect_err("the spacer's A renders, so it collides with the inherited A");
+        assert!(err.to_string().contains("\"A\""), "{err}");
     }
 
     #[test]
