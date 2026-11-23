@@ -112,15 +112,20 @@
    `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
 3. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
    pattern 外的 `clip-path` 被 pattern body 引用（`20736/6264`）、pattern 内 `<text>`（resvg 不画）。
-4. **数字实体被双重转义**（`docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md`）：
+4. **R44 的字母重号检测有三类漏判**（`docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md`）：
+   `src/label_conflicts.rs:124-146` 的 `collect_letters` 只取 marker 元素的**直接** `Text` 子节点 ⇒
+   `<text data-svg-grid-label="0"><tspan>A</tspan></text>` 与 `<g data-svg-grid-label="0"><text>A</text></g>`
+   都 rc=0 静默重号；比较也不做空白/实体规范化（`A` vs `' A '` 算两个字母，而显式 `--labels` 路径会 trim）。
+   另两处非阻断：`LetterSite.cell` 恒等于 `input`（深层嵌套文案误导）、≥5 个重号时站点列表塌成 plain。
+5. **数字实体被双重转义**（`docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md`）：
    `src/dom.rs:151-158` 的 `resolve_reference` 只认五个命名实体，`&#176;`/`&#x42;` 被还原成字面量再转义成
    `&amp;#176;` ⇒ 渲染成可见文本。实测 `37&#176;C &#215;2 &#177;1` 暗像素 64000→995（文字几乎全丢）。
    `tests/fixtures/` 0 个 `&#`（220 fixture 抓不到），但 R/ggplot2 与部分 matplotlib 后端会输出数字实体。
-5. **marker + viewBox 二次缩放**（R43 遗留，窄口径）：`<marker markerUnits="userSpaceOnUse" viewBox="…">`
+6. **marker + viewBox 二次缩放**（R43 遗留，窄口径）：`<marker markerUnits="userSpaceOnUse" viewBox="…">`
    的 body 被再乘一次 (sx,sy)（`xor 48`，cairosvg 同样）；usvg `parser/marker.rs:183-196` 有 viewBox 时
    已按视口放大内容。语料 0 个 marker。
-6. **gradient/mask/filter 的 units 不沿 href 继承**（R43 遗留）：`patternUnits` 已修（R41），其余三类未修。
-7. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+7. **gradient/mask/filter 的 units 不沿 href 继承**（R43 遗留）：`patternUnits` 已修（R41），其余三类未修。
+8. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；`verify` 与"旧证据全绿"的口径**不含 R19**。
 
 ## 其他未决项
