@@ -23,8 +23,11 @@
 | R42 `convert/` crate 并入 `src/convert/` 模块（用户要求） | ✅ 已搬迁，对抗评审 PASS | `de1bfae`→`8f38435`；R42 |
 | R43 单位属性语义（非法值/继承、marker/mask 内容域、IRI） | ✅ 已修，对抗评审 PASS（1 项 P1 遗留） | `8846fa8`→`2287213`；R43 |
 | R44 组合图字母重号静默（rc=0、A,B,A） | ✅ 已修，rc=2 fail-closed | `4873156`→`42184d5`；R44 |
-| R45 doctor 告警码漂移（11 条里 5 条死码，W7 门禁 fail-open） | ⏳ 进行中 | 报告 `docs/PITFALLS/suggestion-svg_grid-doctor-warning-codes-drift.md` |
+| R45 doctor 告警码漂移（11 条里 5 条死码，W7 门禁 fail-open） | ✅ 已修（短语表搬到 `src/warnings/codes.rs`，W7 门禁复活） | `196da47`；R45 |
+| R46 `<defs>` 子树不继承引用者 `data-scale` + marker/viewBox + units 继承 + normalize 盲缩放 | ⏳ 进行中 | 报告 `docs/PITFALLS/blocker-svg_grid-defs-subtree-units.md` |
 | 数字实体双重转义（`&#176;` 等，文字几乎全丢） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md` |
+| 字母重号检测漏判（tspan/g 包裹、实体、空白）与反向误伤（不可见字母） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md` |
+| `--normalize-input-max-side` 盲缩放 obb 分数（hatch 4800→1200） | ⏳ 已开报告，R46 一并修 | `docs/PITFALLS/blocker-svg_grid-normalize-scales-obb-fractions.md` |
 
 ## 1. 先读什么（按顺序）
 
@@ -122,7 +125,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 406**：221 lib + 59 bin + 126 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 419**：231 lib + 59 bin + 129 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -170,11 +173,12 @@
    每轮仍走 `query <位置> --repo .` → 改 → `cargo test` → `doctor` → `install.sh` → commit → `record`；
    若与旧轮同址（复发），在 `docs/PITFALLS/round-data/<新轮>/` 留可跑证据。
 3. ~~消费 `blocker-convert-defs-mask-dropped.md`~~ —— 已完成（R37），后续 R38–R41 收掉了嵌套 `<defs>`、
-   pattern 相位与 pattern 单位语义。**下一轮 = 单位语义收尾**（R41 遗留 P2：混合单位 tile 继承静默
-   `xor 1104`；`maskContentUnits`/`href` 词法的 trim 宽松；`patternTransform` 长度量；嵌套 pattern）。
-   另有两份新报告待排期：`blocker-svg_grid-duplicate-letters-across-composites.md`、
-   `suggestion-svg_grid-doctor-warning-codes-drift.md`。
-4. 交付前全量复核：`cargo test`（单 crate **406**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   pattern 相位与 pattern 单位语义；R42 把转换器并入 `src/convert/`；R43 收掉单位属性语义；
+   R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移。
+   **进行中 = R46 单位语义收尾**（`<defs>` 子树不继承引用者 `data-scale`、marker+viewBox 二次缩放、
+   gradient/mask/filter 的 units 不沿 href 继承、`--normalize-input-max-side` 盲缩放 obb 分数）。
+   之后消费剩余报告：数字实体双重转义、字母重号检测漏判（含不可见字母误伤）。
+4. 交付前全量复核：`cargo test`（单 crate **419**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
