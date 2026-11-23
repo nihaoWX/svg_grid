@@ -101,8 +101,15 @@ fn scale_children(element: &mut Element, factor: f32, defs: &Definitions) {
 /// itself (`mask.rs:20-30`, `marker.rs:222`). A `viewBox` body is already mapped
 /// onto the tile/viewport by the renderer, so it must stay verbatim.
 fn scale_definition(element: &mut Element, factor: f32, defs: &Definitions) {
-    scale_numeric_attrs(element, &["font-size", "stroke-width"], factor);
-    scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
+    // The definition's **own** `stroke-width`/`font-size` are inherited by its
+    // body, so they live in the body's coordinate system, not the panel's. Under
+    // `objectBoundingBox` they are fractions of the referencing box and under a
+    // `viewBox` they are viewBox units; the renderer already maps both, so
+    // scaling them here shrinks the outline twice (round-data/R49).
+    if content_is_user_space(element, defs) {
+        scale_numeric_attrs(element, &["font-size", "stroke-width"], factor);
+        scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
+    }
     scale_rotate_transform(element, factor);
 
     match element.name.as_str() {
@@ -170,6 +177,38 @@ fn scale_definition(element: &mut Element, factor: f32, defs: &Definitions) {
             scale_children(element, factor, defs);
         }
         _ => {}
+    }
+}
+
+/// Whether a definition's body is drawn in **user space**, so its own inherited
+/// lengths follow the panel. `objectBoundingBox` bodies are fractions of the
+/// referencing box and `viewBox` bodies are viewBox units; both are mapped by the
+/// renderer and must stay verbatim (round-data/R49).
+///
+/// The units are read the way `usvg-0.47.0` reads them: `patternContentUnits`
+/// and `primitiveUnits` along the `href` chain (`paint_server.rs:169`,
+/// `filter.rs:171`), `maskContentUnits` and `clipPathUnits` off the element
+/// itself (`mask.rs:20-30`, `clippath.rs:23-25`), and `markerUnits` as the
+/// literal `userSpaceOnUse` token (`marker.rs:222`). A gradient has no content
+/// domain, so it keeps the old unconditional behaviour.
+fn content_is_user_space(element: &Element, defs: &Definitions) -> bool {
+    match element.name.as_str() {
+        "pattern" => {
+            !has_view_box(element)
+                && defs.units(element, "patternContentUnits", Units::UserSpaceOnUse)
+                    == Units::UserSpaceOnUse
+        }
+        "marker" => marker_units_are_user_space(element),
+        "mask" => {
+            units_of(element, "maskContentUnits", Units::UserSpaceOnUse) == Units::UserSpaceOnUse
+        }
+        "filter" => {
+            defs.units(element, "primitiveUnits", Units::UserSpaceOnUse) == Units::UserSpaceOnUse
+        }
+        "clipPath" => {
+            units_of(element, "clipPathUnits", Units::UserSpaceOnUse) == Units::UserSpaceOnUse
+        }
+        _ => true,
     }
 }
 
@@ -340,4 +379,64 @@ fn scale_rotate_transform(element: &mut Element, factor: f32) {
             crate::format_number(y * factor)
         ),
     );
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::dom::{parse, serialize};
+
+    fn normalized(svg: &str, max_side: f32) -> String {
+        let mut root = parse(svg).unwrap();
+        normalize_svg(&mut root, max_side).unwrap();
+        serialize(&root).unwrap()
+    }
+
+    #[test]
+    fn an_object_bounding_box_pattern_keeps_its_own_stroke_width() {
+        let text = normalized(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
+                  <pattern id="h" width="0.25" height="0.25"
+                           patternContentUnits="objectBoundingBox" stroke-width="0.1">
+                    <rect x="0" y="0" width="0.1" height="0.1" fill="none" stroke="#000"/>
+                  </pattern>
+                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
+                </svg>"##,
+            50.0,
+        );
+        assert!(text.contains(r#"stroke-width="0.1""#), "{text}");
+        assert!(!text.contains(r#"stroke-width="0.050""#), "{text}");
+    }
+
+    #[test]
+    fn a_user_space_pattern_scales_its_own_stroke_width() {
+        let text = normalized(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
+                  <pattern id="h" patternUnits="userSpaceOnUse"
+                           patternContentUnits="userSpaceOnUse" x="0" y="0"
+                           width="20" height="20" stroke-width="2">
+                    <rect x="0" y="0" width="6" height="6" fill="none" stroke="#000"/>
+                  </pattern>
+                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
+                </svg>"##,
+            50.0,
+        );
+        assert!(text.contains(r#"stroke-width="1""#), "{text}");
+    }
+
+    #[test]
+    fn a_pattern_with_a_view_box_keeps_its_own_stroke_width() {
+        let text = normalized(
+            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
+                  <pattern id="h" patternUnits="userSpaceOnUse"
+                           patternContentUnits="userSpaceOnUse" x="0" y="0"
+                           width="20" height="20" viewBox="0 0 20 20" stroke-width="2">
+                    <rect x="0" y="0" width="6" height="6" fill="none" stroke="#000"/>
+                  </pattern>
+                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
+                </svg>"##,
+            50.0,
+        );
+        assert!(text.contains(r#"stroke-width="2""#), "{text}");
+    }
 }

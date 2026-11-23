@@ -1,0 +1,77 @@
+id = "R49"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "嵌套定义被克隆时产生重复 id：`<pattern id=\"P\">` 内含 `<defs><linearGradient id=\"G\">`，P 被 `data-scale=\"xy\"` 与 `data-scale=\"y\"` 引用 ⇒ 每份 P 拷贝里都生成全套 G 拷贝（probe19：G×2、G--y×3）；probe11 里两份 G 内容不同（x2=49.6 vs 20），resvg last-wins / 浏览器 first-wins ⇒ 跨渲染器不一致",
+  "`src/normalize.rs::scale_definition` 在 units 门控之前无条件缩定义元素自身的 `stroke-width`/`font-size`：`patternContentUnits=\"objectBoundingBox\"` 的 pattern 自身 `stroke-width=\"0.1\"` 被缩成 `0.050`（probe6 P6a：xor=11520 maxdiff=255 ink 27648→16128）",
+]
+
+closures = [
+  { finding = "R49-F1", tier = "代码" },
+  { finding = "R49-F2", tier = "代码" },
+  { finding = "R49-F3", tier = "测试" },
+  { finding = "R49-F4", tier = "检查" },
+]
+
+run_before = ["R48", "R47", "R46"]
+touched = ["R46", "R48"]
+
+note = """
+B1 根因（已证）：`src/transform/defs.rs::referrers` 的依赖边 `(owner,target)` 丢掉了引用点 policy，
+单调不动点让内层定义 G 的 policy 集合恒等于外层 P 的集合；`split_children` 递归进每份 P 拷贝时
+又按 G 的**完整** wanted 集合重拆一遍 ⇒ 每份 P 拷贝里都生成全套 G 拷贝。probe19 修前
+ids=['P','G','G--y','P--y','G','G--y','G--y']，dups={'G':2,'G--y':3}；probe11 修前两份 G
+内容不同（x2=49.600/y2=49.600 vs x2=49.600/y2=20），正是 resvg last-wins 与浏览器 first-wins
+会分叉的形态。修法（a）+（b）合用：`src/transform/hoist.rs::hoist_outside` 先把「被外层定义之外
+引用、且 policy 集合与外壳不同」的嵌套定义提升到顶层只拆一次；`split_children` 递归进某份拷贝时
+把内层 wanted 收窄为 `{该拷贝的 policy}`（`Some((policy, first))`），未在 names 里的内层定义用
+`name_or_allocate` 现场分配唯一 id（覆盖 probe11 的**未被引用**嵌套定义）。修后 probe19
+ids=['P','G','P--y','G--y']、dups={}；probe11 dups={}，两份 G 变成 G（x2=49.6,y2=49.6）与
+G--x（x2=49.6,y2=20），各自被正确引用。所有 `url(#…)`/`href="#…"` 可解析；渲染与手工展开成
+唯一 id 的 oracle 逐像素相同（xor=0 maxdiff=0）。
+
+P1 根因（已证）：`scale_definition` 第一段无条件 `scale_numeric_attrs(["font-size","stroke-width"])`
++ `scale_style_lengths(SCALED_STYLE_PROPS)`，然后才按 tag 门控 body。`patternContentUnits=
+objectBoundingBox` 时 pattern 内容在 bbox 单位里，`stroke-width` 是**内容**属性，不该被面板缩放。
+修法：新增 `content_is_user_space(element, defs)`，定义元素自身的表现属性只在内容域是
+userSpaceOnUse 时缩放 —— pattern 看 `patternContentUnits`（沿 href）且无 viewBox；marker 看
+`markerUnits`（只看自身，usvg-0.47.0/src/parser/marker.rs:222 用 `marker_node.attribute`）；
+mask 看 `maskContentUnits`（只看自身，mask.rs:20-30）；filter 看 `primitiveUnits`（沿 href，
+filter.rs:170-171 用 `convert_units`）；clipPath 看 `clipPathUnits`（只看自身，clippath.rs:23-25
+用 `node.attribute`）；gradient 无内容域，保持原行为（`_ => true`）。修后 probe6 P6a
+`stroke-width="0.1"`、xor=0 maxdiff=0 ink 27648→27648；P6b..P6g 全 PASS。
+
+证据（`docs/PITFALLS/round-data/R49/test.py`）：默认 8 条全绿（A1..A5 嵌套 id + B1..B3 内容域）；
+`SVG_GRID_OLD_BIN=/tmp/r46base/target/release/svg_grid` 时 16 条全绿 —— A1..A5 与 B1 在 base 上
+必须红，B2/B3 是「必须缩放」对照、在 base 上保持绿（base 已正确缩放 userSpaceOnUse）。
+A1=P{xy,y}+G 被 P body 引用；A2=P{xy,x,y} 三引用；A3=P>G>H 两层嵌套；A4=克隆内引用另一个克隆
+（P--y 引用 Q--y）；A5=嵌套定义被外壳之外以不同 policy 引用 ⇒ 提升到顶层。
+
+变异（每条都记录红了哪些测试）：
+  M1 `Some((*policy, position == 0))` → `None`（内层 wanted 收回完整集合，复现 B1）⇒ A1/A2/A3 红；
+  M2 `content_is_user_space` 恒 true（永不缩）⇒ B1 红；
+  M3 `content_is_user_space` 恒 false（永远缩）⇒ B2/B3 红。
+
+回归：`cargo test --offline` 482（264 lib + 59 main + 159 selftest；基线 474，+8，未删任何既有测试）；
+`cargo fmt --all --check` OK；`cargo clippy --offline --all-targets -- -D warnings` OK；
+`./install.sh` 后 `sha256sum ~/.local/bin/svg_grid target/release/svg_grid` 同为
+75def0b88eb461f9dedbec5f93debfd0acb0c5b31409bcb34091fb7c05f71a98；`svg_grid doctor` 57 pass / 0 fail / 1 skip。
+语料逐字节：220 个 `tests/**/*.svg` 的 `convert` 输出 + 220 个 `--report` + 58 个
+`tests/fixtures/**/*.svg` 的 `plot-grid --width 600 --ncol 1` 输出 + 58 个 `--plan`，与 base
+（/tmp/r46base/target/release/svg_grid @196da47）0 差异。旧证据 R3..R49 顶层跑 44/45 绿，
+仅 R19 既有失效（写死 190 用例），照实记为 pre-existing，未改其期望值。
+
+单文件：src/transform/defs.rs 19895 B、src/transform/hoist.rs 9250 B、src/normalize.rs 16072 B，
+均 ≤20000 B。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R49/test.py
+# 有牙（fail-closed）：指向修复前的二进制，A1..A5 与 B1 必须红，B2/B3 对照保持绿
+SVG_GRID_OLD_BIN=/tmp/r46base/target/release/svg_grid python3 docs/PITFALLS/round-data/R49/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R49/run_old_evidence.sh
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""

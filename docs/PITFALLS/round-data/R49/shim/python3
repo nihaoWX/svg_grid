@@ -1,0 +1,39 @@
+#!/bin/bash
+# Strict evidence shim (R49).
+#
+# Every round's test.py is run at top level, one process per round, with
+# SVG_GRID_EVIDENCE_TOPLEVEL=1 and SVG_GRID_EVIDENCE_TOPLEVEL_THIS=<round>.
+# A round that re-invokes an EARLIER round's test.py (through sys.executable,
+# which sitecustomize.py points here) is short-circuited ONLY if that earlier
+# round is recorded as OK in ran.txt. Anything else is a hard failure: a nested
+# run must never be able to turn a red round green.
+SHIM_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+RAN="$SHIM_DIR/ran.txt"
+
+target=""
+for a in "$@"; do
+  case "$a" in */round-data/R*/test.py) target="$a";; esac
+done
+
+if [ -n "$target" ] && [ -n "$SVG_GRID_EVIDENCE_TOPLEVEL" ]; then
+  n=$(basename "$(dirname "$target")")
+  if [ "$n" = "$SVG_GRID_EVIDENCE_TOPLEVEL_THIS" ]; then
+    exec /usr/bin/python3 "$@"
+  fi
+  # A caller that deliberately perturbs the binary/renderer paths is probing
+  # fail-closed behaviour (R38 family D); that probe needs the real script, so
+  # hand the call through instead of vouching for the round.
+  if [ "${SVG_GRID_BIN:-}" != "${SVG_GRID_SHIM_BASELINE_BIN:-}" ] ||
+     [ "${SVG_GRID_RENDER_BIN:-}" != "${SVG_GRID_SHIM_BASELINE_RENDER:-}" ] ||
+     [ "${SVG_GRID_OLD_BIN:-}" != "${SVG_GRID_SHIM_BASELINE_OLD:-}" ]; then
+    exec /usr/bin/python3 "$@"
+  fi
+  if grep -qx "$n OK" "$RAN" 2>/dev/null; then
+    echo "PASS  回归 既有证据 round-data/$n（该轮已在顶层单独跑过，见 ran.txt）"
+    exit 0
+  fi
+  echo "NESTED $n NOT RUN AT TOP LEVEL (or failed there); see $RAN" >&2
+  exit 1
+fi
+
+exec /usr/bin/python3 "$@"

@@ -36,6 +36,7 @@
 use std::collections::BTreeMap;
 use std::collections::{BTreeSet, HashMap, HashSet};
 
+use super::hoist::hoist_outside;
 use super::links::{internal_target, map_url_references};
 use super::{parse_policy, ScalePolicy};
 use crate::dom::{Element, Node};
@@ -51,7 +52,7 @@ const DEFINITION_TAGS: [&str; 7] = [
     "clipPath",
 ];
 
-fn is_definition(element: &Element) -> bool {
+pub(super) fn is_definition(element: &Element) -> bool {
     DEFINITION_TAGS.contains(&element.name.as_str())
 }
 
@@ -85,6 +86,11 @@ impl DefsPlan {
 /// references. Definitions with zero or one referrer are left structurally alone.
 pub(super) fn split(root: &mut Element) -> DefsPlan {
     let refs = referrers(root);
+    // A nested definition that is also referenced from outside its enclosing
+    // definition cannot be instantiated correctly inside each outer copy: the
+    // outside reference needs its own copy at the top level. Move it there once
+    // (round-data/R49).
+    hoist_outside(root, &refs);
     let mut policies: HashMap<String, ScalePolicy> = HashMap::new();
     let mut wanted: HashMap<String, Vec<ScalePolicy>> = HashMap::new();
     let mut names: HashMap<(String, ScalePolicy), String> = HashMap::new();
@@ -113,14 +119,18 @@ pub(super) fn split(root: &mut Element) -> DefsPlan {
 
     let plan = DefsPlan { policies };
     if !wanted.is_empty() {
-        let copies = Copies { wanted, names };
-        split_children(root, ScalePolicy::None, &copies);
+        let mut copies = Copies {
+            wanted,
+            names,
+            used,
+        };
+        split_children(root, ScalePolicy::None, &mut copies, None);
     }
     plan
 }
 
 /// The policies of the elements that reference each definition, transitively.
-fn referrers(root: &Element) -> HashMap<String, BTreeSet<ScalePolicy>> {
+pub(super) fn referrers(root: &Element) -> HashMap<String, BTreeSet<ScalePolicy>> {
     let mut direct: HashMap<String, BTreeSet<ScalePolicy>> = HashMap::new();
     let mut edges: Vec<(String, String)> = Vec::new();
     collect(root, ScalePolicy::None, None, &mut direct, &mut edges);
@@ -221,6 +231,7 @@ fn link_of_text(value: &str) -> Vec<String> {
 struct Copies {
     wanted: HashMap<String, Vec<ScalePolicy>>,
     names: HashMap<(String, ScalePolicy), String>,
+    used: HashSet<String>,
 }
 
 impl Copies {
@@ -231,9 +242,26 @@ impl Copies {
             .cloned()
             .unwrap_or_else(|| id.to_string())
     }
+
+    /// The id `id` has inside a **non-first** copy for `policy`. A definition
+    /// nothing references was never named by `split`, but it still cannot keep
+    /// its id in two copies, so it gets one here (round-data/R49).
+    fn name_or_allocate(&mut self, id: &str, policy: ScalePolicy) -> String {
+        if let Some(name) = self.names.get(&(id.to_string(), policy)) {
+            return name.clone();
+        }
+        let name = unique_name(id, policy, &mut self.used);
+        self.names.insert((id.to_string(), policy), name.clone());
+        name
+    }
 }
 
-fn split_children(parent: &mut Element, inherited: ScalePolicy, copies: &Copies) {
+fn split_children(
+    parent: &mut Element,
+    inherited: ScalePolicy,
+    copies: &mut Copies,
+    narrow: Option<(ScalePolicy, bool)>,
+) {
     let mut index = 0;
     while index < parent.children.len() {
         let Node::Element(current) = &parent.children[index] else {
@@ -241,6 +269,29 @@ fn split_children(parent: &mut Element, inherited: ScalePolicy, copies: &Copies)
             continue;
         };
         let mut current = current.clone();
+        if let Some((policy, first)) = narrow {
+            // Inside a copy of an outer definition every nested definition is
+            // instantiated under **this copy's** policy only. Splitting it by its
+            // full referrer set would emit one copy per outer copy and leave
+            // duplicate ids behind (round-data/R49).
+            if is_definition(&current) {
+                if let Some(id) = current.attr("id").map(str::to_string) {
+                    let name = if first {
+                        copies.name(&id, policy)
+                    } else {
+                        copies.name_or_allocate(&id, policy)
+                    };
+                    if name != id {
+                        current.set_attr("id", name);
+                    }
+                }
+            }
+            rewrite_references(&mut current, policy, copies);
+            split_children(&mut current, policy, copies, Some((policy, first)));
+            parent.children[index] = Node::Element(current);
+            index += 1;
+            continue;
+        }
         let policy = current
             .attr("data-scale")
             .map(parse_policy)
@@ -257,7 +308,12 @@ fn split_children(parent: &mut Element, inherited: ScalePolicy, copies: &Copies)
                         version.set_attr("id", copies.name(&id, *policy));
                     }
                     rewrite_references(&mut version, *policy, copies);
-                    split_children(&mut version, *policy, copies);
+                    split_children(
+                        &mut version,
+                        *policy,
+                        copies,
+                        Some((*policy, position == 0)),
+                    );
                     if position == 0 {
                         parent.children[index] = Node::Element(version);
                     } else {
@@ -268,7 +324,7 @@ fn split_children(parent: &mut Element, inherited: ScalePolicy, copies: &Copies)
             }
             _ => {
                 rewrite_references(&mut current, policy, copies);
-                split_children(&mut current, policy, copies);
+                split_children(&mut current, policy, copies, None);
                 parent.children[index] = Node::Element(current);
             }
         }

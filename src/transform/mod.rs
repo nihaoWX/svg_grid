@@ -7,11 +7,13 @@
 //! rewrites `<path d>`, [`patterns`] decides what a `<pattern>` body's numbers mean
 //! (its `patternContentUnits`/`viewBox`, inherited along `href`), [`units`]
 //! parses the `*Units` attributes the way the renderer does, [`defs`] decides which
-//! policy a definition is evaluated under (and copies it when several disagree), and
+//! policy a definition is evaluated under (and copies it when several disagree),
+//! [`hoist`] lifts a nested definition that is also referenced from outside, and
 //! [`links`] resolves what a paint server inherits from its `href` target.
 
 mod defs;
 mod dispatch;
+mod hoist;
 mod lengths;
 mod links;
 mod paths;
