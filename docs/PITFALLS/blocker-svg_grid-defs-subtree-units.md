@@ -144,7 +144,8 @@ D1 值得单说：旧行为把 tile 0.25 缩成 0.125，**ink 前后都是 12288
 - `cargo fmt --all --check` 干净；`cargo clippy --offline --all-targets -- -D warnings` 干净。
 - `./install.sh` OK；`svg_grid doctor` = **57 pass / 0 fail / 1 skip**（`matplotlib/mathtext`，注册为不支持）。
 - 既有产物：**223 个 `*.svg` × 4 条命令（`convert`、`plot-grid --width 600 --ncol 3`、`plot-grid --plan`、`convert --report`）= 892 次比对，与基线二进制逐字节相同（0 差异）**。原因：语料里「定义写在 `data-scale` 组外、却被组内图形引用」的文件数为 0（220 fixture + 617 research SVG 里 `data-scale` 之前出现 `linearGradient|radialGradient|pattern|marker|mask|filter` 的文件数 = 0），单 policy 路径又不复制，所以本轮修的是语义而不是既有字节。真实用户路径（未打标签 → 自动 `convert`）不踩这个坑：`src/convert/tag.rs::wrap_root_content_in_xy` 会把 `<defs>` 一起塞进 `<g data-scale="xy">`；本轮**没有**改 convert。
-- 旧证据 `docs/PITFALLS/round-data/R8..R45/test.py` 顶层全 rc=0（R45 的 E 段需要 `SVG_GRID_OLD_BIN`，不给则 SKIP，属正常）。
+- 旧证据 `docs/PITFALLS/round-data/R3..R45/test.py` 逐轮跑过：**除 R19 外全部 rc=0**（R45 的 E 段需要 `SVG_GRID_OLD_BIN`，不给则 SKIP，属正常；R27 没有 `round-data` 目录）。
+- **R19 是既有失效，不是本轮回归**：它的 `test.py` 把用例数写死（`BASELINE = 190`、`COUNTS = {lib 60, main 57, selftest 73}`，见 `docs/PITFALLS/round-data/R19/test.py:47-49`），而基线 `196da47` 的实际计数是 231 / 59 / 129 = 419。在 `/tmp/r46base`（`196da47` 的 worktree）里跑同一份脚本得到 **12 条 FAIL**，与本轮无关。本轮没有改它：改旧证据的期望值等于造假材料，且 R19 的 `meta.toml` 自己写明「用例数写死 190」。
 
 ## 遗留
 
