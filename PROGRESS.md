@@ -4,13 +4,13 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43 收掉单位属性语义，R44 收掉组合图字母重号，R45 收掉 doctor 告警码漂移，R46 收掉定义元素的缩放单位，R47 收掉文本节点的字符引用（数字实体不再双重转义）。
+  R43 收掉单位属性语义，R44 收掉组合图字母重号，R45 收掉 doctor 告警码漂移，R46 收掉定义元素的缩放单位，R47 收掉文本节点的字符引用，R48 收掉字母查重的漏判与误伤。
   余下 pre-existing 均已开报告（见 `# Known Issues`）。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 446 项**（244 lib + 59 main + 143 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 474 项**（256 lib + 59 main + 159 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -25,8 +25,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R47 已入账**；
-  `link` 组 L1–L64；`round-data/R3…R47` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R48 已入账**；
+  `link` 组 L1–L64；`round-data/R3…R48` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -38,6 +38,11 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-24 **R48 字母查重的漏判与误伤**：`src/label_conflicts.rs` 的 `walk_letters`/`collect_text` 递归收集
+  marker 子树文本并按文档序拼接、`normalize_label` 与显式 `--labels` 同口径（trim + 折叠空白）、`enter` 跳过
+  不可见子树（`NON_RENDERED` + `display:none`/`visibility:hidden`/`opacity=0`，`visibility` 可被后代恢复、
+  `display` 不可）；`collisions` 改 O(n)；`LetterSite.cell` 变真、≥5 撞号给 `+N more`、文案改成可执行。
+  40000 字母 1.31 s→0.06 s。测试 446→474。提交 `9117335`。
 - 2026-11-24 **R47 文本节点的字符引用**：`src/dom.rs:80-96` 与 `src/convert/dom.rs:82-93` 的
   `Event::GeneralRef` 改调 `quick_xml::escape::unescape`，`Err` 走各自 Xml 变体（rc=1，与属性路径同前缀），
   两份 `resolve_reference` 删除；控制字符/非字符与 CDATA 口径不变。`37&#176;C` 修前 ink 1701/diff 1734 →
@@ -90,11 +95,11 @@
   布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
 # In Progress
 
-- **R48（进行中）**：字母重号检测的三类漏判 + 一类误伤（报告 `docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md`）。
-  `src/label_conflicts.rs:124-146` 的 `collect_letters` 只取 marker 的直接 `Text` 子节点 ⇒ tspan/g 包裹、
-  实体、空白三种形态静默漏判；`<defs>`/`<symbol>`/`display:none`/`visibility:hidden`/`opacity=0` 里的 marker
-  又被计入 ⇒ 五种形态误报 rc=2。修法必须"递归收集 **且** 跳过不渲染子树"，另收 `LetterSite.cell`、
-  ≥5 撞号折叠、`collisions` O(n²)。
+- **R49（进行中）**：R46 对抗评审的 1 阻断 + 1 P1。**B1**：嵌套定义被克隆时产生重复 id
+  （`<pattern id="P">` 内含 `<defs><linearGradient id="G">`，P 被 `xy`/`y` 两个引用者引用 ⇒
+  `svg-grid-cell0-G` ×2、`svg-grid-cell0-G--svg-grid-y` ×3；机制 `src/transform/defs.rs:split_children`
+  递归进每份拷贝时按内层完整 policy 集合重拆）。**P1**：`src/normalize.rs::scale_definition` 在 units 门控
+  **之前**无条件缩定义元素自身的 `stroke-width`/`font-size`（obb pattern 的 `0.1`→`0.050`，xor 11520）。
 
 # Known Issues
 
@@ -108,18 +113,11 @@
    `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
 2. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
    pattern 外的 `clip-path` 被 pattern body 引用（`20736/6264`）、pattern 内 `<text>`（resvg 不画）。
-3. **R44 的字母重号检测有三类漏判 + 一类误伤**（`docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md`）：
-   `src/label_conflicts.rs:124-146` 的 `collect_letters` 只取 marker 元素的**直接** `Text` 子节点 ⇒
-   `<text data-svg-grid-label="0"><tspan>A</tspan></text>` 与 `<g data-svg-grid-label="0"><text>A</text></g>`
-   都 rc=0 静默重号；比较也不做空白/实体规范化（`A` vs `' A '` 算两个字母）。反向误伤：`<defs>`/`<symbol>`/
-   `display:none`/`visibility:hidden`/`opacity=0` 里的 marker 也参与查重（五种形态全 rc=2，渲染 diff 0）
-   ⇒ 修法必须"递归收集 **且** 跳过不渲染子树"。另：`LetterSite.cell` 恒等于 `input`、≥5 个重号时站点列表
-   塌成 plain、`collisions` O(n²)（40000 字母 1.59 s）。
-4. **`classify` 取表序第一个命中码**（`docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md`）：
+3. **`classify` 取表序第一个命中码**（`docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md`）：
    W9 行原样打印悬空 id、W7 行原样打印属性值 ⇒ 用户内容含表序更靠前的短语时，doctor 的 W9/W7 门禁
    **fail-open**（base FAIL → head PASS `['W4a']`）。同族：`src/warnings/rules_tests.rs:236-266` 的短语副本、
    `round-data/R17/test.py:44-46` 死变量、R45 使旧行号再漂但未记 `modify`。
-5. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；`verify` 与"旧证据全绿"的口径**不含 R19**。
 
 ## 其他未决项
@@ -169,8 +167,9 @@
 # Next Steps
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（§0 有 R27–R46 的提交表）。六缺陷、defs/pattern 语义、
-   字母重号、doctor 告警码、定义元素缩放单位、文本字符引用均已收口；**进行中 = R48 字母检测**。之后消费
-   剩余报告（`classify` 表序遮蔽），最后做交付前全量复核：`cargo test`（446）、`svg_grid doctor`
+   字母重号、doctor 告警码、定义元素缩放单位、文本字符引用、字母查重均已收口；**进行中 = R49**（R46 评审的
+   嵌套克隆重复 id + normalize 定义元素自身表现属性）。之后消费剩余报告（`classify` 表序遮蔽），最后做
+   交付前全量复核：`cargo test`（474）、`svg_grid doctor`
    57/0/1、`pitfalls-manager verify` rc=0、两副本指南 `diff -r`。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 →
    删驱动文档 → 若本轮有改名/移动/拆分，**提交后 `link`**（否则悬空自检会报出来）。
