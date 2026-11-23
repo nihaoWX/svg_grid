@@ -56,7 +56,9 @@ MM = shutil.which("micromamba")
 if not MM:
     local = pathlib.Path.home() / ".local/bin/micromamba"
     MM = str(local) if local.is_file() else None
-ROUNDS = ["R8", "R10", "R19"]
+# R38：R19 已 retire（deprecated——其断言针对已合并的独立 `svg_grid_convert` 二进制
+# 与迁移期的用例数 190/60/57/73），不再作为回归目标；R4–R17 由顶层逐个跑覆盖。
+ROUNDS = ["R8", "R10"]
 
 # 报告点名的五步（照抄裁决里的顺序）——主干与章节都要落在这五条上。
 STEPS = [
@@ -403,7 +405,7 @@ def family_five():
 
 # ── ⑥ 回归 ──────────────────────────────────────────────────────────────────────────
 def family_six():
-    print("\n== ⑥ 回归 R8 / R10 / R19（R19 内部覆盖 R4–R17） ==")
+    print("\n== ⑥ 回归 R8 / R10（R19 已 retire，见 R38） ==")
     started = time.time()
     for round_id in ROUNDS:
         evidence = HERE.parent / round_id / "test.py"

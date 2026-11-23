@@ -121,6 +121,12 @@ pub(super) fn length_scale_factor(
             LengthAxis::Y => Some(sy.abs()),
             LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
         },
+        // A pattern body scales with the panel but keeps its own origin.
+        ScalePolicy::Scale => match axis {
+            LengthAxis::X => Some(sx.abs()),
+            LengthAxis::Y => Some(sy.abs()),
+            LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
+        },
         ScalePolicy::Position | ScalePolicy::None => None,
     }
 }
@@ -153,5 +159,7 @@ pub(super) fn map_point(
         ScalePolicy::X => (target.x + (x - source.x) * sx, translated_y),
         ScalePolicy::Y => (translated_x, target.y + (y - source.y) * sy),
         ScalePolicy::None => (translated_x, translated_y),
+        // Scale only: the pattern body keeps the tile's own origin.
+        ScalePolicy::Scale => (x * sx, y * sy),
     }
 }

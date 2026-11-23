@@ -82,9 +82,16 @@ def main():
           ".svgz 解压失败：stderr 含该 .svgz 路径", f"rc={r.returncode} {r.stderr[:200]}")
 
     print("\n== ④ 退出码分档没被改坏 ==")
-    raw = run(["plot-grid", "--input", str(FIXTURE), "--output", str(tmp / "o3.svg")])
+    # R38：`plot-grid` 现在会自动转换未转换的原始 fixture（autoconvert 落于 R24 之后；
+    # base 756dfb2 上同一命令已 rc=0），所以这里改用**永久无效**的输入：
+    # 非数值几何 ⇒ convert 拒绝 ⇒ 仍是 `invalid input` rc=2。
+    bogus = tmp / "bogus.svg"
+    bogus.write_text('<svg width="100" height="100" viewBox="0 0 100 100" '
+                     'xmlns="http://www.w3.org/2000/svg"><rect x="abc" y="0" width="10" '
+                     'height="10" fill="#000"/></svg>')
+    raw = run(["plot-grid", "--input", str(bogus), "--output", str(tmp / "o3.svg")])
     check(raw.returncode == 2 and "invalid input" in raw.stderr,
-          "未转换的原始 fixture ⇒ `invalid input` rc=2", f"rc={raw.returncode} {raw.stderr[:160]}")
+          "无效输入（非数值几何）⇒ `invalid input` rc=2", f"rc={raw.returncode} {raw.stderr[:160]}")
     no_corpus = run(["doctor", "--fixtures", str(tmp / "no-corpus")])
     check(no_corpus.returncode == 3, "语料目录不存在 ⇒ rc=3（配置错这一档）", f"rc={no_corpus.returncode}")
 

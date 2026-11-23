@@ -91,7 +91,7 @@ pub(super) fn rewrite_rect(
 
     let (x0, y0) = map_point(x, y, policy, source, target);
     let (x1, y1) = match policy {
-        ScalePolicy::Xy | ScalePolicy::X | ScalePolicy::Y => {
+        ScalePolicy::Xy | ScalePolicy::X | ScalePolicy::Y | ScalePolicy::Scale => {
             map_point(x + width, y + height, policy, source, target)
         }
         ScalePolicy::Position | ScalePolicy::None => (x0 + width, y0 + height),

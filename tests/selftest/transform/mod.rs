@@ -6,6 +6,8 @@ use svg_grid::{plot_grid, AlignMode, Margins, PlotGridSpec, SvgInput};
 
 use crate::common::*;
 
+mod pattern;
+
 #[test]
 fn data_scale_position_moves_points_but_keeps_radius() {
     let input = temp_path("position.svg");
@@ -405,6 +407,7 @@ fn paint_server_coordinates_follow_a_user_space_reference() {
 <linearGradient id="box" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/></linearGradient>
 <pattern id="pat" patternUnits="userSpaceOnUse" x="10" y="10" width="4" height="6">
 <rect x="0" y="0" width="4" height="6" fill="#ff0000"/>
+<rect x="1" y="2" width="2" height="3" fill="#00ff00"/>
 <path d="M 0 0 L 4 6" style="fill: none; stroke: #000000"/>
 </pattern>
 </defs>
@@ -459,15 +462,26 @@ fn paint_server_coordinates_follow_a_user_space_reference() {
         svg.contains(r#"patternUnits="userSpaceOnUse" x="20" y="10" width="8" height="6""#),
         "{svg}"
     );
-    // ... and so does its body (user space by default). A hand-fed `<path>` stays a
-    // `<path>` here (form conversion is the converter's job), but its `d` moved.
+    // ... but its body does **not** move with it: a pattern body is *tile local*
+    // (resvg and cairosvg agree, round-data/R38), so translating the tile into the
+    // cell must not translate the body as well — that would push the body out of its
+    // own tile window and the fill would silently disappear. The body only scales.
+    // A hand-fed `<path>` stays a `<path>` here (form conversion is the converter's
+    // job), but its `d` lengths scale.
     assert!(
         svg.contains(r##"<rect x="0" y="0" width="8" height="6" fill="#ff0000"/>"##),
-        "pattern body must scale with the tile: {svg}"
+        "pattern body must scale with the tile but keep its own origin: {svg}"
     );
     assert!(
         svg.contains(r#"<path d="M 0 0 L 8 6""#),
-        "the pattern body's path moves with the tile: {svg}"
+        "the pattern body's path scales with the tile and keeps its origin: {svg}"
+    );
+    // The body above sits at the origin, where "translate" and "do not translate"
+    // coincide — so pin the rule with an asymmetric body too: `x`/`y` stay put while
+    // `width`/`height` scale by (sx, sy) = (2, 1).
+    assert!(
+        svg.contains(r##"<rect x="2" y="2" width="4" height="3" fill="#00ff00"/>"##),
+        "an off-origin pattern body must keep its tile-local x/y: {svg}"
     );
 
     let _ = fs::remove_file(input);

@@ -243,3 +243,78 @@ fn a_converted_output_keeps_the_defs_it_needs_and_nothing_else() {
         Ok(Conversion::AlreadyConverted { .. })
     ));
 }
+
+/// A paint server defined under one wrapper level per nesting shape: `<defs>`
+/// children are not required to be definitions, and a `<rect fill="url(#g)">`
+/// that survives pruning while its gradient does not paints **nothing** at rc 0.
+///
+/// The wrapper is not kept as a container: it was never drawn where it sat, so
+/// its kept descendants are hoisted into the `<defs>` and the wrapper dropped.
+#[test]
+fn a_definition_nested_in_a_container_survives_pruning() {
+    let gradient = "<linearGradient id='g'>\
+         <stop offset='0' stop-color='#f00'/><stop offset='1' stop-color='#00f'/>\
+         </linearGradient>";
+    let rect = "<rect x='10' y='10' width='80' height='60' fill='url(#g)'/>";
+    let shapes = [
+        ("<defs>{DEF}</defs>", "defs"),
+        ("<defs><g>{DEF}</g></defs>", "defs/g"),
+        ("<defs><g id='grp'>{DEF}</g></defs>", "defs/g[id]"),
+        ("<g><defs>{DEF}</defs></g>", "g/defs"),
+        ("<defs><defs>{DEF}</defs></defs>", "defs/defs"),
+        ("<defs><symbol id='s'>{DEF}</symbol></defs>", "defs/symbol"),
+        (
+            "<defs><g><mask id='m' maskUnits='userSpaceOnUse' x='0' y='0' \
+          width='100' height='80'><rect x='0' y='0' width='50' height='80' \
+          fill='white'/></mask></g></defs>",
+            "defs/g[mask]",
+        ),
+    ];
+    for (shape, label) in shapes {
+        let mut body = shape.replace("{DEF}", gradient);
+        body.push_str(rect);
+        // The mask shape references its own definition, not the gradient.
+        if label == "defs/g[mask]" {
+            body = body.replace("fill='url(#g)'", "fill='black' mask='url(#m)'");
+        }
+        let source = svg(&body);
+        let done = converted(&source);
+        let id = if label == "defs/g[mask]" { "m" } else { "g" };
+        assert!(
+            done.svg.contains(&format!("id=\"{id}\"")),
+            "{label}: the nested definition must survive, got {}",
+            done.svg
+        );
+        assert!(
+            !done.svg.contains("<symbol"),
+            "{label}: a <symbol> wrapper is not kept, got {}",
+            done.svg
+        );
+        // The output must be self-consistent enough to be re-read as converted.
+        assert!(
+            matches!(
+                convert(&done.svg, false),
+                Ok(Conversion::AlreadyConverted { .. })
+            ),
+            "{label}: output is not recognised as converted: {}",
+            done.svg
+        );
+    }
+}
+
+/// The reference closure has to cross the wrapper too: a `<pattern>` nested in a
+/// `<g>` points at a gradient nested next to it, and both must survive together.
+#[test]
+fn the_reference_closure_follows_a_wrapped_definition() {
+    let done = converted(&svg("<defs><g>\
+         <linearGradient id='stops'><stop offset='0' stop-color='#f00'/>\
+         <stop offset='1' stop-color='#00f'/></linearGradient>\
+         <pattern id='p' patternUnits='userSpaceOnUse' x='0' y='0' width='10' height='10'>\
+         <rect x='0' y='0' width='10' height='10' fill='url(#stops)'/></pattern>\
+         </g></defs>\
+         <rect x='5' y='5' width='60' height='40' fill='url(#p)'/>"));
+    for id in ["stops", "p"] {
+        assert!(done.svg.contains(&format!("id=\"{id}\"")), "{}", done.svg);
+    }
+    assert!(!done.svg.contains("<g>"), "{}", done.svg);
+}

@@ -1,0 +1,37 @@
+id = "R38"
+date = "2026-11-23"
+verdict = "混合"
+family = [
+  "<pattern> body 被当成普通几何一起平移，body 跑出 tile 窗口 ⇒ hatch 整块静默消失",
+  "<defs> 只扫描直接子元素，嵌在容器/symbol/嵌套 defs 里的定义被剪掉 ⇒ 悬空引用误杀",
+  "证据脚本缺渲染器时 SKIP 而非 FAIL，可 skip-to-green",
+]
+closures = [
+  { finding = "R38-F1", tier = "代码" },   # transform/mod.rs：pattern body 走 Scale 早返回
+  { finding = "R38-F2", tier = "代码" },   # lengths/primitives/paths：ScalePolicy::Scale
+  { finding = "R38-F3", tier = "代码" },   # uses.rs：visit_defs 递归任意深度
+  { finding = "R38-F4", tier = "代码" },   # uses.rs：keep_definitions 解包 wrapper
+  { finding = "R38-F5", tier = "代码" },   # scan.rs：symbol 只在可绘制树拒绝
+  { finding = "R38-F6", tier = "检查" },   # R37/test.py：env 覆盖 + 渲染器缺失 fail
+  { finding = "R38-F7", tier = "检查" },   # 测试：pattern 相位断言 + defs 嵌套 7 形态
+]
+run_before = ["R16", "R37", "R8"]
+touched = ["R37", "R18", "R20", "R24"]
+note = """
+为什么认定同类：pattern 相位是 R16 建立 paint server 坐标域时留下的同一处映射（tile 与 body 共用 `map_point`），
+R37 的 note 曾把它记成「resvg 特有」，实测两渲染器逐格一致 ⇒ 是 composer 缺陷（已证）。
+defs 递归是 R37 新门禁自己的扫描器与剪枝遍历不一致：同一轮引入、同一轮没测到嵌套形态（已证）。
+根因与修法：见报告 §根因；pattern 走「只缩放不平移」的 `ScalePolicy::Scale`，defs 让收集与剪枝同一套遍历、
+剪枝时解包 wrapper 保定义；scan 的 symbol 规则收窄到可绘制树（`self_check` 仍 fail-closed）。
+怎么修才不弄坏前面：R3–R37 逐个顶层复跑全绿；220 fixture `newfail=0`，只有 2 个 pattern 语料产物变化，
+渲染 diff 从 5589/448 降到 442/357（resvg，ink 完全相等）。改旧断言：R37 ⑥ 段（R38 起 body 不平移，期望值必须改）、
+R18（`install.sh` 自 4133c83 起装 skill，`would install` 两行，base 就 FAIL，非本轮引入）。
+未覆盖：obb 内容语义两渲染器本就不一致，按裁决不统一；`patternTransform` 语料 0 处使用，本轮不写。
+"""
+how_to_run = """
+cd tools/svg_grid/docs/PITFALLS/round-data/R38 && python3 test.py   # rc=0 = 全部成立
+前置：`cargo build --offline`（根 crate）与 `cd convert && cargo build --offline`（debug 二进制）。
+渲染对照需要 resvg 探针 /tmp/d1_eval/render/target/release/d1render（缺失 ⇒ FAIL；确实要跳过传 --allow-skip）；
+cairosvg 对照默认用 ~/.venv/bin/python，缺失时打 SKIP。可用 SVG_GRID_BIN / SVG_GRID_CONVERT_BIN /
+SVG_GRID_RENDER_BIN 覆盖。约 4 分钟（D 段会复跑 R37 的 220 fixture 判定）。
+"""

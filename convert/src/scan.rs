@@ -25,6 +25,7 @@ pub(crate) fn scan(root: &Element) -> Vec<Finding> {
         &mut findings,
         &mut order,
         true,
+        false,
         Affine::IDENTITY,
         &ids,
     );
@@ -49,6 +50,7 @@ fn walk_scan(
     findings: &mut Vec<Finding>,
     order: &mut usize,
     is_root: bool,
+    in_defs: bool,
     acc: Affine,
     ids: &HashSet<String>,
 ) {
@@ -72,7 +74,11 @@ fn walk_scan(
     }
 
     match element.name.as_str() {
-        "symbol" => push!(
+        // `<symbol>` inside `<defs>` is never drawn where it sits: the prune
+        // hoists the definitions it carries and drops the wrapper (R38). Only a
+        // symbol in the drawable tree is placed by the composer without its own
+        // coordinate system being rewritten.
+        "symbol" if !in_defs => push!(
             "symbol",
             "<symbol> establishes its own nested coordinate system; the composer does not rewrite \
              it, so the content would be placed incorrectly"
@@ -194,9 +200,19 @@ fn walk_scan(
         );
     }
 
+    let children_in_defs = in_defs || element.name == "defs";
     for child in &element.children {
         if let Node::Element(child) = child {
-            walk_scan(child, &path, findings, order, false, world, ids);
+            walk_scan(
+                child,
+                &path,
+                findings,
+                order,
+                false,
+                children_in_defs,
+                world,
+                ids,
+            );
         }
     }
 }
@@ -283,12 +299,26 @@ mod tests {
     }
 
     #[test]
-    fn symbol_is_rejected() {
+    fn symbol_in_the_drawable_tree_is_rejected() {
         let findings = incompatible(
             r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
-<defs><symbol id='s'><rect x='1' y='1' width='2' height='2'/></symbol></defs></svg>"#,
+<symbol id='s'><rect x='1' y='1' width='2' height='2'/></symbol></svg>"#,
         );
         assert!(findings.iter().any(|f| f.tag == "symbol"));
+    }
+
+    #[test]
+    fn symbol_inside_defs_is_not_a_placement_hazard() {
+        // `<defs>` is never drawn where it sits; the prune hoists what the
+        // symbol carries and drops the wrapper (R38). A symbol that reaches the
+        // drawable tree (a `<use>` pulls it out) is still rejected.
+        let converted = crate::test_support::converted(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<defs><symbol id='s'><linearGradient id='g'><stop offset='0' stop-color='#f00'/><stop offset='1' stop-color='#00f'/></linearGradient></symbol></defs>
+<rect x='1' y='1' width='2' height='2' fill='url(#g)'/></svg>"#,
+        );
+        assert!(converted.svg.contains("<linearGradient"));
+        assert!(!converted.svg.contains("<symbol"), "{}", converted.svg);
     }
 
     #[test]

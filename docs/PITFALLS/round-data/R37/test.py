@@ -13,10 +13,15 @@
    AlreadyConverted）且产物内无悬空 `url(#…)`/`href="#…"`
 ⑤ 真实语料 `S36_panelA_matrix.svg`（hatch pattern）：`<pattern>` 保留，渲染残差
    只落在 hatch 相位（已知 R16 遗留，见报告），convert-only 必须几乎逐像素一致
-无参数；用 `target/debug/svg_grid` 与 `convert/target/debug/svg_grid_convert`；
-只写系统临时目录。渲染对照需要 resvg 探针 `/tmp/d1_eval/render/.../d1render`，
-缺失时该子项 SKIP（结构断言仍照跑）。
+无参数；默认用 `target/debug/svg_grid` 与 `convert/target/debug/svg_grid_convert`，
+可用 `SVG_GRID_BIN` / `SVG_GRID_CONVERT_BIN` / `SVG_GRID_RENDER_BIN` 覆盖（R38：这样
+才能指向 base worktree 做对照）；只写系统临时目录。
+
+渲染对照需要 resvg 探针（默认 `/tmp/d1_eval/render/.../d1render`）。**缺失或渲染失败时
+渲染对照类判据 fail**，不再静默 SKIP——skip-to-green 会让"判据全部成立"变成谎话；
+确实没有渲染器时显式传 `--allow-skip` 才降级为 SKIP。
 """
+import os
 import pathlib
 import re
 import subprocess
@@ -25,9 +30,12 @@ import tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]
-BIN = SVG_GRID / "target/debug/svg_grid"
-CONV = SVG_GRID / "convert/target/debug/svg_grid_convert"
-RENDER = pathlib.Path("/tmp/d1_eval/render/target/release/d1render")
+BIN = pathlib.Path(os.environ.get("SVG_GRID_BIN", SVG_GRID / "target/debug/svg_grid"))
+CONV = pathlib.Path(
+    os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "convert/target/debug/svg_grid_convert"))
+RENDER = pathlib.Path(
+    os.environ.get("SVG_GRID_RENDER_BIN", "/tmp/d1_eval/render/target/release/d1render"))
+ALLOW_SKIP = "--allow-skip" in sys.argv
 CORPUS = pathlib.Path(
     "/home/nihao/bioagentforge/research/白藜芦醇胰腺癌/steps/09_上游转录因子/出图/"
     "S36_S37/figure_panels/S36_panelA_matrix.svg"
@@ -51,6 +59,18 @@ def check(ok, label, detail=""):
 def skip(label, reason):
     print(f"SKIP  {label} — {reason}")
     SKIPS.append(label)
+
+
+def skip_render(label, reason):
+    """A missing/broken renderer fails the render criteria unless `--allow-skip`.
+
+    Comparing pixels is half of what this round claims; silently dropping it and
+    still printing "判据全部成立" is skip-to-green.
+    """
+    if ALLOW_SKIP:
+        skip(label, reason)
+    else:
+        check(False, label, f"{reason}（渲染对照缺失 ⇒ fail；确实要跳过请显式传 --allow-skip）")
 
 
 def convert(src, dst, *extra):
@@ -126,7 +146,7 @@ def main():
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="r37ev_"))
     have_render = RENDER.exists()
     if not have_render:
-        skip("渲染对照（XOR/ink）", f"缺少 resvg 探针 {RENDER}")
+        skip_render("渲染对照（XOR/ink）", f"缺少 resvg 探针 {RENDER}")
 
     # ── ① 四组探针：定义保留 + 渲染一致
     print("\n== ① 四组探针：mask / marker / filter / pattern 定义保留且渲染一致 ==")
@@ -186,7 +206,7 @@ def main():
                           f"ink {ink_src}->{ink_out}",
                           f"xor={xor} maxdiff={maxdiff}")
                 except Exception as error:  # noqa: BLE001
-                    skip(f"① [{tag}] convert-only 渲染对照", str(error))
+                    skip_render(f"① [{tag}] convert-only 渲染对照", str(error))
             continue
         out = tmp / f"{tag}.grid.svg"
         got = grid(tagged, out, width)
@@ -197,8 +217,8 @@ def main():
             continue
         try:
             xor, maxdiff, ink_src, ink_out, shift = compare(src, out, tag, s_src, s_out)
-        except Exception as error:  # noqa: BLE001 - renderer failure is a skip, not a fail
-            skip(f"① [{tag}] 渲染对照", str(error))
+        except Exception as error:  # noqa: BLE001 - renderer failure fails unless --allow-skip
+            skip_render(f"① [{tag}] 渲染对照", str(error))
             continue
         check(xor == 0 and ink_src == ink_out,
               f"① [{tag}] 渲染一致 xor={xor} maxdiff={maxdiff} ink {ink_src}->{ink_out} "
@@ -312,10 +332,10 @@ def main():
                           f"ink {ink_src}->{ink_out} shift={shift}",
                           f"xor={xor} maxdiff={maxdiff}")
                 except Exception as error:  # noqa: BLE001
-                    skip("⑤ S36 渲染对照", str(error))
+                    skip_render("⑤ S36 渲染对照", str(error))
 
-    # ── ⑥ 已知遗留：pattern 相位（R16 时代，非本轮引入）
-    print("\n== ⑥ 已知遗留：pattern 相位错位（R16 时代，本轮未改，交父裁决） ==")
+    # ── ⑥ pattern 相位：R38 已修（历史小节，保留回归）
+    print("\n== ⑥ pattern 相位：body 只缩放不平移（R38 修复后的回归判据） ==")
     body = ("<defs><pattern id='p' patternUnits='userSpaceOnUse' x='0' y='0' width='20' height='20'>"
             "<rect x='0' y='0' width='20' height='20' fill='#c97ba6'/></pattern></defs>"
             "<rect x='10' y='10' width='80' height='50' fill='url(#p)'/>")
@@ -329,20 +349,23 @@ def main():
         check(got.returncode == 0, "⑥ [phase] plot-grid rc=0", got.stderr[:300])
         if got.returncode == 0:
             svg = out.read_text()
-            # Signature of the defect: the tile box moved AND the body moved with it,
-            # so the hatch phase is off by the tile origin (resvg renders pattern
-            # content in tile-local coordinates).
+            # The tile box moves with the panel; the body is tile-local coordinates
+            # (resvg *and* cairosvg render it that way), so it must keep x=0 y=0.
+            # Moving it too was the R16–R37 defect: the hatch fell outside its tile
+            # and the fill silently disappeared (rc 0, empty stderr).
             check(re.search(r'<pattern[^>]*x="24"[^>]*y="24"', svg) is not None,
-                  "⑥ [phase] tile 已平移（正确的一半）", svg[:400])
-            check(re.search(r'<rect x="24" y="24" width="\d', svg) is not None,
-                  "⑥ [phase] body 也被平移（缺陷签名：应只缩放不平移）", svg[:400])
+                  "⑥ [phase] tile 已平移", svg[:400])
+            check(re.search(r'<rect x="0" y="0" width="\d', svg) is not None,
+                  "⑥ [phase] body 保持 tile 局部坐标（只缩放、不平移）", svg[:400])
+            check(re.search(r'<rect x="24" y="24" width="\d', svg) is None,
+                  "⑥ [phase] body 不再被平移（缺陷签名消失）", svg[:400])
             if have_render:
                 try:
                     xor, maxdiff, ink_src, ink_out, shift = compare(src, out, "phase", 1.0, 1.0)
                     print(f"      已知残差：xor={xor} maxdiff={maxdiff} ink {ink_src}->{ink_out} "
                           f"shift={shift}")
                 except Exception as error:  # noqa: BLE001
-                    skip("⑥ [phase] 渲染对照", str(error))
+                    skip_render("⑥ [phase] 渲染对照", str(error))
     # 非本轮引入的证据（一次性、记录在报告里，不在这里重跑）：用 `git worktree add
     # /tmp/r37/base e39b3e9` 的基线二进制跑同一条命令，产物与本轮逐字节相同
     # （124574 B 的 S36 产物亦然），且基线 convert 产物与新 convert 产物逐字节相同。
@@ -354,7 +377,10 @@ def main():
             print("  · " + label)
         return 1
     if SKIPS:
-        print(f"== 判据全部成立（另有 {len(SKIPS)} 条 SKIP） ==")
+        if ALLOW_SKIP:
+            print(f"== 判据全部成立（显式 --allow-skip，另有 {len(SKIPS)} 条 SKIP） ==")
+        else:
+            print(f"== 判据全部成立（另有 {len(SKIPS)} 条 SKIP） ==")
         for label in SKIPS:
             print("  ~ " + label)
         return 0

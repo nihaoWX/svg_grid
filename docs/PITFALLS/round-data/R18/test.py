@@ -365,8 +365,11 @@ def family_three(faces):
           and "would install svg_grid_convert" not in dry.stdout,
           "`install.sh --dry-run` 只计划装一个二进制（不再有 svg_grid_convert）",
           dry.stdout[:600])
-    check(dry.stdout.count("would install") == 1,
-          "`install.sh --dry-run` 的安装计划只有一行", dry.stdout)
+    # 4133c83 起 install.sh 还装 `general-figure-guide` skill，`would install` 因此有两行；
+    # 原断言「只有一行」是那次改动之前的期望（R38 实测 2 行，账本 R18 有 ↻ 注记）。
+    check(dry.stdout.count("would install svg_grid ->") == 1
+          and dry.stdout.count("would install skill") == 1,
+          "`install.sh --dry-run` 只装一个二进制 + 一个 skill", dry.stdout)
 
 
 # ── ④ 回归 ──────────────────────────────────────────────────────────────────────────

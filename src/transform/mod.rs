@@ -28,6 +28,13 @@ pub(super) enum ScalePolicy {
     Y,
     Position,
     None,
+    /// Scale the numbers but never translate them. Only the composer produces it,
+    /// and only for a `<pattern>` body: the body's coordinates are *tile local*
+    /// (both resvg and cairosvg place them relative to the tile origin), so the
+    /// tile may move to its cell while the body must stay where it is — moving
+    /// both would push the body out of its own tile window and the fill would
+    /// vanish silently (round-data/R38). `data-scale` never yields this variant.
+    Scale,
 }
 
 /// Rewrite every coordinate of `root` under the composer's `data-scale` policy.
@@ -68,16 +75,31 @@ fn transform_element(
 
     rewrite_primitive(element, policy, source, target, index, passthroughs)?;
 
-    // A `patternContentUnits="objectBoundingBox"` body is a *fraction* of the
-    // referencing element's box, not a user-space coordinate: leaving the body alone
-    // is what keeps it attached to the shape (the tile box itself may still be
-    // `userSpaceOnUse`, so it is rewritten above).
-    let body_is_fractional = element.name == "pattern"
-        && matches!(
-            element.attr("patternContentUnits"),
-            Some(units) if units.trim() != "userSpaceOnUse"
-        );
-    if body_is_fractional {
+    // A `<pattern>` body is **tile local** in both renderers: the tile box
+    // (`x/y/width/height`, rewritten above) is mapped into the cell, but the body's
+    // numbers are placed relative to the tile origin. Translating the body by the
+    // panel offset as well would move it out of its own tile window, and the fill
+    // disappears with no error at all (measured: ink 9600 -> 0 under both resvg and
+    // cairosvg, round-data/R38). So the body is scaled but never translated, in
+    // *both* unit modes — `patternContentUnits="objectBoundingBox"` is a fraction of
+    // the referencing box and must not move either.
+    //
+    // `patternTransform` is deliberately left verbatim: it is already relative to
+    // the tile, so it keeps working, and the corpus uses it nowhere (0 of 220
+    // fixtures). If it ever needs rewriting, it must be *accumulated*, not replaced.
+    if element.name == "pattern" {
+        for child in &mut element.children {
+            if let Node::Element(child) = child {
+                transform_element(
+                    child,
+                    ScalePolicy::Scale,
+                    source,
+                    target,
+                    index,
+                    passthroughs,
+                )?;
+            }
+        }
         return Ok(());
     }
 

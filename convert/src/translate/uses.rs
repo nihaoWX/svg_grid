@@ -220,13 +220,7 @@ fn prune_defs_with(element: &mut Element, referenced: &HashSet<String>) {
         if let Node::Element(mut child) = node {
             prune_defs_with(&mut child, referenced);
             if child.name == "defs" {
-                child.children.retain(|node| match node {
-                    Node::Element(child) => {
-                        REFERENCE_TARGETS.contains(&child.name.as_str())
-                            || child.attr("id").is_some_and(|id| referenced.contains(id))
-                    }
-                    Node::Text(_) => false,
-                });
+                child.children = keep_definitions(std::mem::take(&mut child.children), referenced);
                 if child.children.is_empty() {
                     continue;
                 }
@@ -239,20 +233,74 @@ fn prune_defs_with(element: &mut Element, referenced: &HashSet<String>) {
     element.children = out;
 }
 
-/// Call `visit` on every direct child of every `<defs>` in the tree.
+/// The definitions a `<defs>` subtree still needs, hoisted out of the wrappers
+/// that carry them.
+///
+/// `<defs>` children are not required to be definitions: `<defs><g><linearGradient
+/// id="g">` is legal, and so is `<defs><symbol id="s"><linearGradient …>` or
+/// `<defs><defs><pattern …>`. Dropping such a wrapper would drop the definition
+/// with it, and the *silent* failure mode is the one this module exists to
+/// prevent: the shape paints nothing. So a wrapper (`<g>`, `<symbol>`, a nested
+/// `<defs>`, `<a>`, `<switch>`) is not kept as a container — it is unlaced and
+/// its kept descendants are spliced into the `<defs>` itself. The wrapper was
+/// never drawn where it sat, so nothing moves; only the reachability of the ids
+/// inside it matters.
+///
+/// A node whose *own* id is referenced stays verbatim (a `<mask id="m">` is the
+/// definition), and so does every [`REFERENCE_TARGETS`] element.
+fn keep_definitions(children: Vec<Node>, referenced: &HashSet<String>) -> Vec<Node> {
+    let mut out = Vec::with_capacity(children.len());
+    for node in children {
+        let Node::Element(mut child) = node else {
+            continue;
+        };
+        let kept_by_id = child.attr("id").is_some_and(|id| referenced.contains(id));
+        if REFERENCE_TARGETS.contains(&child.name.as_str()) || kept_by_id {
+            out.push(Node::Element(child));
+        } else if is_wrapper(&child.name) {
+            out.append(&mut keep_definitions(
+                std::mem::take(&mut child.children),
+                referenced,
+            ));
+        }
+    }
+    out
+}
+
+/// Containers that a `<defs>` child may be wrapped in without being a definition
+/// itself (see [`keep_definitions`]).
+fn is_wrapper(name: &str) -> bool {
+    matches!(name, "g" | "symbol" | "defs" | "a" | "switch")
+}
+
+/// Call `visit` on every element inside every `<defs>` in the tree, at any
+/// depth.
+///
+/// The scan and the prune must agree on what a definition is: a `<linearGradient>`
+/// wrapped in `<g>`, a `<mask>` inside a `<symbol>`, a paint server in a nested
+/// `<defs>` is just as reachable by `url(#…)` as a direct child. Visiting only
+/// the direct children (R37) made the prune drop those definitions while the
+/// reference survived, and the new dangling-reference gate then hard-failed a
+/// document the renderers handle fine (R38).
 fn visit_defs(element: &Element, visit: &mut impl FnMut(&Element)) {
     for child in &element.children {
         let Node::Element(child) = child else {
             continue;
         };
         if child.name == "defs" {
-            for node in &child.children {
-                if let Node::Element(node) = node {
-                    visit(node);
-                }
-            }
+            visit_defs_contents(child, visit);
+        } else {
+            visit_defs(child, visit);
         }
-        visit_defs(child, visit);
+    }
+}
+
+fn visit_defs_contents(element: &Element, visit: &mut impl FnMut(&Element)) {
+    for child in &element.children {
+        if let Node::Element(child) = child {
+            visit(child);
+            visit_defs_contents(child, visit);
+        }
     }
 }
 
