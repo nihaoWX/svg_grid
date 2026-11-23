@@ -44,3 +44,55 @@ sed -n '248,265p' src/cli/doctor/run.rs
 希望 `WARNING_CODES` 的每条片段都由一个**真实构造的告警文案**来守护（表里每条码至少有一条测试断言
 "用真实 `describe_*` 产出的文案能被 `classify` 认出来"），这样文案一改就会红；顺带把 W4a/W5 两条片段
 改成与现行文案一致，并让注释指向真实存在的测试名。
+
+## 追加实测（2026-11-24，R44 之后，HEAD `42184d5`）
+
+用真实 `describe_*` 产出的文案逐条比对 `WARNING_CODES`（脚本见下），**漂移的是三条，不是两条**：
+
+| 码 | 表里的片段 | 真实文案（实测） | 后果 |
+|---|---|---|---|
+| W4a | `` `--labels` has `` | `--labels has 3 entries but the grid has 2 inputs: …` | `--json` 缺项（doctor 从不传 `--labels`，暂不可见） |
+| W5 | `may be clipped by the canvas` | 主路径 `was moved inside the canvas`（`src/warnings/labels.rs:49`）；`may be clipped` 只在 `src/warnings/labels.rs:128` 的极端分支 | 同上 |
+| **W7** | `could not be rewritten and were left exactly as written` | `1 attribute could not be rewritten, kept verbatim: input #0 <rect x>: non-finite number "inf".`（`src/warnings/passthrough.rs:110`） | **不只是 `--json` 缺项**：`judge()`（`src/cli/doctor/run.rs:364-369`）用 `codes.contains(&"W7")` 把 W7 判成 FAIL，而 `classify` 永远产不出 `W7` ⇒ **doctor 的 W7 门禁是死代码，fail-open** |
+
+复现（W7 真实可达）：
+
+```bash
+cd /home/nihao/bioagentforge/tools/svg_grid
+cat > /tmp/w7.svg <<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80"><rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none"/><g data-scale="xy"><rect x="inf" y="0" width="10" height="10" fill="#000"/></g></svg>
+SVG
+~/.local/bin/svg_grid plot-grid --input /tmp/w7.svg --width 400 --ncol 1 --verbose --output /tmp/w7o.svg 2>&1 | grep 'kept verbatim'
+# svg_grid: warning: 1 attribute could not be rewritten, kept verbatim: input #0 <rect x>: non-finite number "inf". …
+```
+
+逐条比对脚本（把 `WARNING_CODES` 的片段与真实文案对照，输出 MISS 即漂移）：
+
+```bash
+python3 - <<'PY'
+import re, pathlib
+run = pathlib.Path('src/cli/doctor/run.rs').read_text()
+pairs = re.findall(r'\("([^"]+)",\s*"((?:[^"\\]|\\.)*)"\)',
+                   re.search(r'WARNING_CODES: &\[\(&str, &str\)\] = &\[(.*?)\];', run, re.S).group(1))
+real = {
+ 'W1': 'scaled by the layout', 'W2': 'stretched: ', 'W3': 'already carry letters',
+ 'W4a': '--labels has 3 entries but the grid has 2 inputs',
+ 'W4b': 'repeats some letters',
+ 'W5': 'was moved inside the canvas',
+ 'W6': 'draws ink outside its own canvas box',
+ 'W7': 'could not be rewritten, kept verbatim',
+ 'W8': 'is not in the font library',
+ 'W9': 'point at an id that nothing in the output defines',
+ 'V1': '<style> CSS block',
+}
+for code, phrase in pairs:
+    phrase = phrase.encode().decode('unicode_escape')
+    print(f"{code:4} {'OK ' if phrase in real.get(code, '') else 'MISS'} {phrase!r}")
+PY
+```
+
+## 建议（追加）
+
+1. 三条片段都改成与现行文案一致：W4a → `--labels has `、W5 → `was moved inside the canvas`（并保留 `may be clipped by the canvas` 作为**第二条**片段，或让 `classify` 支持一码多片段）、W7 → `could not be rewritten, kept verbatim`。
+2. 补上注释承诺的守护测试（`every_warning_code_still_matches_its_message`）：对每个码用**真实 `describe_*` 产出的文案**断言 `classify` 能认出来——这样文案一改就红，而不是靠人肉比对。
+3. W7 这条尤其要测：它是 `judge()` 的 FAIL 判据，漂移的后果是 doctor 静默放过本该 FAIL 的 fixture（fail-open），比 `--json` 缺项严重。
