@@ -72,8 +72,11 @@ echo "rc=$?"                                        # rc=0
 
 ## 影响面
 
-- 形态 1（`<tspan>`）**不是臆造**：R/ggplot2 的 `ggsave` 与 matplotlib 的 mathtext 后端都会把
-  一段文字拆成多个 `<tspan>`（不同字号/上下标）。只要字母被拆进 tspan，检测就失效。
+- 形态 1（`<tspan>`）**不是臆造，语料里就有**：`tests/fixtures/matplotlib/mathtext.svg` 有 39 个
+  `<tspan>`，形态是 `<text><tspan x="0" y="-0.6875" style="…">x</tspan><tspan …>…</tspan></text>`
+  ——matplotlib 的 mathtext 后端把一段文字拆成多个 tspan（不同字号/上下标），
+  `tests/fixtures/matplotlib/log_axes.svg` 同样有。R/ggplot2 的 `ggsave` 也会这样拆。
+  只要字母被拆进 tspan，检测就失效。
 - 形态 2（marker 在 `<g>` 上）在手工编辑或某些导出器里常见。
 - 形态 3（空白/实体）在 `&#65;` 这类数字实体上尤其隐蔽——它与
   `docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md` 是同一族问题：
