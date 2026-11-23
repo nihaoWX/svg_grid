@@ -1,0 +1,41 @@
+id = "R45"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "doctor 的 WARNING_CODES 与产品文案漂移：11 条里 5 条永远匹配不上（W4a 反引号、W5 只认极端分支、W7 整句改写、W3/W8 是硬错误前缀）",
+  "W7 门禁 fail-open：judge() 用 codes.contains(&\"W7\") 判 FAIL，而 W7 片段是死码 ⇒ 该判据从未生效",
+  "守护测试缺失：注释承诺 every_warning_code_still_matches_its_message，实际测试手写字符串，只证明表与测试自洽",
+]
+
+closures = [
+  { finding = "R45-F1", tier = "代码" },
+  { finding = "R45-F2", tier = "代码" },
+  { finding = "R45-F3", tier = "测试" },
+  { finding = "R45-F4", tier = "代码" },
+  { finding = "R45-F5", tier = "测试" },
+  { finding = "R45-F6", tier = "测试" },
+  { finding = "R45-F7", tier = "测试" },
+  { finding = "R45-F8", tier = "检查" },
+  { finding = "R45-F9", tier = "检查" },
+]
+
+run_before = ["R44", "R43", "R17"]
+touched = ["R44", "R43", "R42", "R41", "R40", "R39", "R38", "R37", "R36", "R35", "R31", "R28", "R25", "R20", "R18", "R17", "R16", "R15", "R9", "R8"]
+
+note = """
+根因（已证）：短语表放在 doctor 里、与 describe_* 文案分居两处，且没有任何测试用真实文案回灌 classify；
+R17 的 KNOWN_CODE_WORDS 常量定义了却从未使用，正是同一漂移的化石。
+修法：表移到 src/warnings/codes.rs（紧邻文案），一码多短语（W5 两种形态都留），
+W3/W8 从表中移除（硬错误由 rc 判，is_warning_line 本就不认它们的行）。
+W7 门禁已实测复活：x="inf" fixture 让 doctor rc=1、--json 带 W7；全量语料仍 57/0/1。
+遗留（未修，非本轮授权）：src/warnings/rules_tests.rs 的短语清单是第二处需同步的副本；
+doctor 只对 W7/W9 判 FAIL，其余码仅记录。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R45/test.py
+# 有牙（fail-closed）：指向修复前的二进制，E 段必须红
+SVG_GRID_OLD_BIN=/tmp/r45_base_target/release/svg_grid python3 docs/PITFALLS/round-data/R45/test.py
+"""

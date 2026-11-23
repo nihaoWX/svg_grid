@@ -30,6 +30,8 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 use std::time::Instant;
 
+use svg_grid::classify;
+
 use super::fixtures::Fixture;
 use super::natural;
 use super::{ink, DEFAULT_MARGIN};
@@ -384,57 +386,6 @@ fn step_of(stage: &StageResult) -> &'static str {
     } else {
         "check"
     }
-}
-
-/// Warning codes recognised on stderr.
-///
-/// The ids are the stable interface of `ARCHITECTURE/warnings.md` §3; the phrases
-/// are the ones the messages themselves use, so a reworded message is caught by
-/// `every_warning_code_still_matches_its_message` in the unit tests.
-pub(crate) const WARNING_CODES: &[(&str, &str)] = &[
-    ("W1", "scaled by the layout"),
-    ("W2", "stretched: "),
-    ("W3", "already carry letters"),
-    ("W4a", "`--labels` has "),
-    ("W4b", "repeats some letters"),
-    ("W5", "may be clipped by the canvas"),
-    ("W6", "draws ink outside its own canvas box"),
-    (
-        "W7",
-        "could not be rewritten and were left exactly as written",
-    ),
-    ("W8", "is not in the font library"),
-    ("W9", "point at an id that nothing in the output defines"),
-    ("V1", "<style> CSS block"),
-];
-
-/// Split stderr into (warning codes, warning count).
-///
-/// The uniform tally line (`N non-fatal warning(s) — …`) is a footer, not a
-/// warning, so it is not counted.
-pub(crate) fn classify(stderr: &str) -> (Vec<&'static str>, usize) {
-    let mut codes: Vec<&'static str> = Vec::new();
-    let mut warnings = 0;
-    for line in stderr.lines() {
-        if !is_warning_line(line) {
-            continue;
-        }
-        warnings += 1;
-        if let Some((code, _)) = WARNING_CODES
-            .iter()
-            .find(|(_, phrase)| line.contains(phrase))
-        {
-            if !codes.contains(code) {
-                codes.push(code);
-            }
-        }
-    }
-    (codes, warnings)
-}
-
-fn is_warning_line(line: &str) -> bool {
-    (line.starts_with("svg_grid: warning:") || line.starts_with("svg_grid convert: warning:"))
-        && !line.contains("non-fatal warning(s)")
 }
 
 /// The stderr lines worth repeating under a FAIL/SKIP: warnings first (they are

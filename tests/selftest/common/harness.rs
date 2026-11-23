@@ -78,6 +78,31 @@ fill=\"#000000\">y label</text></g>
 </svg>
 ";
 
+/// A tagged panel with one attribute the composer cannot rewrite (`x="inf"`):
+/// the run still succeeds (rc=0) but prints W7, which `doctor` must FAIL.
+const W7_PANEL: &str = "\
+<svg width=\"100pt\" height=\"80pt\" viewBox=\"0 0 100 80\" xmlns=\"http://www.w3.org/2000/svg\">
+<rect data-panel-box=\"main\" x=\"0\" y=\"0\" width=\"100\" height=\"80\" fill=\"none\" stroke=\"none\"/>
+<g data-scale=\"xy\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"30\" fill=\"#3366cc\"/>
+<rect x=\"inf\" y=\"10\" width=\"20\" height=\"20\" fill=\"#000000\"/></g>
+</svg>
+";
+
+/// A corpus whose only fixture trips W7 (an attribute kept verbatim).
+///
+/// W7 is one of the two codes `doctor` judges as a FAIL, so this corpus is the
+/// end-to-end proof that the gate is alive: a table entry that no message can
+/// produce would let the fixture pass (R45).
+pub fn w7_corpus(name: &str) -> PathBuf {
+    let dir = temp_dir(name);
+    write(&dir.join("ggplot2/kept_verbatim.svg"), W7_PANEL);
+    write(
+        &dir.join("MANIFEST.toml"),
+        "[[fixture]]\nid = \"ggplot2/kept_verbatim\"\npackage = \"ggplot2\"\nexpect = \"pass\"\n",
+    );
+    dir
+}
+
 /// Build a corpus in `dir` and return it.
 ///
 /// `with_bad` adds the W9 fixture; the `unsupported` one is always registered (so

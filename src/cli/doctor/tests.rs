@@ -412,7 +412,8 @@ fn a_corpus_without_a_manifest_still_runs() {
     assert!(loaded.iter().all(|fixture| fixture.expect == "pass"));
 }
 
-use super::run::{classify, judge, number, read_stderr_lines, StageResult};
+use super::run::{judge, number, read_stderr_lines, StageResult};
+use svg_grid::classify;
 
 fn stage(convert_rc: i32, plot_rc: i32, ink: Result<u64, String>, stderr: &str) -> StageResult {
     StageResult {
@@ -451,10 +452,20 @@ fn w7_and_w9_fail_the_fixture_but_w1_does_not() {
     assert_eq!(problems.len(), 1);
     assert!(problems[0].contains("W9"), "{problems:?}");
 
-    let w7 = "svg_grid: warning: 1 attribute(s) could not be rewritten and were left exactly as \
-              written: input #0 <path d> (malformed).";
-    let problems = judge(&stage(0, 0, Ok(10), w7));
-    assert_eq!(problems.len(), 1);
+    // The real W7 text, built by the production function: a hand-written string
+    // only proves the table agrees with the test (that is how W7 stayed dead, R45).
+    let w7 = format!(
+        "svg_grid: warning: {}\n",
+        svg_grid::describe_passthrough(&[svg_grid::Passthrough {
+            index: 0,
+            element: "rect".to_string(),
+            attr: "x".to_string(),
+            detail: "non-finite number \"inf\"".to_string(),
+        }])
+        .expect("a kept-verbatim attribute warns")
+    );
+    let problems = judge(&stage(0, 0, Ok(10), &w7));
+    assert_eq!(problems.len(), 1, "{problems:?}");
     assert!(problems[0].contains("W7"), "{problems:?}");
 }
 

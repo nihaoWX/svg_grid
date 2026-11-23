@@ -6,7 +6,7 @@
 
 use crate::common::harness::{
     corpus, doctor, doctor_with_empty_path, font_library_available, summary, svg_grid,
-    verdict_lines, Binaries,
+    verdict_lines, w7_corpus, Binaries,
 };
 
 /// The binary under test.
@@ -106,6 +106,46 @@ fn a_dangling_reference_fails_the_fixture_and_the_run() {
         report.stderr.contains("1 of 4 fixture(s) FAILED"),
         "stderr carries the one-line verdict:\n{}",
         report.stderr
+    );
+}
+
+/// W7 is a FAIL criterion, and the classifier must actually produce it: a fixture
+/// whose attribute is kept verbatim (`x="inf"`) fails at the check step, and the
+/// `--json` report carries `W7` (R45: the table entry used to be dead, so this
+/// fixture passed silently).
+#[test]
+fn a_kept_verbatim_attribute_fails_the_fixture() {
+    let Some(bins) = ready() else { return };
+    let dir = w7_corpus("w7");
+    let report = doctor(&bins, &["--fixtures", &path_of(&dir)]);
+    assert_eq!(
+        report.code, 1,
+        "a W7 fixture must make doctor exit 1:\n{}\n{}",
+        report.stdout, report.stderr
+    );
+    assert!(
+        report.stdout.contains("FAIL  ggplot2/kept_verbatim  check"),
+        "the fixture fails at the check step:\n{}",
+        report.stdout
+    );
+    assert!(
+        report.stdout.contains("stderr contains W7"),
+        "the criterion names W7:\n{}",
+        report.stdout
+    );
+    assert!(
+        report.stdout.contains("kept verbatim"),
+        "the real message is repeated:\n{}",
+        report.stdout
+    );
+
+    let json = doctor(&bins, &["--fixtures", &path_of(&dir), "--json"]);
+    assert_eq!(json.code, 1, "{}", json.stderr);
+    assert!(
+        json.stdout.contains("\"warning_codes\": [\"W6\", \"W7\"]")
+            || json.stdout.contains("\"warning_codes\": [\"W7\", \"W6\"]"),
+        "the machine report carries W7:\n{}",
+        json.stdout
     );
 }
 

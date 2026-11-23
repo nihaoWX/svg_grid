@@ -35,6 +35,7 @@ pub use raster::{
     render_svg_to_png_with_dpi_with_fonts, render_svg_to_png_with_fonts, DEFAULT_FONT_FAMILY,
     FONT_DIR_ENV,
 };
+pub use warnings::{classify, describe_passthrough, Passthrough, WARNING_CODES};
 
 #[derive(Debug, Clone)]
 pub enum SvgInput {

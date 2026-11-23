@@ -42,6 +42,7 @@
 //! * [`fonts`] — W8 ([`describe_missing_font_error`], a hard error).
 //! * [`refs`] — W9 ([`dangling_references`] / [`describe_dangling_reference`]).
 
+mod codes;
 mod content;
 mod fonts;
 mod labels;
@@ -50,10 +51,13 @@ mod refs;
 mod scale;
 
 #[cfg(test)]
+mod codes_tests;
+#[cfg(test)]
 mod rules_tests;
 #[cfg(test)]
 mod tests;
 
+pub use codes::{classify, WARNING_CODES};
 pub use content::*;
 pub use fonts::*;
 pub use labels::*;
