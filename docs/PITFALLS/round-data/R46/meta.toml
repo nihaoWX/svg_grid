@@ -21,7 +21,7 @@ closures = [
 ]
 
 run_before = ["R45", "R44", "R43"]
-touched = ["R45", "R44", "R43", "R42", "R41", "R40", "R39", "R38", "R37", "R36", "R33", "R30", "R27", "R20", "R17", "R12", "R8"]
+touched = ["R45", "R44", "R43", "R42", "R41", "R40", "R39", "R38", "R37", "R36", "R33", "R30", "R20", "R17", "R8"]
 
 note = """
 根因（已证）：src/transform/walk.rs::transform_element 只按书写位置取策略
