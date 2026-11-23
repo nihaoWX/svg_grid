@@ -251,3 +251,101 @@ fn pattern_transform_is_kept_verbatim() {
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
 }
+
+/// The composer reads `patternContentUnits` and `viewBox` with the renderer's own
+/// typed grammar, and follows `href` the way usvg does (round-data/R40):
+///
+/// * only the exact token `objectBoundingBox` means bbox fractions — a different
+///   case, surrounding whitespace or an unknown value is the `userSpaceOnUse`
+///   default and the body must scale;
+/// * a valid `viewBox` puts the body in viewBox units, which the viewBox→tile
+///   mapping already applies, so the body must stay verbatim;
+/// * both attributes are inherited through `href`/`xlink:href`, and a cycle ends
+///   the chain instead of hanging.
+#[test]
+fn pattern_body_units_are_strict_and_inherited_through_href() {
+    let input = temp_path("pattern_units.svg");
+    let output = temp_path("pattern_units_combined.svg");
+    fs::write(
+        &input,
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="xy">
+<defs>
+<pattern id="invalid" patternUnits="userSpaceOnUse" patternContentUnits="ObjectBoundingBox" x="10" y="10" width="20" height="20">
+<rect x="2" y="3" width="6" height="4" fill="#000000"/>
+</pattern>
+<pattern id="vb" patternUnits="userSpaceOnUse" viewBox="0 0 20 20" x="10" y="10" width="20" height="20">
+<rect x="2" y="3" width="6" height="4" fill="#000000"/>
+</pattern>
+<pattern id="base_obb" patternContentUnits="objectBoundingBox"/>
+<pattern id="inherited_obb" href="#base_obb" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="0.1" y="0.2" width="0.5" height="0.25" fill="#000000"/>
+</pattern>
+<pattern id="base_vb" viewBox="0 0 20 20"/>
+<pattern id="inherited_vb" xlink:href="#base_vb" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="2" y="3" width="6" height="4" fill="#000000"/>
+</pattern>
+<pattern id="cycle_a" href="#cycle_b"/>
+<pattern id="cycle_b" href="#cycle_a" patternUnits="userSpaceOnUse" x="10" y="10" width="20" height="20">
+<rect x="2" y="3" width="6" height="4" fill="#000000"/>
+</pattern>
+</defs>
+<rect x="10" y="10" width="40" height="30" fill="url(#invalid)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#vb)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#inherited_obb)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#inherited_vb)"/>
+<rect x="10" y="10" width="40" height="30" fill="url(#cycle_b)"/>
+</g>
+</svg>"##,
+    )
+    .unwrap();
+
+    // sx = sy = 2 (100x80 panel into a 200x160 canvas).
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: 200.0,
+        height: Some(160.0),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: None,
+        font_families: None,
+    })
+    .unwrap();
+
+    let svg = fs::read_to_string(&output).unwrap();
+    // `ObjectBoundingBox` is not the bbox token, so the body scales like user space.
+    assert!(
+        svg.contains(r##"<rect x="4" y="6" width="12" height="8" fill="#000000"/>"##),
+        "a non-canonical patternContentUnits value must fall back to user space: {svg}"
+    );
+    // A valid viewBox keeps the body in viewBox units; the tile box still scales.
+    let verbatim = r##"<rect x="2" y="3" width="6" height="4" fill="#000000"/>"##;
+    assert!(
+        svg.matches(verbatim).count() >= 2,
+        "a viewBox body (direct and inherited) must stay verbatim: {svg}"
+    );
+    assert!(
+        svg.contains(r##"<rect x="0.1" y="0.2" width="0.5" height="0.25" fill="#000000"/>"##),
+        "an objectBoundingBox inherited through href must stay verbatim: {svg}"
+    );
+    assert!(
+        svg.contains(r#"viewBox="0 0 20 20""#),
+        "the viewBox itself stays untouched: {svg}"
+    );
+    assert!(
+        svg.contains(r#"x="20" y="20" width="40" height="40""#),
+        "every tile box is user-space geometry and still scales: {svg}"
+    );
+
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+}

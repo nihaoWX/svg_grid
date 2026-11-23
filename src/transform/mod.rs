@@ -3,11 +3,13 @@
 //!
 //! Split by responsibility (R14, `ARCHITECTURE.md` §跨领域约定 体积口径):
 //! this module walks the tree and dispatches, [`lengths`] owns the scale factors and
-//! the lengths they apply to, [`primitives`] rewrites the plain shapes, and [`paths`]
-//! rewrites `<path d>`. Behaviour is unchanged by the split.
+//! the lengths they apply to, [`primitives`] rewrites the plain shapes, [`paths`]
+//! rewrites `<path d>`, and [`patterns`] decides what a `<pattern>` body's numbers
+//! mean (its `patternContentUnits`/`viewBox`, inherited along `href`).
 
 mod lengths;
 mod paths;
+mod patterns;
 mod primitives;
 
 use crate::dom::{Element, Node};
@@ -17,6 +19,7 @@ use crate::warnings::Passthroughs;
 
 use lengths::{rewrite_scaled_length, LengthAxis};
 use paths::rewrite_path;
+use patterns::{pattern_body_is_verbatim, PatternIndex};
 use primitives::{
     rewrite_axis_coordinates, rewrite_pair, rewrite_points, rewrite_rect, rewrite_rotate_transform,
 };
@@ -50,12 +53,14 @@ pub fn transform_svg(
     index: usize,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
+    let patterns = PatternIndex::collect(root);
     transform_element(
         root,
         ScalePolicy::None,
         source_panel,
         target_panel,
         index,
+        &patterns,
         passthroughs,
     )
 }
@@ -66,6 +71,7 @@ fn transform_element(
     source: Rect,
     target: Rect,
     index: usize,
+    patterns: &PatternIndex,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
     let policy = element
@@ -73,7 +79,15 @@ fn transform_element(
         .map(parse_policy)
         .unwrap_or(inherited);
 
-    rewrite_primitive(element, policy, source, target, index, passthroughs)?;
+    rewrite_primitive(
+        element,
+        policy,
+        source,
+        target,
+        index,
+        patterns,
+        passthroughs,
+    )?;
 
     // A `<pattern>` body is **tile local** in both renderers: the tile box
     // (`x/y/width/height`, rewritten above) is mapped into the cell, but the body's
@@ -82,24 +96,31 @@ fn transform_element(
     // disappears with no error at all (measured: ink 9600 -> 0 under both resvg and
     // cairosvg, round-data/R38).
     //
-    // What the body's numbers *mean* depends on `patternContentUnits`:
+    // What the body's numbers *mean* depends on `patternContentUnits` and on
+    // whether the pattern has a `viewBox` — both inherited along `href`, see
+    // [`patterns::pattern_body_is_verbatim`]:
     //
-    // * unset or `userSpaceOnUse` (the default) — user units of the tile, so they
+    // * neither (the default `userSpaceOnUse`) — user units of the tile, so they
     //   scale with the panel but keep the tile's own origin (`Scale`);
-    // * an explicit `objectBoundingBox` — fractions of the **referencing element's
-    //   bbox**, and that box already scales with the panel. Multiplying the
-    //   fractions by `(sx, sy)` on top of that is a double scaling: the motif
-    //   shrinks/expands and the output stops matching the source (measured at
-    //   s=0.5: ink 4 vs 16, xor 16 md 255; the base commit rendered xor 0 —
-    //   round-data/R39). The whole body is therefore left verbatim, no recursion.
+    // * `objectBoundingBox` — fractions of the **referencing element's bbox**, and
+    //   that box already scales with the panel. Multiplying the fractions by
+    //   `(sx, sy)` on top of that is a double scaling: the motif shrinks/expands
+    //   and the output stops matching the source (measured at s=0.5: ink 4 vs 16,
+    //   xor 16 md 255; the base commit rendered xor 0 — round-data/R39);
+    // * a valid `viewBox` — the body lives in viewBox units and the viewBox→tile
+    //   mapping already follows the panel, so scaling the numbers again is the same
+    //   mistake (measured at s=2: `2 2 6 6` became `4 4 12 12`, xor 1792 —
+    //   round-data/R40).
+    //
+    // In both of the latter cases the body is left verbatim, without recursion. A
+    // chain the composer cannot resolve is treated the same way (fail safe: never
+    // *add* a scaling the renderer did not ask for).
     //
     // `patternTransform` is deliberately left verbatim: it is already relative to
     // the tile, so it keeps working, and the corpus uses it nowhere (0 of 220
     // fixtures). If it ever needs rewriting, it must be *accumulated*, not replaced.
     if element.name == "pattern" {
-        // `patternContentUnits` defaults to `userSpaceOnUse`; any explicit other
-        // value means the fractions are bbox relative and must stay untouched.
-        if pattern_content_is_object_bounding_box(element) {
+        if pattern_body_is_verbatim(element, patterns) {
             return Ok(());
         }
         for child in &mut element.children {
@@ -110,6 +131,7 @@ fn transform_element(
                     source,
                     target,
                     index,
+                    patterns,
                     passthroughs,
                 )?;
             }
@@ -157,7 +179,7 @@ fn transform_element(
 
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            transform_element(child, policy, source, target, index, passthroughs)?;
+            transform_element(child, policy, source, target, index, patterns, passthroughs)?;
         }
     }
 
@@ -175,16 +197,6 @@ fn user_space_units(element: &Element, attr: &str) -> bool {
     )
 }
 
-/// Whether a `<pattern>`'s body numbers are fractions of the referencing element's
-/// box rather than user units. `patternContentUnits` defaults to `userSpaceOnUse`,
-/// so only an explicit other value counts; an unknown value is treated the same way
-/// (leaving the body verbatim can never *add* a wrong scaling, round-data/R39).
-fn pattern_content_is_object_bounding_box(element: &Element) -> bool {
-    matches!(
-        element.attr("patternContentUnits"),
-        Some(units) if units.trim() != "userSpaceOnUse"
-    )
-}
 fn parse_policy(value: &str) -> ScalePolicy {
     match value {
         "xy" => ScalePolicy::Xy,
@@ -202,6 +214,7 @@ fn rewrite_primitive(
     source: Rect,
     target: Rect,
     index: usize,
+    patterns: &PatternIndex,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
     match element.name.as_str() {
@@ -401,10 +414,11 @@ fn rewrite_primitive(
         }
         _ => {}
     }
-    // An `objectBoundingBox` pattern body stays verbatim, and so do the lengths it
-    // inherits from the `<pattern>` element: `stroke-width` there is a fraction of
-    // the same box, so scaling it would double-scale the body's outline too.
-    if element.name == "pattern" && pattern_content_is_object_bounding_box(element) {
+    // A body that stays verbatim keeps the lengths it inherits from the
+    // `<pattern>` element too: under `objectBoundingBox` a `stroke-width` there is
+    // a fraction of the same box, and under a `viewBox` it is in viewBox units, so
+    // scaling either would double-scale the body's outline as well.
+    if element.name == "pattern" && pattern_body_is_verbatim(element, patterns) {
         return Ok(());
     }
     rewrite_scaled_length(

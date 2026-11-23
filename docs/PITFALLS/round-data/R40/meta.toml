@@ -1,0 +1,40 @@
+id = "R40"
+date = "2026-11-23"
+verdict = "复发"
+family = [
+  "`patternContentUnits` 用「非 `userSpaceOnUse` 即 bbox」的宽松判据（R39 引入）：usvg 是类型化解析，大小写不符/前后空白/未知值/空串一律回退 user space ⇒ body 该缩放却被留原样（s=2 实测 xor 448）",
+  "`<pattern viewBox>` 的内容坐标在 **viewBox 单位**里，viewBox→tile 映射已经随 s 跟上；R38 起仍把 body 乘 (sx,sy) ⇒ 双重缩放（s=2 实测 xor 1792，body `2 2 6 6` 被写成 `4 4 12 12`）",
+  "`patternContentUnits`/`viewBox` 沿 `href`/`xlink:href` 继承（usvg `resolve_pattern_attr`：链上第一个显式值），此前完全没解析；链不可解析时也没有定义取舍",
+]
+closures = [
+  { finding = "R40-F1", tier = "代码" },   # transform/mod.rs：transform_element 用 pattern_body_is_verbatim 分流
+  { finding = "R40-F2", tier = "代码" },   # transform/mod.rs：rewrite_primitive 早返回，viewBox 也算 verbatim
+  { finding = "R40-F3", tier = "代码" },   # transform/patterns.rs：PatternIndex + href 链 + 严格 token + viewBox 解析
+  { finding = "R40-F4", tier = "测试" },   # transform/tests.rs：5 种非法值按 user 单位缩放
+  { finding = "R40-F5", tier = "测试" },   # transform/tests.rs：viewBox 内容逐字保留
+  { finding = "R40-F6", tier = "测试" },   # selftest/transform/pattern.rs：端到端严格 token + href 继承
+  { finding = "R40-F7", tier = "检查" },   # round-data/R40/test.py：B1 五种非法值 + viewBox + href + fail-closed
+  { finding = "R40-F8", tier = "检查" },   # round-data/R39/test.py：追加 F 族（类型化 token + viewBox）
+  { finding = "R40-F9", tier = "检查" },   # round-data/R40/meta.toml：连带面与 how_to_run
+]
+run_before = ["R39", "R38", "R16"]
+touched = ["R39", "R38", "R37", "R16", "R8", "R9", "R25", "R28", "R31", "R35", "R36"]
+note = """
+为什么认定复发：pattern 坐标域是 R16 建立、R37/R38/R39 连续改写的同一处映射；R39 修好
+obb 双重缩放，却在同一行判据里换成宽松比较 ⇒ 同类「不该缩放/该缩放」错位，只隔一轮（已证）。
+根因：usvg `convert_units` = `resolve_attr` + `attribute(...).unwrap_or(default)`，区分大小写、
+不 trim，类型化解析失败即默认；`viewBox` 解析成功时 `push_pattern_transform` 并强制内容单位为
+user space，所以内容数值不能再乘 (sx,sy)（已证，复现与数字见报告）。两个属性都沿 href 继承。
+怎么修才不弄坏前面：只有精确 token 与可解析 viewBox 才 verbatim，其余（含链不可解析）一律
+fail-safe 原样；`userSpaceOnUse` 仍走 `ScalePolicy::Scale`，R38/R39 的行为逐字保留。
+回归：R8..R39 逐个顶层复跑全绿；220 fixture 转换字节不变、幂等 0、悬空 0；58 组合 fixture
+0 字节差（仅 mathtext 双方 rc=2）；R38 证据 C1 bars_grouped resvg 数字不回退。
+未覆盖：maskContentUnits/patternUnits/maskUnits/filterUnits 仍是 trim 宽松比较（同类隐患，无授权未动）；嵌套 pattern、patternTransform 长度量、pattern 外 clip-path、pattern 内 text、patternUnits=obb 两渲染器分歧照旧。
+"""
+how_to_run = """
+cd tools/svg_grid && python3 docs/PITFALLS/round-data/R40/test.py    # rc=0 = 全部成立
+前置：`cargo build --offline`（根 crate，debug 二进制）。
+渲染对照需要 /tmp/d1_eval/render/target/release/d1render（缺失 ⇒ FAIL；确实要跳过传 --allow-skip）。
+fail-closed 段：SVG_GRID_OLD_BIN=<上一轮二进制> 时，B1 五种非法值 + viewBox 必须全红，否则 FAIL；
+不给则打 SKIP。可用 SVG_GRID_BIN / SVG_GRID_RENDER_BIN 覆盖二进制定位。
+"""

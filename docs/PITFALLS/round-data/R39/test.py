@@ -6,6 +6,12 @@ R38 把 pattern 的 **所有** children 一律送进 `ScalePolicy::Scale`；但 
 缩放（s=0.5 时 ink 4 而非 16，xor 16）。R39 按 `patternContentUnits` 分流：未写或
 `userSpaceOnUse` 照旧 `ScalePolicy::Scale`，显式其它值（obb）原样跳过、不递归。
 
+R40 追加（本脚本保留这条修法的证据，不另开轮次）：`patternContentUnits` 必须**类型化**
+读取——只有严格 token `objectBoundingBox` 才算 bbox，其它写法（大小写不符、带空白、未知值、
+空串）一律按 usvg 回退 `userSpaceOnUse` 并缩放；并且带 `viewBox` 的 pattern 内容在 viewBox
+单位里，也必须原样（R39 引入的 B1 与既有 P1-B 由 R40 修复）。F 族就是这两条，把它们放进
+R39 的证据而不是 R38，是因为 R38 的证据只谈相位/平移，单位语义是 R39 才写进代码的。
+
 契约（`pitfalls-manager/references/02_consume.md` §4.3）：无参只跑快断言；退出码即结论
 （0＝全过）；每族一行 PASS/FAIL；只有 FAIL 才给细节；跳过必须打出来并给原因；幂等、离线、
 不写仓库。`--with-old` 额外复跑 R38 证据（数分钟），默认不打。
@@ -311,7 +317,47 @@ def family_d():
           "D5 R38 证据保持非退化（A2 跑 s1+s2，不再用 obb SKIP 掩盖）", "")
 
 
-# ── E. 旧证据复跑（可选，数分钟） ──────────────────────────────────────────────────
+# ── F. R40 追加：类型化 token + viewBox 内容原样（B1 / P1-B） ──────────────────────
+def family_f():
+    """R39 把「任何非 userSpaceOnUse」当 bbox；resvg 只认精确 token。"""
+    for value in ["ObjectBoundingBox", "objectBoundingBox ", " objectBoundingBox", "foo", ""]:
+        src = write_svg(f"f_inv_{abs(hash(value))}.svg", panel(100, 80) + (
+            '<g data-scale="xy"><defs>'
+            f'<pattern id="p" patternUnits="userSpaceOnUse" patternContentUnits="{value}" '
+            'x="10" y="10" width="20" height="20">'
+            '<rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern></defs>'
+            '<rect x="10" y="10" width="40" height="30" fill="url(#p)"/></g></svg>'))
+        svg = compose(src, f"f_inv_{abs(hash(value))}_out.svg", "--width", "200", "--height",
+                      "160", "--ncol", "1", "--plot-margin", "0")
+        check('<rect x="4" y="6" width="12" height="8" fill="#000000"/>' in svg,
+              f"F1 patternContentUnits={value!r} 不是 bbox token ⇒ body 按 user 单位缩放",
+              svg[:900])
+
+    src = write_svg("f_vb.svg", panel(100, 80) + (
+        '<g data-scale="xy"><defs>'
+        '<pattern id="p" patternUnits="userSpaceOnUse" viewBox="0 0 10 10" '
+        'x="10" y="10" width="20" height="20">'
+        '<rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern></defs>'
+        '<rect x="10" y="10" width="40" height="30" fill="url(#p)"/></g></svg>'))
+    svg = compose(src, "f_vb_out.svg", "--width", "200", "--height", "160", "--ncol", "1",
+                  "--plot-margin", "0")
+    check('<rect x="2" y="3" width="6" height="4" fill="#000000"/>' in svg,
+          "F2 viewBox 内容在 viewBox 单位里 ⇒ 逐字保留（不乘 (sx,sy)）", svg[:900])
+
+    src = write_svg("f_vb_href.svg", panel(100, 80) + (
+        '<g data-scale="xy"><defs>'
+        '<pattern id="base" viewBox="0 0 10 10"/>'
+        '<pattern id="p" href="#base" patternUnits="userSpaceOnUse" '
+        'x="10" y="10" width="20" height="20">'
+        '<rect x="2" y="3" width="6" height="4" fill="#000000"/></pattern></defs>'
+        '<rect x="10" y="10" width="40" height="30" fill="url(#p)"/></g></svg>'))
+    svg = compose(src, "f_vb_href_out.svg", "--width", "200", "--height", "160", "--ncol", "1",
+                  "--plot-margin", "0")
+    check('<rect x="2" y="3" width="6" height="4" fill="#000000"/>' in svg,
+          "F3 viewBox 经 href 继承 ⇒ 内容逐字保留", svg[:900])
+
+
+# —— E. 旧证据复跑（可选，数分钟） ──────────────────────────────────────────────────
 def family_e():
     if not WITH_OLD:
         skip("E1 R38 证据复跑", "传 --with-old 启用（数分钟；R39 已单独复跑过 rc=0）")
@@ -335,6 +381,7 @@ def main():
     if src is not None:
         family_b(src, outs)
     family_c()
+    family_f()
     family_d()
     family_e()
     return finish()
