@@ -25,5 +25,6 @@ mod fonts;
 mod labels;
 mod layout;
 mod refs;
+mod textref;
 mod transform;
 mod warnings;

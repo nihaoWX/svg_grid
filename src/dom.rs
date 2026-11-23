@@ -83,9 +83,15 @@ pub fn parse(svg: &str) -> Result<Element> {
                         .xml_content()
                         .map_err(quick_xml::Error::from)?
                         .into_owned();
-                    parent
-                        .children
-                        .push(Node::Text(resolve_reference(&reference)));
+                    // `quick_xml` hands the reference over without its `&`/`;`.
+                    // `unescape` is the authority for both character references
+                    // (`&#176;`, `&#x42;`) and the five predefined entities; a
+                    // hand-written number parser would miss `0`, the surrogate
+                    // range and `+`/`-` (round-data/R47).
+                    let decoded = quick_xml::escape::unescape(&format!("&{reference};"))
+                        .map_err(quick_xml::Error::from)?
+                        .into_owned();
+                    parent.children.push(Node::Text(decoded));
                 }
             }
             Event::End(_) => {
@@ -147,17 +153,6 @@ fn push_element(stack: &mut [Element], root: &mut Option<Element>, element: Elem
     Ok(())
 }
 
-fn resolve_reference(reference: &str) -> String {
-    match reference {
-        "amp" => "&".to_string(),
-        "lt" => "<".to_string(),
-        "gt" => ">".to_string(),
-        "quot" => "\"".to_string(),
-        "apos" => "'".to_string(),
-        _ => format!("&{reference};"),
-    }
-}
-
 fn write_element(writer: &mut Writer<Vec<u8>>, element: &Element) -> Result<()> {
     let mut start = BytesStart::new(element.name.as_str());
     for (name, value) in &element.attrs {
@@ -178,4 +173,73 @@ fn write_element(writer: &mut Writer<Vec<u8>>, element: &Element) -> Result<()> 
     }
     writer.write_event(Event::End(BytesEnd::new(element.name.as_str())))?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parse one `<text>` body and return the decoded character data.
+    fn decode(body: &str) -> Result<String> {
+        let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><text>{body}</text></svg>"#);
+        let root = parse(&svg)?;
+        let Node::Element(text) = &root.children[0] else {
+            panic!("expected a <text> element");
+        };
+        let mut decoded = String::new();
+        for child in &text.children {
+            match child {
+                Node::Text(value) => decoded.push_str(value),
+                Node::Element(element) => panic!("unexpected <{}>", element.name),
+            }
+        }
+        Ok(decoded)
+    }
+
+    #[test]
+    fn character_references_decode_to_their_characters() {
+        for (reference, expected) in [
+            ("&#65;", "A"),
+            ("&#x42;", "B"),
+            ("&#176;", "°"),
+            ("&#065;", "A"),
+            ("&#x0041;", "A"),
+            ("&#x1F600;", "😀"),
+        ] {
+            assert_eq!(decode(reference).unwrap(), expected, "{reference}");
+        }
+    }
+
+    #[test]
+    fn whitespace_character_references_are_passed_through() {
+        for (reference, expected) in [
+            ("&#9;", "\t"),
+            ("&#10;", "\n"),
+            ("&#13;", "\r"),
+            ("&#32;", " "),
+        ] {
+            assert_eq!(decode(reference).unwrap(), expected, "{reference}");
+        }
+    }
+
+    #[test]
+    fn the_five_predefined_entities_still_decode() {
+        assert_eq!(decode("&amp;&lt;&gt;&quot;&apos;").unwrap(), "&<>\"'");
+    }
+
+    #[test]
+    fn invalid_and_undefined_references_are_rejected() {
+        for (reference, expected) in [
+            ("&#0;", "invalid character reference"),
+            ("&#x110000;", "invalid character reference"),
+            ("&#55296;", "invalid character reference"),
+            ("&#;", "invalid character reference"),
+            ("&#-1;", "invalid character reference"),
+            ("&#X41;", "invalid character reference"),
+            ("&nbsp;", "unrecognized entity"),
+        ] {
+            let error = decode(reference).unwrap_err().to_string();
+            assert!(error.contains(expected), "{reference} => {error}");
+        }
+    }
 }

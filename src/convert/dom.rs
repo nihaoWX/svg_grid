@@ -82,9 +82,13 @@ pub(crate) fn parse(svg: &str) -> Result<Element, ConvertError> {
             Event::GeneralRef(reference) => {
                 if let Some(parent) = stack.last_mut() {
                     let reference = reference.xml_content().map_err(ConvertError::xml)?;
-                    parent
-                        .children
-                        .push(Node::Text(resolve_reference(&reference)));
+                    // Same authority as `src/dom.rs`: `unescape` resolves both
+                    // character references and the five predefined entities, and
+                    // rejects undefined names (round-data/R47).
+                    let decoded = quick_xml::escape::unescape(&format!("&{reference};"))
+                        .map_err(ConvertError::xml)?
+                        .into_owned();
+                    parent.children.push(Node::Text(decoded));
                 }
             }
             Event::End(_) => {
@@ -143,17 +147,6 @@ fn push_element(
     Ok(())
 }
 
-fn resolve_reference(reference: &str) -> String {
-    match reference {
-        "amp" => "&".to_string(),
-        "lt" => "<".to_string(),
-        "gt" => ">".to_string(),
-        "quot" => "\"".to_string(),
-        "apos" => "'".to_string(),
-        _ => format!("&{reference};"),
-    }
-}
-
 pub(crate) fn serialize(root: &Element) -> String {
     let mut writer = Writer::new(Vec::new());
     write_element(&mut writer, root);
@@ -188,4 +181,53 @@ fn write_element(writer: &mut Writer<Vec<u8>>, element: &Element) {
     writer
         .write_event(Event::End(BytesEnd::new(element.name.as_str())))
         .expect("writing to an in-memory buffer cannot fail");
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Parse one `<text>` body and return the decoded character data.
+    fn decode(body: &str) -> Result<String, ConvertError> {
+        let svg = format!(r#"<svg xmlns="http://www.w3.org/2000/svg"><text>{body}</text></svg>"#);
+        let root = parse(&svg)?;
+        let Node::Element(text) = &root.children[0] else {
+            panic!("expected a <text> element");
+        };
+        let mut decoded = String::new();
+        for child in &text.children {
+            match child {
+                Node::Text(value) => decoded.push_str(value),
+                Node::Element(element) => panic!("unexpected <{}>", element.name),
+            }
+        }
+        Ok(decoded)
+    }
+
+    #[test]
+    fn character_references_are_unescaped_with_quick_xml_semantics() {
+        for (reference, expected) in [
+            ("&#65;", "A"),
+            ("&#x42;", "B"),
+            ("&#176;", "°"),
+            ("&#x1F600;", "😀"),
+            ("&amp;", "&"),
+        ] {
+            assert_eq!(decode(reference).unwrap(), expected, "{reference}");
+        }
+    }
+
+    #[test]
+    fn undefined_and_malformed_references_fail_closed() {
+        for (reference, expected) in [
+            ("&nbsp;", "unrecognized entity"),
+            ("&#0;", "invalid character reference"),
+            ("&#55296;", "invalid character reference"),
+            ("&#X41;", "invalid character reference"),
+        ] {
+            let error = decode(reference).unwrap_err().to_string();
+            assert!(error.starts_with("XML error: "), "{reference} => {error}");
+            assert!(error.contains(expected), "{reference} => {error}");
+        }
+    }
 }

@@ -1,0 +1,44 @@
+id = "R47"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "文本节点的字符引用（`&#176;` / `&#x42;`）被当成不认识的命名实体逐字保留，序列化时 `&` 再转义一次 ⇒ 产物 `&amp;#176;`，渲染成可见文本（`37°C ×2 ±1` 面板 ink 1701 → 502）",
+  "两处 DOM（src/dom.rs 与 src/convert/dom.rs）各有一份只认 amp/lt/gt/quot/apos 的 resolve_reference，同一缺陷两份实现",
+  "未定义命名实体（`&nbsp;`）在文本路径静默放行、在属性路径响亮失败 —— 两条路径对同一个输入给不同答案",
+]
+
+closures = [
+  { finding = "R47-F1", tier = "代码" },
+  { finding = "R47-F2", tier = "代码" },
+  { finding = "R47-F3", tier = "代码" },
+  { finding = "R47-F4", tier = "测试" },
+  { finding = "R47-F5", tier = "测试" },
+  { finding = "R47-F6", tier = "测试" },
+  { finding = "R47-F7", tier = "检查" },
+]
+
+run_before = ["R8", "R19", "R38"]
+touched = []
+
+note = """
+根因（已证）：quick-xml 的 BytesText 把引用拆成 Event::GeneralRef（不含 & 与 ;），
+两处 DOM 用自写的 resolve_reference 只查五张表；属性路径走 decode_and_unescape_value，
+用的正是 quick_xml::escape::unescape —— 两条路径从源头分叉。
+修法：两处 GeneralRef 分支都改调 quick_xml::escape::unescape(&format!("&{reference};"))，
+Err 走各自已有的 Xml 变体（Display 前缀不变、rc=1），删掉两份 resolve_reference。
+不自己写数字解析：0 / 代理区 / `+`-`-` / 空串四类，unescape 都按 XML 规范拒绝（实测表见报告）。
+口径不变：属性路径一字未动；控制字符与非法码位在文本路径仍放行（与属性路径一致）；
+CDATA 走 Event::CData，不解实体（`<![CDATA[37&#176;C]]>` 产物与修前逐字节相同）。
+遗留（未修，非本轮授权）：文本路径对 `&#1;`/`&#xFFFE;` 仍放行；要加严须两条路径一起改。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R47/test.py
+# 有牙（fail-closed）：指向修复前的二进制，E 段必须红
+SVG_GRID_OLD_BIN=/tmp/r46base/target/release/svg_grid python3 docs/PITFALLS/round-data/R47/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R47/run_old_evidence.sh
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""
