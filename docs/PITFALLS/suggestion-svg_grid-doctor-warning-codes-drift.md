@@ -95,6 +95,26 @@ for code, phrase in pairs:
 PY
 ```
 
+## 为什么现有测试没抓到（关键）
+
+`src/cli/doctor/tests.rs:442-460` 的 `w7_and_w9_fail_the_fixture_but_w1_does_not` **自己编了一条 W7 文案**：
+
+```rust
+let w7 = "svg_grid: warning: 1 attribute(s) could not be rewritten and were left exactly as \
+          written: input #0 <path d> (malformed).";
+```
+
+这条字符串与 `WARNING_CODES` 里的片段**互相自洽**（都写 "could not be rewritten and were left exactly
+as written"），但**与真实文案无关**——真实文案是
+`1 attribute could not be rewritten, kept verbatim: input #0 <rect x>: non-finite number "inf".`
+（`src/warnings/passthrough.rs:110`）。所以测试绿、门禁死，两边一起漂移。
+
+同理 `classify` 的另外两个测试（`the_tally_line_is_not_counted_as_a_warning`、
+`the_converter_warning_is_counted_with_its_own_code`）也是手写字符串，只覆盖 W1/V1 两条恰好没漂的码。
+
+⇒ 守护测试必须**调用真实的 `describe_*` 函数**产出文案，再喂给 `classify`；手写字符串只能证明
+"表与测试一致"，不能证明"表与产品一致"。
+
 ## 建议（追加）
 
 1. 三条片段都改成与现行文案一致：W4a → `--labels has `、W5 → `was moved inside the canvas`（并保留 `may be clipped by the canvas` 作为**第二条**片段，或让 `classify` 支持一码多片段）、W7 → `could not be rewritten, kept verbatim`。
