@@ -82,6 +82,13 @@ grep -o '<rect x="[^"]*" y="[^"]*"' o.svg     # x="10"  ← 正确
 只有 `Event::GeneralRef`（文本节点里的实体）走 `resolve_reference`。所以修的时候只需改
 `resolve_reference` 这一处（两个文件各一份），不必动属性解析。
 
+## 为什么一直没被发现：`resolve_reference` 零测试
+
+`grep -rn 'resolve_reference' --include=*.rs src/ tests/` 只命中两个定义处与两个调用处，
+**没有任何测试**直接或间接覆盖它；`tests/fixtures/**` 里也 0 个 `&#`。所以这条路径从建立起
+就没有被验证过——五个命名实体恰好对，是因为它们与 XML 规范一致；数字实体是唯一的分支，
+而它写错了。
+
 ## 影响面
 
 - `tests/fixtures/**/*.svg`：**0 个**含 `&#`（所以 220 fixture 回归抓不到）。
