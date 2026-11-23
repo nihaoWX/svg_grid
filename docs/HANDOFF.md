@@ -20,7 +20,8 @@
 | R37 `<defs>` 内 mask/marker/filter 被丢弃 | ✅ 已修，对抗评审 PASS | `18102d8`→`756dfb2`；R37 |
 | R38 `<defs>` 嵌套定义被误丢 + pattern 相位（tile 与 body 双平移） | ✅ 已修（含 R39/R40/R41 收尾），对抗评审 PASS | `95698ca`→`75d59fb`；R38/R39/R40/R41 |
 | R39/R40/R41 pattern 单位语义（obb 双重缩放、viewBox、href 继承、重复 id） | ✅ 已修，R41 评审 PASS | `2a6a1ed`→`96dfeab`、`475894a`→`715ce48`、`0d3d758`→`3a8416e` |
-| R42 `convert/` crate 并入 `src/convert/` 模块（用户要求） | ⏳ 已搬迁，待评审 | `de1bfae`→`8f38435`；R42 |
+| R42 `convert/` crate 并入 `src/convert/` 模块（用户要求） | ✅ 已搬迁，对抗评审 PASS | `de1bfae`→`8f38435`；R42 |
+| R43 单位属性语义（非法值/继承、marker/mask 内容域、IRI） | ⏳ 已修，待评审 | `8846fa8`→`2287213`；R43 |
 
 ## 1. 先读什么（按顺序）
 
@@ -118,7 +119,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 394**：211 lib + 59 bin + 124 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 406**：221 lib + 59 bin + 126 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -170,7 +171,7 @@
    `xor 1104`；`maskContentUnits`/`href` 词法的 trim 宽松；`patternTransform` 长度量；嵌套 pattern）。
    另有两份新报告待排期：`blocker-svg_grid-duplicate-letters-across-composites.md`、
    `suggestion-svg_grid-doctor-warning-codes-drift.md`。
-4. 交付前全量复核：`cargo test`（单 crate **394**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+4. 交付前全量复核：`cargo test`（单 crate **406**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点

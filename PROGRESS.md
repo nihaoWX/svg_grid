@@ -5,11 +5,12 @@
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**，随后的
   R37–R41 又收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`。
   余下两项 pre-existing（均已开报告）：组合图字母重号静默、doctor 告警码漂移。
+  R43 收掉单位属性语义（mask/marker/filter/gradient/pattern 的非法值与继承）。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 394 项**（211 lib + 59 main + 124 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 406 项**（221 lib + 59 main + 126 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -82,17 +83,15 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩三项 pre-existing，均已开报告：
 
-1. **pattern 混合单位继承仍会静默错**（R41 遗留 P2，下一轮"单位语义收尾"）：`<pattern id="base" x/y/width/height
-   默认 objectBoundingBox>` + `<pattern id="p" href="#base" patternUnits="userSpaceOnUse" x="10">` ⇒ 继承来的
-   tile 数值未缩放，`xor 1104 / maxdiff 255`（源 192、产物 ink 1152），rc=0 无告警。同族还有 `maskContentUnits`
-   等 trim 宽松比较、`href` 前导空白/`id` 含空格的词法问题、`patternTransform` 长度量、嵌套 `<pattern>`。
-2. **组合图字母重号静默**：两个各自带字母的组合图直接组合（不给 `--labels`）⇒ rc=0、stderr 0 字节，
-   产物出现两个 `data-svg-grid-label="0"`（渲染成 A、B、A）。W3 只覆盖"本次给非空字母"。
-   报告：`docs/PITFALLS/blocker-svg_grid-duplicate-letters-across-composites.md`。
-3. **doctor 告警码漂移**：`src/cli/doctor/run.rs:394-409` 的 `WARNING_CODES` 里 W4a（`` `--labels` has ``）
-   与 W5（`may be clipped by the canvas`）两条片段匹配不上现行文案 ⇒ `--json` 的 `warning_codes` 静默缺项；
-   注释承诺的 `every_warning_code_still_matches_its_message` 测试**不存在**。
-   报告：`docs/PITFALLS/suggestion-svg_grid-doctor-warning-codes-drift.md`。
+1. **`--normalize-input-max-side` 路径对 obb 内容仍二次缩放**（R43 遗留）：`src/normalize.rs:scale_element`
+   按固定属性表盲缩放，`patternUnits`/`patternContentUnits` 为 `objectBoundingBox` 的 pattern 内容会被再乘一次。
+   transform 路径已在 R38–R43 修好，normalize 路径是独立实现、仍是同一处语义。
+2. **滤镜图元长度不随面板缩放**（`feMorphology radius`、`feGaussianBlur stdDeviation` 等；s=2 `xor 1136`）：
+   `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
+3. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
+   pattern 外的 `clip-path` 被 pattern body 引用（`20736/6264`）、pattern 内 `<text>`（resvg 不画）。
+4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+   告警前缀，在 base 上也是红的（8 FAIL）；`verify` 与"旧证据全绿"的口径**不含 R19**。
 
 ## 其他未决项
 

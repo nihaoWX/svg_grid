@@ -95,11 +95,11 @@ tools/svg_grid/
 │   ├── lib.rs                  # plot_grid()：布局 → 逐输入按标签协议变换 → 拼装输出
 │   ├── layout.rs               # 网格划分（nrow/ncol/rel-*/margin/gap）→ 每个 cell 的 Rect
 │   ├── geom.rs                 # canvas box / panel box 解析；scale_panel_to_cell
-│   ├── transform/              # 按 data-scale 策略逐图元重写坐标（mod/primitives/lengths/paths）
+│   ├── transform/              # 按 data-scale 逐图元重写坐标（mod/primitives/lengths/paths/units/patterns）
 │   ├── path/                   # <path d> 的解析 / 按轴重写 / 展平（mod/parse/rewrite/flatten/tests）
 │   ├── ink/                    # 内容墨迹盒（W6 用；mod/walk/bbox/shapes/text/uses/tests）
 │   ├── warnings/               # 九条非致命告警 W1–W9 的收集与文案
-│   ├── dom.rs                  # 最小 XML DOM（parse/serialize）
+│   ├── dom.rs                  # 最小 XML DOM；ns.rs 给 id/IRI 加前缀
 │   ├── labels.rs               # 面板字母的构造
 │   ├── input.rs / output.rs    # SVG 读写；error.rs / normalize.rs
 │   ├── raster.rs               # PNG/AVIF 渲染；PNG 写 pHYs（dpi 元数据）

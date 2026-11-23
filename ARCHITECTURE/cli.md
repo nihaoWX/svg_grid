@@ -25,6 +25,7 @@ svg_grid --version                          # 版本，stdout，退出 0
 - **只有一个二进制 `svg_grid`**（用户 2026-10-06 裁决）：`convert` 是**子命令**，不是第二个可执行文件。
   R42 起转换器是主库的模块 `src/convert/`（此前是独立 crate + 独立 `svg_grid_convert` 二进制，已删除）：
   `src/cli/convert.rs` 是薄壳（`svg_grid::convert::cli::run_args_as`），`plot-grid`/`doctor` 走进程内调用。
+  `pub mod convert` 是**给 bin 用的内部模块**（bin crate 无法 `pub(crate)` 访问 lib），不是对外 API 承诺。
   ⇒ `doctor` 不需要"找外部 convert 二进制"，那个 `exit 3` 分支早已消失；`install.sh` 只装一个二进制
   （仍会清理旧机器上残留的 `svg_grid_convert` 并报告）。
 
