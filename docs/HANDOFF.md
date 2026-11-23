@@ -21,12 +21,15 @@
 | R38 `<defs>` 嵌套定义被误丢 + pattern 相位（tile 与 body 双平移） | ✅ 已修（含 R39/R40/R41 收尾），对抗评审 PASS | `95698ca`→`75d59fb`；R38/R39/R40/R41 |
 | R39/R40/R41 pattern 单位语义（obb 双重缩放、viewBox、href 继承、重复 id） | ✅ 已修，R41 评审 PASS | `2a6a1ed`→`96dfeab`、`475894a`→`715ce48`、`0d3d758`→`3a8416e` |
 | R42 `convert/` crate 并入 `src/convert/` 模块（用户要求） | ✅ 已搬迁，对抗评审 PASS | `de1bfae`→`8f38435`；R42 |
-| R43 单位属性语义（非法值/继承、marker/mask 内容域、IRI） | ⏳ 已修，待评审 | `8846fa8`→`2287213`；R43 |
+| R43 单位属性语义（非法值/继承、marker/mask 内容域、IRI） | ✅ 已修，对抗评审 PASS（1 项 P1 遗留） | `8846fa8`→`2287213`；R43 |
+| R44 组合图字母重号静默（rc=0、A,B,A） | ✅ 已修，rc=2 fail-closed | `4873156`→`42184d5`；R44 |
+| R45 doctor 告警码漂移（11 条里 5 条死码，W7 门禁 fail-open） | ⏳ 进行中 | 报告 `docs/PITFALLS/suggestion-svg_grid-doctor-warning-codes-drift.md` |
+| 数字实体双重转义（`&#176;` 等，文字几乎全丢） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md` |
 
 ## 1. 先读什么（按顺序）
 
 1. `INSTRUCTIONS.md` —— 用户手写、只由用户改。**产品定义与所有语义以它为准**。
-2. `PROGRESS.md` → `# Known Issues` —— 8 条待办，每条带 `file:line` 与实测数字。
+2. `PROGRESS.md` → `# Known Issues` —— 每条带 `file:line` 与实测数字。
 3. `ARCHITECTURE.md` → 用户期望 **#9–#13**（本次新加的四条）。
 4. `ARCHITECTURE/convert.md` → §3 末尾的 **⚠️**（bridge 净绕数为 0 只对 N=2 成立）。
 5. `ARCHITECTURE/layout.md` → §2 末尾两条 ⚠️（末行格子尺寸、`rows×cols` 校验）。

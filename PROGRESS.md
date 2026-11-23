@@ -4,13 +4,14 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**，随后的
   R37–R41 又收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`。
-  余下两项 pre-existing（均已开报告）：组合图字母重号静默、doctor 告警码漂移。
-  R43 收掉单位属性语义（mask/marker/filter/gradient/pattern 的非法值与继承）。
+  R43 收掉单位属性语义（mask/marker/filter/gradient/pattern 的非法值与继承），R44 收掉组合图字母重号
+  （跨输入与单输入内部重号都 rc=2）。余下 pre-existing 均已开报告：doctor 告警码漂移（11 条里 5 条死码）、
+  数字实体双重转义、marker+viewBox 二次缩放、gradient/mask/filter 的 units 不沿 href 继承。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` 2026-09-28 R5 起；分界原则见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 406 项**（221 lib + 59 main + 126 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 415 项**（228 lib + 59 main + 128 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -29,8 +30,8 @@
   回退 `02b` = cowplot；两副本 `diff -r` 为空）。**HARNESS 是两件套**（2026-10-06 起）：本文件
   + `ARCHITECTURE.md`（含 `# 已定型的决定` 与 `ARCHITECTURE/` 机制文档，索引见该文件）+ `docs/`；**不设 `DECISIONS.md`**。
   **`INSTRUCTIONS.md` 是用户手写、只由用户改**，与其余文件冲突时以它为准。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R42 已入账**；
-  `link` 组 L1–L64；`round-data/R3…R42` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R44 已入账**；
+  `link` 组 L1–L64；`round-data/R3…R44` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -42,6 +43,24 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-24 **R44 组合图字母重号 fail-closed**：字母唯一性从"单次调用"提升为"整张图"的性质——
+  收集最终字母集合（输入自带 `data-svg-grid-label` ∪ 本次分配），同一字母出现 ≥2 次且至少一处来自输入
+  ⇒ rc=2、不写产物、`--plan` 同 rc 同文案；全部来自显式 `--labels` 时维持 W4b 警告。
+  `src/label_conflicts.rs`（`validate_label_conflicts` 28-42、`collisions` 61-114、`collect_letters` 124-146）、
+  `src/warnings/labels.rs:describe_duplicate_panel_letters` 178-214、`src/lib.rs:154-327`、
+  `src/plan.rs:238-278`；新 `tests/selftest/labels/duplicates.rs`。测试 406→415。提交 `4873156`→`42184d5`。
+- 2026-11-24 **R43 单位属性语义收尾**：新增 `src/transform/units.rs`（`convert_units`/`units_of`/
+  `marker_units_are_user_space`，与 usvg 同义：精确 token、不 trim、非法值回退属性默认值），
+  mask/filter/gradient/marker/pattern 全部切换；`patterns.rs:resolved_attr` 让 tile 的 x/y/width/height
+  **逐属性**沿 href 链解析；`primitives.rs:rewrite_marker_box`；`src/ns.rs` 拆出（IRI 空白与命名空间）。
+  12 用例 × s=1/2 全 xor=0。测试 394→406。提交 `8846fa8`→`2287213`。
+- 2026-11-24 **R42 转换器并入主库**：`convert/` crate → `src/convert/` 模块（28 个 `.rs` `git mv`、
+  106 处 `crate::`→`crate::convert::`、删独立 `[[bin]]`/`Cargo.toml`/`main.rs`），
+  `convert/tests/cli.rs` → `tests/selftest/convert_cli/mod.rs`；诊断前缀统一 `svg_grid convert:`。
+  220 fixture / 58 组合 / `--plan` / `--report` 与 base 逐字节相同。测试 394（单 crate）。提交 `de1bfae`→`8f38435`。
+- 2026-11-24 **R37–R41 defs 与 pattern 单位语义**：`prune_defs` 按引用保留 + 悬空引用 fail-closed（R37）、
+  pattern 相位（tile 全映射 + body 只缩放不平移，R38）、obb 内容逐字保留（R39）、
+  viewBox/严格 token（R40）、href 断链回退 user space + 重复 id 后者胜 + `patternUnits` 继承（R41）。
 - 2026-11-23 **D5b–D5d W8 收尾（R34–R36）**：① `describe_missing_font_error` 原来取"链里第一个非通用名"
   判是否在库 ⇒ 改为**链里任一名字可用（在库或通用族）即放行**，整链不可用才 rc=3 并点名整链 + 可用族 + 修法；
   ② 错误行 200 字符硬上限（`MAX_ERROR_BODY`/`assemble_within`），W3 205→188、W8 239→194/195、W5 217→191；
@@ -73,7 +92,10 @@
   布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
 # In Progress
 
-- 无进行中轮次（D1–D6 + D5b–D5d 全部完成，R27–R36）。下一轮 = 消费 `docs/PITFALLS/blocker-convert-defs-mask-dropped.md`（R37）。
+- **R45（进行中）**：消费 `docs/PITFALLS/suggestion-svg_grid-doctor-warning-codes-drift.md` ——
+  `src/cli/doctor/run.rs:394-409` 的 `WARNING_CODES` 11 条里 5 条永远匹配不上（W4a/W5/W7 片段写错、
+  W3/W8 是硬错误行被 `is_warning_line` 跳过），其中 W7 是 `judge()` 的 FAIL 判据 ⇒ **门禁 fail-open**；
+  注释承诺的 `every_warning_code_still_matches_its_message` 测试不存在（现有测试自编文案，与表自洽但与产品无关）。
 
 # Known Issues
 
@@ -81,7 +103,7 @@
 
 ## 对照 `INSTRUCTIONS.md` 的缺口（2026-11-23 实测）
 
-**D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩三项 pre-existing，均已开报告：
+**D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
 1. **`--normalize-input-max-side` 路径对 obb 内容仍二次缩放**（R43 遗留）：`src/normalize.rs:scale_element`
    按固定属性表盲缩放，`patternUnits`/`patternContentUnits` 为 `objectBoundingBox` 的 pattern 内容会被再乘一次。
@@ -90,7 +112,15 @@
    `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
 3. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
    pattern 外的 `clip-path` 被 pattern body 引用（`20736/6264`）、pattern 内 `<text>`（resvg 不画）。
-4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+4. **数字实体被双重转义**（`docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md`）：
+   `src/dom.rs:151-158` 的 `resolve_reference` 只认五个命名实体，`&#176;`/`&#x42;` 被还原成字面量再转义成
+   `&amp;#176;` ⇒ 渲染成可见文本。实测 `37&#176;C &#215;2 &#177;1` 暗像素 64000→995（文字几乎全丢）。
+   `tests/fixtures/` 0 个 `&#`（220 fixture 抓不到），但 R/ggplot2 与部分 matplotlib 后端会输出数字实体。
+5. **marker + viewBox 二次缩放**（R43 遗留，窄口径）：`<marker markerUnits="userSpaceOnUse" viewBox="…">`
+   的 body 被再乘一次 (sx,sy)（`xor 48`，cairosvg 同样）；usvg `parser/marker.rs:183-196` 有 viewBox 时
+   已按视口放大内容。语料 0 个 marker。
+6. **gradient/mask/filter 的 units 不沿 href 继承**（R43 遗留）：`patternUnits` 已修（R41），其余三类未修。
+7. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；`verify` 与"旧证据全绿"的口径**不含 R19**。
 
 ## 其他未决项
