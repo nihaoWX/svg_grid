@@ -241,9 +241,7 @@ fn plan_grid_checked(
     verbose: bool,
 ) -> Result<GridPlan> {
     let (prepared, grid) = prepare(&request)?;
-    if let Some(labels) = labels {
-        crate::validate_label_conflicts(&prepared, labels)?;
-    }
+    crate::validate_label_conflicts(&prepared, labels)?;
     let mut warnings = warnings::Warnings::default();
     collect_auto_conversion_diagnostics(&request.inputs, &prepared, &mut warnings);
     let mut inputs = Vec::with_capacity(request.inputs.len());

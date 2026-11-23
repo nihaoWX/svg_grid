@@ -169,8 +169,8 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
     // W3 is a hard error now, and so is W8: both are "necessary information" in
     // `INSTRUCTIONS.md`. They are checked before any output path is opened, so a
     // failing call leaves no file behind.
+    validate_label_conflicts(&prepared, spec.labels.as_ref())?;
     if let Some(labels) = &spec.labels {
-        validate_label_conflicts(&prepared, labels)?;
         if let Some(available) = &spec.font_families {
             if labels.labels.iter().any(|label| !label.is_empty()) {
                 if let Some(message) =

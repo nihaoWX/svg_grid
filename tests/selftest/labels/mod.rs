@@ -446,3 +446,5 @@ fn margin_zero_moves_every_letter_inside_the_canvas() {
         let _ = fs::remove_file(panel);
     }
 }
+
+mod duplicates;

@@ -1,0 +1,41 @@
+id = "R44"
+date = "2026-11-24"
+verdict = "复发"
+family = [
+  "字母的唯一性是**整张图**的性质，不是单次调用的性质：输入自带的 `data-svg-grid-label` 会随子树原样保留，本调用分配的字母只是第二层——只校验『本次会不会覆盖输入』（W3）永远看不到『两块各自带字母的组合图拼起来撞号』这一半",
+  "硬错误只给意外：同一字母至少有一处来自输入 ⇒ rc=2（跨层撞号是事故）；全部来自显式 `--labels` ⇒ 保持 W4b 警告 rc=0（用户自己写重）——两者语义不同，不能顺手统一",
+  "fail-closed 的完整形态：`--plan` 与真实渲染同 rc、同文案、stdout 不留计划；错误在打开输出路径前抛出，既有产物不被截断；不依赖 `--verbose`",
+]
+closures = [
+  { finding = "R44-F1", tier = "代码" },   # src/label_conflicts.rs：validate_label_conflicts 接收 Option<&LabelSpec>
+  { finding = "R44-F2", tier = "代码" },   # src/label_conflicts.rs：collisions/collect_letters（最终字母集合查重）
+  { finding = "R44-F3", tier = "代码" },   # src/warnings/labels.rs：LetterSite + describe_duplicate_panel_letters
+  { finding = "R44-F4", tier = "代码" },   # src/lib.rs + src/plan.rs：两条调用点无条件校验（--plan 同 rc）
+  { finding = "R44-F5", tier = "测试" },   # src/label_conflicts.rs 的 7 条单测
+  { finding = "R44-F6", tier = "测试" },   # tests/selftest/labels/duplicates.rs：三步复现 + 真语料
+  { finding = "R44-F7", tier = "检查" },   # round-data/R44/test.py：正例/反例/plan/真语料/fail-closed
+  { finding = "R44-F8", tier = "检查" },   # round-data/R44/meta.toml
+]
+run_before = ["R43", "R42", "R9"]
+touched = ["R44", "R43", "R42", "R41", "R40", "R39", "R38", "R37", "R35", "R31", "R28", "R25", "R20", "R18", "R17", "R16", "R15", "R9", "R8"]
+note = """
+为什么是复发：字母重号属于 R9（W4b 字母重复）与 D5/W3 的同一族；R9 当时只做了"显式列表里重复"
+的警告，没有把输入自带的字母算进最终集合——W3 只覆盖"本次给字母又覆盖输入"。
+根因（已证）：产物字母 = 输入自带 ∪ 本调用分配；旧代码只查后者覆盖前者。复现 rc=0、stderr 0 字节、
+data-svg-grid-label=0,1,0（可见 A,B,A）。
+修法（已证）：收集最终集合按字母分组；≥2 且至少一处来自输入 ⇒ 硬错误，文案点名字母 + input# + cell
+（152 字符 ≤200）；全部来自显式 --labels ⇒ W4b 维持警告。
+证据（已证）：R44 脚本 24 条（+ fail-closed 25 条）全绿；旧二进制复现静默 0,1,0（F1）。
+存量（已证）：220 convert 0 字节变、58 compose + --plan 0 差、--report 逐字节相同、doctor 57/0/1。
+连带面：tests/selftest/labels/mod.rs 拆分出 duplicates.rs（R8 的 20000 B 上限）；W4b 未升级；
+`--labels none` 遇到输入自带重号同样 rc=2（口径：最终集合查重，与是否显式给字母无关）。
+怎么不弄坏前面：误伤面 6 条（A,B+C、A,B+无字母、单独组合图、--labels A,B、--labels A,A、--labels ,C）
+全部保留原行为；R8..R43 证据脚本未改，全部原样重跑。
+"""
+how_to_run = """
+cd tools/svg_grid && cargo build --offline
+python3 docs/PITFALLS/round-data/R44/test.py                          # rc=0 = 全部成立
+SVG_GRID_OLD_BIN=/path/to/727f45d/svg_grid \\
+  python3 docs/PITFALLS/round-data/R44/test.py                        # fail-closed：旧二进制仍静默 0,1,0
+只读、离线：不写仓库；临时文件在系统临时目录。
+"""

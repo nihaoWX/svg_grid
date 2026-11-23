@@ -146,3 +146,69 @@ pub fn describe_clipped_label(
     }
     Some(fit(&variants))
 }
+
+/// One place a panel letter appears in the finished figure (R44).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LetterSite {
+    /// Input index (0-based), i.e. the cell it lands in.
+    pub input: usize,
+    /// Cell index in the finished grid.
+    pub cell: usize,
+    /// `Some(marker)` when the letter comes from the input's own
+    /// `data-svg-grid-label`; `None` when this call writes it.
+    pub inner: Option<String>,
+}
+
+impl LetterSite {
+    pub(crate) fn inherited(&self) -> bool {
+        self.inner.is_some()
+    }
+
+    fn place(&self) -> String {
+        format!("#{} (cell {})", self.input, self.cell)
+    }
+}
+
+/// R44: the figure would carry the same panel letter twice, and at least one of
+/// those places is an input's own letter (an explicit `--labels A,A` collision is
+/// W4b's warning, not this error).
+///
+/// The message names the letter, every input/cell pair it lands in, and the fix:
+/// letter only the outer layer, or give this call unique `--labels`.
+pub fn describe_duplicate_panel_letters(
+    collisions: &[(String, Vec<LetterSite>)],
+) -> Option<String> {
+    if collisions.is_empty() {
+        return None;
+    }
+    let detailed: Vec<String> = collisions
+        .iter()
+        .map(|(letter, sites)| {
+            // One input can carry the same letter twice; then there is only one
+            // place to name and the count is what explains the collision.
+            let mut places: Vec<String> = Vec::new();
+            for site in sites {
+                let place = site.place();
+                if !places.contains(&place) {
+                    places.push(place);
+                }
+            }
+            if places.len() == 1 {
+                format!("{letter:?} {} times inside {}", sites.len(), places[0])
+            } else {
+                format!("{letter:?} at {}", places.join(" and "))
+            }
+        })
+        .collect();
+    let plain: Vec<String> = collisions
+        .iter()
+        .map(|(letter, _)| format!("{letter:?}"))
+        .collect();
+    Some(assemble_within(
+        "duplicate panel letters: ",
+        &detailed,
+        &plain,
+        &[". Fix: letter only at the outer layer, or pass unique --labels here."],
+        super::MAX_ERROR_BODY,
+    ))
+}
