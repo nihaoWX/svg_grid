@@ -102,3 +102,57 @@ grep -o '<rect x="[^"]*" y="[^"]*"' o.svg     # x="10"  ← 正确
 `resolve_reference` 补数字实体解析（`#123` 十进制、`#x1F` 十六进制），按 XML 规范映射到字符；
 无法解析的（越界、非法码点）保留原样或 fail-closed 报错。修完补测试：十进制/十六进制/越界/非法，
 以及"产物渲染后与源图逐像素一致"的对照（不能只断 markup）。
+
+## 追加实测（2026-11-24，R47 派单前；含两条更正）
+
+### 更正 1：CDATA 不是缺陷
+
+`<text><![CDATA[37&#176;C]]></text>` 经 `svg_grid convert` ⇒ 产物 `37&amp;#176;C`，但**渲染与源图逐像素
+相同**（resvg 300×40，diff 0）。CDATA 里 `&#176;` 本来就是字面量，序列化成 `&amp;#176;` 后渲染出同样的
+字面量 ⇒ 行为正确，不要"修"。
+
+### 更正 2：`&unknown;` 在文本里静默、在属性里 fail-closed（口径不一致）
+
+| 输入 | 结果 |
+|---|---|
+| 文本 `a &unknown; b` | rc=0，产物 `a &amp;unknown; b`（静默保留字面量） |
+| 属性 `data-x="a&nbsp;b"` | rc=1 `XML error: at 2..6: unrecognized entity `nbsp`` |
+| 文本 `a & b`（裸 `&`） | rc=1 `XML error: ill-formed document: entity or character reference not closed` |
+
+两个渲染器对源图里的 `&nbsp;` 都直接拒绝（resvg `unknown entity reference 'nbsp'`、cairosvg
+`ParseError undefined entity`）⇒ 含未定义命名实体的源图本来就不可渲染，静默保留只会把"不可渲染"
+变成"渲染出字面量"。建议与属性路径一致：**fail-closed**。
+
+### quick-xml 0.39.4 的权威语义（不要手写数字解析）
+
+`~/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/quick-xml-0.39.4/src/escape.rs`：
+
+- `:2038-2051` `parse_number`：`#x` 前缀走 16 进制、否则 10 进制；`code == 0` ⇒ `IllegalCharacter`；
+  `char::from_u32` 失败 ⇒ `InvalidCodepoint`。
+- `:2054-2061` `from_str_radix` 拒绝 `+`/`-` 符号（`UnexpectedSign`）。
+- `:212-215` `pub fn unescape(raw: &str) -> Result<Cow<'_, str>, EscapeError>` =
+  `unescape_with(raw, resolve_predefined_entity)`；`:255-300` `unescape_with` 先处理 `#` 数字引用
+  （不可覆盖），再 `resolve_entity`，未识别 ⇒ `EscapeError::UnrecognizedEntity`。
+
+实测（`quick_xml::escape::unescape(&format!("&{};", reference))`）：
+
+```
+#65      -> Ok("A")          #x42     -> Ok("B")        #176 -> Ok("°")
+amp      -> Ok("&")          nbsp     -> Err(UnrecognizedEntity(1..5, "nbsp"))
+#0       -> Err(InvalidCharRef(IllegalCharacter(0)))
+#x110000 -> Err(InvalidCharRef(InvalidCodepoint(1114112)))
+#55296   -> Err(InvalidCharRef(InvalidCodepoint(55296)))
+#        -> Err(InvalidCharRef(InvalidNumber(Empty)))
+#x       -> Err(InvalidCharRef(InvalidNumber(Empty)))
+#-1      -> Err(InvalidCharRef(UnexpectedSign))   #+65 -> Err(InvalidCharRef(UnexpectedSign))
+```
+
+⇒ 修法：`Event::GeneralRef` 分支直接调 `quick_xml::escape::unescape`，`Ok` 用返回值，`Err` 转
+`SvgGridError::InvalidInput`（rc=2）或 `Xml`（rc=1），文案点名实体与位置。**不要**自己写
+`u32::from_str_radix`（会漏 `0`、代理区、`+`/`-`、空串四类）。
+
+### 语料面（复核）
+
+`tests/fixtures/**/*.svg`：0 个 `&#`、0 个命名实体。`research/**/*.svg`：命名实体只有
+`&apos;` 133201、`&quot;` 5520、`&gt;` 264、`&lt;` 68、`&amp;` 45（全是五个预定义），
+0 个 `&nbsp;`/`&mdash;`/数字实体。⇒ 修数字实体 + 未定义命名实体 fail-closed 对现有语料零回归。
