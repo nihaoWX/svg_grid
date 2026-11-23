@@ -121,11 +121,22 @@ pub(super) fn length_scale_factor(
             LengthAxis::Y => Some(sy.abs()),
             LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
         },
-        // A pattern body scales with the panel but keeps its own origin.
+        // A pattern/marker body scales with the panel but keeps its own origin.
         ScalePolicy::Scale => match axis {
             LengthAxis::X => Some(sx.abs()),
             LengthAxis::Y => Some(sy.abs()),
             LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
+        },
+        // The same, on one axis only: a body referenced from a `data-scale="x"`
+        // group scales its x lengths and leaves its y lengths alone, or a square
+        // motif becomes an oblong one (round-data/R46).
+        ScalePolicy::ScaleX => match axis {
+            LengthAxis::X | LengthAxis::Uniform => Some(sx.abs()),
+            LengthAxis::Y => None,
+        },
+        ScalePolicy::ScaleY => match axis {
+            LengthAxis::X => None,
+            LengthAxis::Y | LengthAxis::Uniform => Some(sy.abs()),
         },
         ScalePolicy::Position | ScalePolicy::None => None,
     }
@@ -159,7 +170,9 @@ pub(super) fn map_point(
         ScalePolicy::X => (target.x + (x - source.x) * sx, translated_y),
         ScalePolicy::Y => (translated_x, target.y + (y - source.y) * sy),
         ScalePolicy::None => (translated_x, translated_y),
-        // Scale only: the pattern body keeps the tile's own origin.
+        // Scale only: a definition body keeps the tile's/marker's own origin.
         ScalePolicy::Scale => (x * sx, y * sy),
+        ScalePolicy::ScaleX => (x * sx, y),
+        ScalePolicy::ScaleY => (x, y * sy),
     }
 }

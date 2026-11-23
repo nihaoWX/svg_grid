@@ -41,13 +41,13 @@ use crate::dom::Element;
 /// The two values SVG defines for the `*Units` attributes that take a coordinate
 /// system (`usvg::tree::Units`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(super) enum Units {
+pub(crate) enum Units {
     UserSpaceOnUse,
     ObjectBoundingBox,
 }
 
 /// `convert_units`: parse `value` type-wise, falling back to `default`.
-pub(super) fn convert_units(value: Option<&str>, default: Units) -> Units {
+pub(crate) fn convert_units(value: Option<&str>, default: Units) -> Units {
     match value {
         Some("userSpaceOnUse") => Units::UserSpaceOnUse,
         Some("objectBoundingBox") => Units::ObjectBoundingBox,
@@ -57,13 +57,13 @@ pub(super) fn convert_units(value: Option<&str>, default: Units) -> Units {
 
 /// The units of `element`'s own `attr`, with `default` when the attribute is
 /// missing or does not parse.
-pub(super) fn units_of(element: &Element, attr: &str, default: Units) -> Units {
+pub(crate) fn units_of(element: &Element, attr: &str, default: Units) -> Units {
     convert_units(element.attr(attr), default)
 }
 
 /// `markerUnits="userSpaceOnUse"` holds only for the exact token; every other
 /// value means the default `strokeWidth` (`usvg-0.47.0/src/parser/marker.rs:222`).
-pub(super) fn marker_units_are_user_space(element: &Element) -> bool {
+pub(crate) fn marker_units_are_user_space(element: &Element) -> bool {
     element.attr("markerUnits") == Some("userSpaceOnUse")
 }
 

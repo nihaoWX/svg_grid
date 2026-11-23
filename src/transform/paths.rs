@@ -78,8 +78,10 @@ pub(super) fn path_axis_map(
         ScalePolicy::X => (sx, 1.0, target.x - source.x * sx, target.y - source.y),
         ScalePolicy::Y => (1.0, sy, target.x - source.x, target.y - source.y * sy),
         ScalePolicy::None => (1.0, 1.0, target.x - source.x, target.y - source.y),
-        // Pattern body: scale, keep the tile origin.
+        // Definition body: scale, keep the tile/marker origin.
         ScalePolicy::Scale => (sx, sy, 0.0, 0.0),
+        ScalePolicy::ScaleX => (sx, 1.0, 0.0, 0.0),
+        ScalePolicy::ScaleY => (1.0, sy, 0.0, 0.0),
     };
 
     crate::path::AxisMap {

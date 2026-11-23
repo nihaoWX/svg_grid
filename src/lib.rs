@@ -15,7 +15,7 @@ mod path;
 mod plan;
 mod raster;
 mod style;
-mod transform;
+pub(crate) mod transform;
 mod warnings;
 
 use std::path::PathBuf;

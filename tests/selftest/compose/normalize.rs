@@ -211,3 +211,109 @@ fn text_length_is_untouched_without_normalization() {
     let _ = fs::remove_file(input);
     let _ = fs::remove_file(output);
 }
+
+/// Compose `body` under `data-scale="xy"` with input normalization, and return the
+/// output SVG.
+fn normalize_panel(name: &str, body: &str, max_side: f32, canvas: f32) -> String {
+    let input = temp_path(name);
+    let output = temp_path(&format!("{name}_out"));
+    fs::write(
+        &input,
+        format!(
+            r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<g data-scale="xy">{body}</g>
+</svg>"##
+        ),
+    )
+    .unwrap();
+    plot_grid(PlotGridSpec {
+        inputs: vec![SvgInput::Path(input.clone())],
+        output_svg: output.clone(),
+        output_svgz: None,
+        width: canvas,
+        height: Some(canvas * 0.8),
+        nrow: None,
+        ncol: Some(1),
+        rel_widths: vec![],
+        rel_heights: vec![],
+        gap: 0.0,
+        margin: Margins::zero(),
+        align: AlignMode::Panels,
+        labels: None,
+        normalize: Some(InputNormalize { max_side }),
+        font_families: None,
+    })
+    .unwrap();
+    let svg = fs::read_to_string(&output).unwrap();
+    let _ = fs::remove_file(input);
+    let _ = fs::remove_file(output);
+    svg
+}
+
+#[test]
+fn normalization_keeps_object_bounding_box_pattern_fractions() {
+    // `patternUnits`/`patternContentUnits` default to fractions of the referencing
+    // element's box, and that box shrinks with the input — so the fractions must
+    // stay put. Halving them too made the hatch twice as fine as the panel it
+    // decorates (round-data/R46 item D: normalized output xor 18432 against the
+    // same panel without normalization).
+    let svg = normalize_panel(
+        "normalize_obb_pattern.svg",
+        "<defs><pattern id='h' width='0.25' height='0.25' patternContentUnits='objectBoundingBox'>\
+         <rect x='0' y='0' width='0.1' height='0.1' fill='black'/></pattern></defs>\
+         <rect x='10' y='10' width='80' height='60' fill='url(#h)'/>",
+        50.0,
+        400.0,
+    );
+    assert!(
+        svg.contains(r#"<pattern id="svg-grid-cell0-h" width="0.25" height="0.25""#),
+        "the tile is a fraction of the referrer's box: {svg}"
+    );
+    assert!(
+        svg.contains(r#"<rect x="0" y="0" width="0.1" height="0.1" fill="black"/>"#),
+        "the body is a fraction of the same box: {svg}"
+    );
+}
+
+#[test]
+fn normalization_leaves_a_stroke_width_marker_box_alone() {
+    // The default `markerUnits` is `strokeWidth`: the box is a multiple of the
+    // stroke, which already halved with the input, so the multiple must not
+    // (round-data/R46 item D: the arrowhead shrank from ink 4880 to 2600).
+    let svg = normalize_panel(
+        "normalize_marker_units.svg",
+        "<defs><marker id='a' markerWidth='10' markerHeight='10' refX='5' refY='5' orient='auto'>\
+         <path d='M 0,0 L 10,5 L 0,10 Z' fill='black'/></marker></defs>\
+         <polyline points='20,40 80,40' stroke='black' stroke-width='2' marker-end='url(#a)'/>",
+        50.0,
+        400.0,
+    );
+    assert!(
+        svg.contains(r#"markerWidth="10" markerHeight="10" refX="5" refY="5""#),
+        "a stroke-width marker box is not a user length: {svg}"
+    );
+    assert!(
+        svg.contains(r#"<path d="M 0,0 L 10,5 L 0,10 Z""#),
+        "its body is in the marker's own units: {svg}"
+    );
+}
+
+#[test]
+fn normalization_scales_a_user_space_marker_box() {
+    // Control: with `markerUnits="userSpaceOnUse"` the box *is* panel geometry, so
+    // it halves with the input (10 → 5) and then follows the panel (×8 → 40).
+    let svg = normalize_panel(
+        "normalize_marker_user_space.svg",
+        "<defs><marker id='a' markerUnits='userSpaceOnUse' markerWidth='10' markerHeight='8' \
+         refX='4' refY='4' orient='auto'>\
+         <path d='M 0,0 L 10,5 L 0,10 Z' fill='black'/></marker></defs>\
+         <polyline points='20,40 80,40' stroke='black' stroke-width='2' marker-end='url(#a)'/>",
+        50.0,
+        400.0,
+    );
+    assert!(
+        svg.contains(r#"markerWidth="40" markerHeight="32" refX="16" refY="16""#),
+        "a user-space marker box follows the panel: {svg}"
+    );
+}

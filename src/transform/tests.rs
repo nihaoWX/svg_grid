@@ -25,6 +25,7 @@ const SVG: &str = r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="h
 </pattern>
 </defs>
 <rect x="10" y="10" width="40" height="30" fill="url(#p_obb)"/>
+<rect x="60" y="10" width="20" height="20" fill="url(#p_user)"/>
 </g>
 </svg>"##;
 

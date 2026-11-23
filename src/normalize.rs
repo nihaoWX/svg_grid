@@ -1,6 +1,7 @@
 use crate::dom::{Element, Node};
 use crate::error::{Result, SvgGridError};
 use crate::geom;
+use crate::transform::{is_view_box, marker_units_are_user_space, units_of, Definitions, Units};
 
 pub fn normalize_svg(root: &mut Element, max_side: f32) -> Result<()> {
     if max_side <= 0.0 {
@@ -17,7 +18,8 @@ pub fn normalize_svg(root: &mut Element, max_side: f32) -> Result<()> {
         ));
     }
 
-    scale_element(root, max_side / current_max_side);
+    let defs = Definitions::collect(root);
+    scale_element(root, max_side / current_max_side, &defs);
     Ok(())
 }
 
@@ -34,44 +36,146 @@ const SCALED_STYLE_PROPS: [&str; 4] = [
     "stroke-dashoffset",
 ];
 
-fn scale_element(element: &mut Element, factor: f32) {
-    scale_numeric_attrs(
-        element,
-        &[
-            "x",
-            "y",
-            "x1",
-            "y1",
-            "x2",
-            "y2",
-            "cx",
-            "cy",
-            "r",
-            "rx",
-            "ry",
-            "width",
-            "height",
-            "textLength",
-            "font-size",
-            "stroke-width",
-            "markerWidth",
-            "markerHeight",
-            "refX",
-            "refY",
-        ],
-        factor,
-    );
+/// Geometry that is a user-unit length no matter which element carries it.
+const GEOMETRY_ATTRS: [&str; 16] = [
+    "x",
+    "y",
+    "x1",
+    "y1",
+    "x2",
+    "y2",
+    "cx",
+    "cy",
+    "r",
+    "rx",
+    "ry",
+    "width",
+    "height",
+    "textLength",
+    "font-size",
+    "stroke-width",
+];
+
+/// Definition tags whose numbers may be **fractions of a box** instead of user
+/// units. Their content is scaled by the renderer on its own, so multiplying those
+/// fractions here shrinks the motif twice (round-data/R46 item D: ink 4800 → 1200).
+const DEFINITION_TAGS: [&str; 7] = [
+    "pattern",
+    "marker",
+    "mask",
+    "filter",
+    "linearGradient",
+    "radialGradient",
+    "clipPath",
+];
+
+fn scale_element(element: &mut Element, factor: f32, defs: &Definitions) {
+    if DEFINITION_TAGS.contains(&element.name.as_str()) {
+        scale_definition(element, factor, defs);
+        return;
+    }
+
+    scale_numeric_attrs(element, &GEOMETRY_ATTRS, factor);
     scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
     scale_view_box(element, factor);
     scale_points(element, factor);
     scale_path(element, factor);
     scale_rotate_transform(element, factor);
+    scale_children(element, factor, defs);
+}
 
+fn scale_children(element: &mut Element, factor: f32, defs: &Definitions) {
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            scale_element(child, factor);
+            scale_element(child, factor, defs);
         }
     }
+}
+
+/// Scale a definition only where its numbers are user units.
+///
+/// Mirrors the renderer's own reading of each `*Units` attribute
+/// (`usvg-0.47.0/src/parser/`): `patternUnits`, `patternContentUnits`,
+/// `gradientUnits` and `filterUnits` are resolved along the `href` chain, while
+/// `maskUnits`, `maskContentUnits` and `markerUnits` are read off the element
+/// itself (`mask.rs:20-30`, `marker.rs:222`). A `viewBox` body is already mapped
+/// onto the tile/viewport by the renderer, so it must stay verbatim.
+fn scale_definition(element: &mut Element, factor: f32, defs: &Definitions) {
+    scale_numeric_attrs(element, &["font-size", "stroke-width"], factor);
+    scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
+    scale_rotate_transform(element, factor);
+
+    match element.name.as_str() {
+        "pattern" => {
+            if defs.units(element, "patternUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse
+            {
+                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+            }
+            scale_view_box(element, factor);
+            let verbatim = defs.units(element, "patternContentUnits", Units::UserSpaceOnUse)
+                == Units::ObjectBoundingBox
+                || has_view_box(element);
+            if !verbatim {
+                scale_children(element, factor, defs);
+            }
+        }
+        "marker" => {
+            let user_space = marker_units_are_user_space(element);
+            if user_space {
+                scale_numeric_attrs(
+                    element,
+                    &["markerWidth", "markerHeight", "refX", "refY"],
+                    factor,
+                );
+            }
+            scale_view_box(element, factor);
+            if user_space && !has_view_box(element) {
+                scale_children(element, factor, defs);
+            }
+        }
+        "mask" => {
+            if units_of(element, "maskUnits", Units::ObjectBoundingBox) == Units::UserSpaceOnUse {
+                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+            }
+            if units_of(element, "maskContentUnits", Units::UserSpaceOnUse) == Units::UserSpaceOnUse
+            {
+                scale_children(element, factor, defs);
+            }
+        }
+        "filter" => {
+            if units_of(element, "filterUnits", Units::ObjectBoundingBox) == Units::UserSpaceOnUse {
+                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+            }
+            // Filter primitives are in `primitiveUnits` (user space by default);
+            // their own lengths were already rewritten before this round.
+            scale_children(element, factor, defs);
+        }
+        "linearGradient"
+            if defs.units(element, "gradientUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
+            scale_numeric_attrs(element, &["x1", "y1", "x2", "y2"], factor);
+        }
+        "radialGradient"
+            if defs.units(element, "gradientUnits", Units::ObjectBoundingBox)
+                == Units::UserSpaceOnUse =>
+        {
+            scale_numeric_attrs(element, &["cx", "cy", "r", "fx", "fy", "fr"], factor);
+        }
+        "clipPath"
+            if units_of(element, "clipPathUnits", Units::UserSpaceOnUse)
+                == Units::UserSpaceOnUse =>
+        {
+            scale_children(element, factor, defs);
+        }
+        _ => {}
+    }
+}
+
+/// Whether the element carries a `viewBox` the renderer honours.
+fn has_view_box(element: &Element) -> bool {
+    element.attr("viewBox").is_some_and(is_view_box)
 }
 
 /// Scale the numeric length of every presentational property in the element's

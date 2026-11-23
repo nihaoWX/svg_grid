@@ -38,6 +38,7 @@
 use std::collections::{HashMap, HashSet};
 
 use super::lengths::{length_scale_factor, map_point, LengthAxis};
+use super::links::{internal_target, link_of};
 use super::units::{convert_units, Units};
 use super::ScalePolicy;
 use crate::dom::{Element, Node};
@@ -320,36 +321,11 @@ fn resolved_attr(element: &Element, index: &PatternIndex, name: &str) -> Option<
     None
 }
 
-/// The raw `href` of a `<pattern>`, in either spelling.
-fn link_of(element: &Element) -> Option<&str> {
-    element.attr("href").or_else(|| element.attr("xlink:href"))
-}
-
-/// The `#id` a link points at, if the link is an internal IRI that the renderer
-/// can follow, parsed like `svgtypes::Stream::parse_iri`:
-///
-/// * leading and trailing **spaces** are skipped (`' '` only: a tab belongs to
-///   the id, so `"#\tbase"` names a different, unresolvable element);
-/// * the fragment runs to the first literal space;
-/// * whatever follows it must be spaces only.
-///
-/// A URI with a scheme or a path (`other.svg#q`, `http://example.com/#p`) is not
-/// an internal target, and neither is an empty fragment (round-data/R43).
-fn internal_target(href: &str) -> Option<&str> {
-    let fragment = href.trim_start_matches(' ').strip_prefix('#')?;
-    let end = fragment.find(' ').unwrap_or(fragment.len());
-    let (id, tail) = fragment.split_at(end);
-    if id.is_empty() || !tail.bytes().all(|byte| byte == b' ') {
-        return None;
-    }
-    Some(id)
-}
-
 /// Whether `value` parses as the `viewBox` attribute (`svgtypes::ViewBox`): four
 /// numbers `x y width height` separated by whitespace and/or a single comma each,
 /// with a positive, finite size. Trailing garbage after the fourth number is
 /// ignored, exactly like `svgtypes`.
-fn valid_view_box(value: &str) -> bool {
+pub(super) fn valid_view_box(value: &str) -> bool {
     let mut rest = value;
     let mut numbers = [0.0_f32; 4];
     for slot in &mut numbers {

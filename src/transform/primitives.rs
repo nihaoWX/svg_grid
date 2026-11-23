@@ -37,27 +37,36 @@ pub(super) fn rewrite_pair(
     Ok(())
 }
 
-/// Rewrite the `x` and `y` of a `<tspan>` *independently*: each present axis is
-/// mapped on its own through the single-axis projection of [`map_point`], so a
-/// run that declares only one coordinate (`<tspan x="10" dy="1.2em">`, the usual
-/// multi-line form) is still moved. `dx`/`dy` are incremental offsets, not
-/// positions, and are deliberately left untouched; when neither `x` nor `y` is
-/// present the tspan simply follows the (already rewritten) `<text>` position.
-pub(super) fn rewrite_axis_coordinates(
+/// Rewrite each of `axes` *independently*, each on its own single-axis projection
+/// of [`map_point`], so an element that declares only one of a coordinate pair is
+/// still moved.
+///
+/// Two callers need this rather than [`rewrite_pair`]: a `<tspan>` (`<tspan
+/// x="10" dy="1.2em">`, the usual multi-line form, carries only one coordinate and
+/// skipping it would misplace the run), and a gradient, whose coordinates inherit
+/// along `href` one by one — a `<linearGradient href="#base" x1="10">` declares
+/// only `x1` and a pair-wise rewrite would skip it entirely (round-data/R46).
+///
+/// The two projections are exactly the axes of the affine map, because every
+/// policy here is separable, so a caller that does declare both coordinates gets
+/// the same numbers [`rewrite_pair`] would produce.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn rewrite_axes(
     element: &mut Element,
+    axes: &[(&str, bool)],
     policy: ScalePolicy,
     source: Rect,
     target: Rect,
     index: usize,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
-    for (attr, is_y) in [("x", false), ("y", true)] {
+    for (attr, is_y) in axes {
         let Some(raw) = element.attr(attr).map(str::to_string) else {
             continue;
         };
         let value = parse_f32(&raw, attr)?;
         note_non_finite(passthroughs, index, element, attr, &raw, value);
-        let mapped = if is_y {
+        let mapped = if *is_y {
             map_point(0.0, value, policy, source, target).1
         } else {
             map_point(value, 0.0, policy, source, target).0
@@ -91,9 +100,12 @@ pub(super) fn rewrite_rect(
 
     let (x0, y0) = map_point(x, y, policy, source, target);
     let (x1, y1) = match policy {
-        ScalePolicy::Xy | ScalePolicy::X | ScalePolicy::Y | ScalePolicy::Scale => {
-            map_point(x + width, y + height, policy, source, target)
-        }
+        ScalePolicy::Xy
+        | ScalePolicy::X
+        | ScalePolicy::Y
+        | ScalePolicy::Scale
+        | ScalePolicy::ScaleX
+        | ScalePolicy::ScaleY => map_point(x + width, y + height, policy, source, target),
         ScalePolicy::Position | ScalePolicy::None => (x0 + width, y0 + height),
     };
 

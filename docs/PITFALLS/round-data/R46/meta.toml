@@ -1,0 +1,63 @@
+id = "R46"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "定义元素按书写位置继承 data-scale，而引用它的图形按自己的 data-scale 缩放 ⇒ 同一份 pattern 的窗口与内容用了两套坐标系（A1：ink 1128 → 0）",
+  "marker 有 viewBox 时 usvg 已把 body 映射进视口，我们再把 body 缩一遍（二次缩放）；pattern/marker body 只有双轴 Scale，缺 ScaleX/ScaleY",
+  "gradient/filter 的 units 不沿 href 解析，且坐标必须成对改写 ⇒ `<linearGradient href=\"#base\" x1=\"10\">` 整体漏改；normalize 则反过来盲缩 objectBoundingBox 分数",
+]
+
+closures = [
+  { finding = "R46-F1", tier = "代码" },
+  { finding = "R46-F2", tier = "代码" },
+  { finding = "R46-F3", tier = "代码" },
+  { finding = "R46-F4", tier = "代码" },
+  { finding = "R46-F5", tier = "代码" },
+  { finding = "R46-F6", tier = "代码" },
+  { finding = "R46-F7", tier = "代码" },
+  { finding = "R46-F8", tier = "测试" },
+  { finding = "R46-F9", tier = "测试" },
+]
+
+run_before = ["R45", "R44", "R43"]
+touched = ["R45", "R44", "R43", "R42", "R41", "R40", "R39", "R38", "R37", "R36", "R33", "R30", "R27", "R20", "R17", "R12", "R8"]
+
+note = """
+根因（已证）：src/transform/walk.rs::transform_element 只按书写位置取策略
+（element.attr("data-scale").unwrap_or(inherited)），<defs> 走普通递归、继承的是根上的 None；
+而 resvg 在引用者各自的 user space 里解释定义数值（usvg-0.47.0/src/parser/paint_server.rs 的 resolve_*）。
+⇒ 一份被两种 policy 引用的定义本来就等价于两份定义，所以修法是「按引用者复制」，不是「取最宽 policy」
+（取最宽只是把错缩放换个范围保留）。
+
+修法：
+A 新增 src/transform/defs.rs：referrers() 建 direct + 定义间依赖边，单调不动点沿引用图传递 policy；
+  单 policy 不复制；多 policy 各复制一份、id 加 --svg-grid-<tag>（撞名加序号），副本内引用指向自己的副本；
+  无引用者保持书写位置的策略（不 fail-closed：<style> 里的 url(#…) 不解析，硬判 None 会让写在 scale 组里的定义静默停缩）。
+A' walk.rs 的 body_policy() 把定义策略折成 body 策略，新增 ScalePolicy::ScaleX/ScaleY（只缩不平移）；
+  pattern body 是 tile 局部且被 tile 裁剪（clip1/2/3 实测），所以 body 不能跟着 map_point 平移。
+B marker_body_is_verbatim()：有合法 viewBox 时 body 逐字保留，只缩 markerWidth/Height 与 refX/refY。
+C 新增 src/transform/links.rs：resolved_units() 按 usvg 的 tag 规则沿 href 找 units；gradient 坐标逐属性改写
+  （dispatch.rs 改用 rewrite_axes）。maskUnits/maskContentUnits 不继承（usvg-0.47.0/src/parser/mask.rs:20-30 用
+  node.attribute，没有 resolve_attr）——这条写进 links.rs 模块注释，下一轮不要顺手统一。
+D src/normalize.rs::scale_definition：按 tag + units 逐组门控（pattern tile/body/viewBox、marker box/body、
+  mask box/body、filter box、gradient 坐标、clipPath 子树），markerWidth/Height/refX/refY 从通用属性表删除。
+
+存量：220 fixture + 617 research SVG 里「data-scale 之前出现 linearGradient|radialGradient|pattern|marker|mask|filter」
+的文件数为 0，所以 223 个 *.svg × 4 条命令 = 892 次比对与基线二进制逐字节相同（0 差异）。
+真实用户路径不踩坑：src/convert/tag.rs::wrap_root_content_in_xy 把 <defs> 一起塞进 data-scale=xy 组；本轮未改 convert。
+
+连带面：单文件 ≤20000 B 的 R8 门禁逼出拆分 —— src/transform/mod.rs（22118 B）拆成 mod.rs（3158）+ walk.rs + dispatch.rs。
+变异 5 条全红（M1 policy_of→None、M2 X→Scale、M3 viewBox 不再保留 body、M4 units 不沿 href、M5 tile 盲缩）。
+
+遗留：<style> 内 url(#…) 仍不解析；patternTransform / pattern 内 text / 滤镜图元长度 / 嵌套 pattern 仍是遗留；
+transform 侧 clipPath 子树仍不缩放（只在 normalize 里加了 gate）。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R46/test.py
+# 有牙（fail-closed）：指向修复前的二进制，E 段必须红
+SVG_GRID_OLD_BIN=/tmp/r46base/target/release/svg_grid python3 docs/PITFALLS/round-data/R46/test.py
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""
