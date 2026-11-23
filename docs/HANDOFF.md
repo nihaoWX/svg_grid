@@ -25,7 +25,7 @@
 | R44 组合图字母重号静默（rc=0、A,B,A） | ✅ 已修，rc=2 fail-closed | `4873156`→`42184d5`；R44 |
 | R45 doctor 告警码漂移（11 条里 5 条死码，W7 门禁 fail-open） | ✅ 已修（短语表搬到 `src/warnings/codes.rs`，W7 门禁复活） | `196da47`；R45 |
 | R46 `<defs>` 子树不继承引用者 `data-scale` + marker/viewBox + units 继承 + normalize 盲缩放 | ✅ 已修（按引用图传递地复制定义；mask 明确不继承） | `54fa2b6`；R46 |
-| R47 数字实体 / 未定义命名实体的文本路径 | ⏳ 进行中 | 报告 `docs/PITFALLS/blocker-svg_grid-numeric-entities-double-escaped.md` |
+| R47 数字实体 / 未定义命名实体的文本路径 | ✅ 已修（`quick_xml::escape::unescape`，未定义实体 rc=1） | `8aca0d1`；R47 |
 | 字母重号检测漏判（tspan/g 包裹、实体、空白）与反向误伤（不可见字母） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-label-detection-gaps.md` |
 | `classify` 取表序第一个命中码（W9/W7 门禁可被用户内容打成 PASS） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md` |
 
@@ -125,7 +125,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 435**：238 lib + 59 bin + 138 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 446**：244 lib + 59 bin + 143 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -174,10 +174,9 @@
    若与旧轮同址（复发），在 `docs/PITFALLS/round-data/<新轮>/` 留可跑证据。
 3. ~~消费 `blocker-convert-defs-mask-dropped.md`~~ —— 已完成（R37），后续 R38–R41 收掉了嵌套 `<defs>`、
    pattern 相位与 pattern 单位语义；R42 把转换器并入 `src/convert/`；R43 收掉单位属性语义；
-   R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位。
-   **进行中 = R47 数字实体**（两处 `resolve_reference` 改走 `quick_xml::escape::unescape`）。
-   之后消费剩余报告：字母重号检测漏判（含不可见字母误伤）、`classify` 表序遮蔽。
-4. 交付前全量复核：`cargo test`（单 crate **435**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用。
+   **进行中 = R48 字母检测**（递归收集 + 跳过不渲染子树）。之后消费剩余报告：`classify` 表序遮蔽。
+4. 交付前全量复核：`cargo test`（单 crate **446**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
