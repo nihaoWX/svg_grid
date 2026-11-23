@@ -92,6 +92,34 @@ echo "rc=$?"                                        # rc=0
 4. 补测试：tspan 包裹、`<g>` 包裹、空白差异、数字实体差异，各一条；并加渲染对照
    （不能只断 markup）。
 
+## 追加：R44 对抗评审的独立复现（2026-11-24，R45 之后）
+
+评审（Evaluator，证据 `/tmp/r44_eval/evidence/README.md`）在 `4873156` 的 worktree
+（`/tmp/r44_eval/pin`）上独立复现了上面三类，并补了两条本报告没写的：
+
+### 第四类漏判：不可见字母被计入（反向误伤）
+
+`<defs>` / `<symbol>` / `display:none` / `visibility:hidden` / `opacity="0"` 里的 marker
+**全部参与查重**（五种形态全 rc=2），而 base 渲染"有/无该 marker"两版像素 diff `(0,0)`
+—— 即对渲染完全正确的已 tagged 输入报错。原始未 tagged 输入不受影响（convert 会丢掉
+`<defs>` 里的 text），所以只对"分步组图、手改中间产物"可达。
+
+⇒ 修法必须**同时**做两件事：递归收集（补漏判）**且**跳过不渲染子树（防误伤）。
+只做前者会把误伤面扩大。
+
+### P 级（非阻断，建议同轮处理）
+
+| # | 问题 | 实测 |
+|---|---|---|
+| P1 | `collisions` 用 `groups.iter_mut().find` 线性查找 ⇒ O(n²) | 40000 个互不相同字母 release 1.590 s vs base 0.075 s（21×）；5000/10000/20000 = 0.027/0.100/0.270 s |
+| P2 | `LetterSite.cell` 恒等于 `input` | 内层字母实际在 cell 1 却报 cell 0；同一输入两个不同 cell 的 A 也报 `2 times inside #0 (cell 0)` |
+| P3 | 文案建议 `pass unique --labels here` **不可执行** | 任何非空 `--labels` 都触发 W3 rc=2；`--labels none` / `''` / `,` 也 rc=2 |
+| P4 | 生产/消费不对称 | `--labels A,A` 产出 rc=0（W4b 警告），把该产物再单独组合 ⇒ rc=2 |
+| P5 | ≥5 处撞号折叠成 `"A"` 121 字符，丢掉全部 input#/cell 明细 | R44 脚本 A5 的 cell 断言在 5+ 时不再成立 |
+| P6 | spacer 的字母不渲染（resvg 0 px）却参与查重 | — |
+| P7 | 空文本口径无测试覆盖 | 变异 `if true` ⇒ 0 红 |
+| P8 | 28 个带字母语料单独跑全 rc=0，两两组合 378 对里 227 对被拒 | 口径正确，但指南宜说明"中间产物不能再组合" |
+
 ## 附：R44 的另外两处非阻断（同一轮发现，可一并处理）
 
 - **`cell` 字段恒等于 `input`**（`src/warnings/labels.rs:178-214` 的 `LetterSite`）：深层嵌套时
