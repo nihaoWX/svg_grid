@@ -156,3 +156,22 @@ amp      -> Ok("&")          nbsp     -> Err(UnrecognizedEntity(1..5, "nbsp"))
 `tests/fixtures/**/*.svg`：0 个 `&#`、0 个命名实体。`research/**/*.svg`：命名实体只有
 `&apos;` 133201、`&quot;` 5520、`&gt;` 264、`&lt;` 68、`&amp;` 45（全是五个预定义），
 0 个 `&nbsp;`/`&mdash;`/数字实体。⇒ 修数字实体 + 未定义命名实体 fail-closed 对现有语料零回归。
+
+### 边界实测（决定 fail-closed 口径时用）
+
+`quick_xml::escape::unescape` 的放行/拒绝面（实测）：
+
+| 引用 | 结果 | 说明 |
+|---|---|---|
+| `&#65;` `&#x41;` `&#065;` `&#x0041;` | `Ok("A")` | 十进制/十六进制、前导零都行 |
+| `&#X41;` | `Err(InvalidNumber)` | 大写 `X` 不认（XML 规范只允许小写 `x`）✅ |
+| `&#0;` `&#x0;` | `Err(IllegalCharacter(0))` | ✅ |
+| `&#x110000;` `&#55296;` `&#xDFFF;` | `Err(InvalidCodepoint)` | 越界与代理区 ✅ |
+| `&#-1;` `&#+65;` | `Err(UnexpectedSign)` | ✅ |
+| `&#;` `&#x;` | `Err(InvalidNumber(Empty))` | ✅ |
+| `&#1;` `&#x8;` `&#x1F;` | `Ok("\u{1}")` 等 | ⚠️ XML 1.0 的 `Char` 产生式**禁止** `#x1–#x8`、`#xB`、`#xC`、`#xE–#x1F`，但 quick-xml 只拒 `0` |
+| `&#xFFFE;` `&#xFFFF;` | `Ok` | ⚠️ 同上，非字符（noncharacter）也放行 |
+
+⚠️ 两行是**既有口径**：属性路径（`decode_and_unescape_value`）同样放行 `&#1;`（实测 rc=0），
+所以文本路径与属性路径保持一致即可，不必单独加严；若要加严，两条路径必须一起改，否则又造出
+"属性 fail-closed、文本静默"的第二处口径差。
