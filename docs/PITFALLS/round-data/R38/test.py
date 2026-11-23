@@ -6,7 +6,7 @@
 
 二进制定位（可用环境变量覆盖，便于对照 BASE）：
   SVG_GRID_BIN          默认 <repo>/target/debug/svg_grid
-  SVG_GRID_CONVERT_BIN  默认 <repo>/convert/target/debug/svg_grid_convert
+  SVG_GRID_CONVERT_BIN  默认 <repo>/target/debug/svg_grid（R42：转换器是它的 `convert` 子命令）
   SVG_GRID_RENDER_BIN   默认 /tmp/d1_eval/render/target/release/d1render （渲染对照，缺失即 FAIL）
   SVG_GRID_CAIRO_PYTHON 默认 ~/.venv/bin/python（能 import cairosvg 才启用第二渲染器对照）
 渲染器缺失时渲染对照类判据 **FAIL**；确实要跳过请显式传 `--allow-skip`（R38 修的就是
@@ -23,7 +23,8 @@ import zlib
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                      # round-data/R38 → PITFALLS → docs → svg_grid
 BIN = pathlib.Path(os.environ.get("SVG_GRID_BIN", SVG_GRID / "target/debug/svg_grid"))
-CONV = pathlib.Path(os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "convert/target/debug/svg_grid_convert"))
+CONV = pathlib.Path(os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "target/debug/svg_grid"))
+CONVERT_ARGS = ["convert"]   # R42：转换器是主二进制的子命令，不再是独立二进制
 RENDER = pathlib.Path(os.environ.get("SVG_GRID_RENDER_BIN", "/tmp/d1_eval/render/target/release/d1render"))
 CAIRO_PYTHON = pathlib.Path(os.environ.get("SVG_GRID_CAIRO_PYTHON", str(pathlib.Path.home() / ".venv/bin/python")))
 ALLOW_SKIP = "--allow-skip" in sys.argv
@@ -192,7 +193,7 @@ def compose(src, out_name, *extra):
 
 
 def convert(src, out_name):
-    run([CONV, "--input", src, "--output", TMP / out_name])
+    run([CONV, *CONVERT_ARGS, "--input", src, "--output", TMP / out_name])
     return (TMP / out_name).read_text()
 
 
@@ -349,7 +350,7 @@ NESTED = {
 
 def family_b():
     if not CONV.exists():
-        check(False, "B0 转换器存在", f"缺 {CONV}（先 cd convert && cargo build）")
+        check(False, "B0 转换器存在", f"缺 {CONV}（先 cargo build --offline）")
         return
     render_ok = RENDER.exists()
     if not render_ok:
@@ -359,7 +360,7 @@ def family_b():
         src = write_svg(f"b_{name}.svg", bare(100, 100) + defs +
                         f'<rect x="10" y="10" width="80" height="80" {ref}/></svg>')
         out_path = TMP / f"b_{name}_out.svg"
-        p = subprocess.run([str(CONV), "--input", str(src), "--output", str(out_path)],
+        p = subprocess.run([str(CONV), *CONVERT_ARGS, "--input", str(src), "--output", str(out_path)],
                             capture_output=True, text=True)
         out = out_path.read_text() if out_path.exists() else ""
         want = "<mask" if name == "d7_g_mask" else '<linearGradient id="g"'

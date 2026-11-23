@@ -5,7 +5,7 @@ vector + bitmap panel set, and verify it.
 
 Pipeline
 --------
-1. ``svg_grid_convert`` on every panel SVG built by ``make_panels.py``
+1. ``svg_grid convert`` on every panel SVG built by ``make_panels.py``
    (vector matplotlib panel + 13 bitmap wrappers) -> ``out/tagged/``;
 2. compose the three bands, each in its own call (that is where the panel letters
    are added), -> ``out/blocks/``:
@@ -21,7 +21,7 @@ Pipeline
    ``tools/svg_grid/scripts/check_deliverable.py`` (``check_dead_band``) instead
    of keeping a local copy.
 
-Every ``plot-grid`` / ``svg_grid_convert`` stderr stream is captured verbatim.
+Every ``plot-grid`` / ``svg_grid convert`` stderr stream is captured verbatim.
 
 Usage:
     micromamba run -n python-bio python compose_fig2.py

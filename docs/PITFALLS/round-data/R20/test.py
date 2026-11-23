@@ -56,7 +56,7 @@ MM = shutil.which("micromamba")
 if not MM:
     local = pathlib.Path.home() / ".local/bin/micromamba"
     MM = str(local) if local.is_file() else None
-# R38：R19 已 retire（deprecated——其断言针对已合并的独立 `svg_grid_convert` 二进制
+# R38：R19 已 retire（deprecated——其断言针对那时已合并进 `svg_grid convert` 的转换器
 # 与迁移期的用例数 190/60/57/73），不再作为回归目标；R4–R17 由顶层逐个跑覆盖。
 ROUNDS = ["R8", "R10"]
 

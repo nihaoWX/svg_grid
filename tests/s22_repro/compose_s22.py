@@ -5,7 +5,7 @@
 Pipeline (all outputs land in ``out/``; the research project is only ever READ):
 
   1. convert every *sized* matplotlib panel in ``out/panels_sized/`` to the tag
-     protocol with the `svg_grid_convert` binary (``out/tagged/``);
+     protocol with the `svg_grid convert` subcommand (``out/tagged/``);
   2. verify no dialect residue survives (no ``<path>``/``<use>``/``<g transform>``/
      un-normalised text transform / transformed ``<image>``);
   3. compose the three blocks and stack them:

@@ -23,7 +23,7 @@
    另加一条「W1 计数器是活的」对照：同一份 tagged 用 `--width 108` 重跑 ⇒ 必须出 W1。
 ⑥ **回归**：R4–R15 的 `test.py` 全绿。
 
-无参数。显式用**仓库内** debug 二进制（`convert/target/debug/svg_grid_convert`、`target/debug/svg_grid`），
+无参数。显式用**仓库内** debug 二进制（`target/debug/svg_grid`，转换器是它的 `convert` 子命令；R42 起不再有独立转换器二进制），
 字体目录走 `$SVG_GRID_FONT_DIR`（并在每条命令上加 `--font-dir`），不依赖 cwd。
 离线、只读（不写仓库），临时产物在临时目录。约 6–8 分钟，绝大部分是回归 R4–R15（R15 自己会重跑 R4–R14）。
 """
@@ -37,7 +37,7 @@ import tempfile
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                       # round-data/R16 → PITFALLS → docs → svg_grid
 BIN = SVG_GRID / "target/debug/svg_grid"         # 仓库内 debug：~/.local/bin 上是旧版本
-CONVERT = SVG_GRID / "convert/target/debug/svg_grid_convert"
+CONVERT = SVG_GRID / "target/debug/svg_grid"      # R42：转换器是 `convert` 子命令
 FIXTURES = SVG_GRID / "tests/fixtures"
 MANIFEST = FIXTURES / "MANIFEST.toml"
 FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
@@ -89,7 +89,7 @@ def compose(src, out_svg, out_png=None, width="216", extra=()):
 
 
 def convert(fid, out_svg):
-    return run([str(CONVERT), "--input", str(FIXTURES / (fid + ".svg")),
+    return run([str(CONVERT), "convert", "--input", str(FIXTURES / (fid + ".svg")),
                 "--output", str(out_svg)], cwd="/tmp")
 
 
@@ -152,13 +152,15 @@ def main():
     print(f"# 仓库内二进制：{CONVERT}\n#               {BIN}\n# 字体目录：{FONT_DIR}\n")
 
     # ── 0. 前置：两个二进制、字体目录、语料登记
-    check(CONVERT.is_file() and os.access(CONVERT, os.X_OK),
-          "仓库内 `convert/target/debug/svg_grid_convert` 存在且可执行（不是 ~/.local/bin 的旧版）",
-          f"{CONVERT}")
     check(BIN.is_file() and os.access(BIN, os.X_OK),
           "仓库内 `target/debug/svg_grid` 存在且可执行", f"{BIN}")
-    if not (CONVERT.is_file() and BIN.is_file()):
-        print("\n== 前置不成立：先 `cargo build --offline`（两个 crate） ==")
+    # R42：转换器不再是独立二进制，而是同一二进制的 `convert` 子命令。
+    conv_help = run([str(BIN), "convert", "--help"], cwd="/tmp")
+    check(conv_help.returncode == 0 and "convert:" in conv_help.stdout,
+          "`svg_grid convert --help` 可用（转换器已并入主二进制）",
+          f"rc={conv_help.returncode} stdout={conv_help.stdout[:200]!r}")
+    if not BIN.is_file():
+        print("\n== 前置不成立：先 `cargo build --offline` ==")
         return 1
 
     entries = load_manifest()
@@ -185,7 +187,7 @@ def main():
               f"源图 {spec['source_ref']:.4f}（cairosvg 参考值）；未修 {spec['before_fix']:.4f}")
         tagged = tmp / (fid.replace("/", "_") + ".tagged.svg")
         conv = convert(fid, tagged)
-        check(conv.returncode == 0, f"{fid}：第一段 `svg_grid_convert` rc=0",
+        check(conv.returncode == 0, f"{fid}：第一段 `svg_grid convert` rc=0",
               f"rc={conv.returncode} stderr={conv.stderr[-300:]!r}")
         if not fonts_ok:
             skip(f"{fid}: 墨水 / 消融", "字体目录不可用（见上）")

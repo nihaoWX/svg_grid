@@ -5,8 +5,8 @@
 //! set**, so the fastest way to know whether a change broke real figures is to run
 //! every registered fixture through
 //!
-//! 1. the converter — `svg_grid_convert`'s library, called **in process** (there is
-//!    no second binary to find, and no exit-3 "first stage missing" failure mode);
+//! 1. the converter — the `svg_grid::convert` module, called **in process** (there
+//!    is no second binary to find, and no exit-3 "first stage missing" failure mode);
 //! 2. `plot-grid --input <tmp>/tagged.svg --output <tmp>/fig.svg --output-png
 //!    <tmp>/fig.png --png-dpi 300`
 //!
@@ -56,7 +56,7 @@ const DEFAULT_MARGIN: f32 = 24.0;
 
 /// What the report says the first stage is. It is a **library** call now, so there
 /// is no path to print — naming the crate keeps the line informative.
-pub(crate) const CONVERT_STAGE: &str = "in-process (svg_grid_convert library)";
+pub(crate) const CONVERT_STAGE: &str = "in-process (svg_grid::convert module)";
 
 /// Run `doctor`.
 pub(crate) fn execute(args: DoctorArgs) -> Result<(), CliError> {

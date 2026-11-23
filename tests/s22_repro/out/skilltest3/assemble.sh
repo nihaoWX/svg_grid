@@ -12,7 +12,7 @@ set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SVG_GRID="/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid"
-SVG_CONVERT="/home/nihao/bioagentforge/tools/svg_grid/convert/target/release/svg_grid_convert"
+SVG_CONVERT="$SVG_GRID"   # R42: converter is the `convert` subcommand of the one binary
 
 mkdir -p "$HERE/tagged" "$HERE/rows"
 
@@ -21,7 +21,7 @@ mkdir -p "$HERE/tagged" "$HERE/rows"
 #    <g transform>; lifts stroke-width out of CSS into attributes)
 for n in 1 2 3 4 5 6; do
   src="$(ls "$HERE"/panels/fig${n}_*.svg)"
-  "$SVG_CONVERT" --input "$src" --output "$HERE/tagged/fig${n}.svg"
+  "$SVG_CONVERT" convert --input "$src" --output "$HERE/tagged/fig${n}.svg"
 done
 
 # --- STEP 2: one row per call.  Only content + column count are given. -------

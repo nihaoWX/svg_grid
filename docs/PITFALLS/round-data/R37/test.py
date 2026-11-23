@@ -13,7 +13,7 @@
    AlreadyConverted）且产物内无悬空 `url(#…)`/`href="#…"`
 ⑤ 真实语料 `S36_panelA_matrix.svg`（hatch pattern）：`<pattern>` 保留，渲染残差
    只落在 hatch 相位（已知 R16 遗留，见报告），convert-only 必须几乎逐像素一致
-无参数；默认用 `target/debug/svg_grid` 与 `convert/target/debug/svg_grid_convert`，
+无参数；默认用 `target/debug/svg_grid`（转换器是它的 `convert` 子命令，R42 起没有独立二进制），
 可用 `SVG_GRID_BIN` / `SVG_GRID_CONVERT_BIN` / `SVG_GRID_RENDER_BIN` 覆盖（R38：这样
 才能指向 base worktree 做对照）；只写系统临时目录。
 
@@ -32,7 +32,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]
 BIN = pathlib.Path(os.environ.get("SVG_GRID_BIN", SVG_GRID / "target/debug/svg_grid"))
 CONV = pathlib.Path(
-    os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "convert/target/debug/svg_grid_convert"))
+    os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "target/debug/svg_grid"))
+CONVERT_ARGS = ["convert"]   # R42：转换器是主二进制的 `convert` 子命令
 RENDER = pathlib.Path(
     os.environ.get("SVG_GRID_RENDER_BIN", "/tmp/d1_eval/render/target/release/d1render"))
 ALLOW_SKIP = "--allow-skip" in sys.argv
@@ -74,7 +75,7 @@ def skip_render(label, reason):
 
 
 def convert(src, dst, *extra):
-    return subprocess.run([str(CONV), "--input", str(src), "--output", str(dst), *extra],
+    return subprocess.run([str(CONV), *CONVERT_ARGS, "--input", str(src), "--output", str(dst), *extra],
                           capture_output=True, text=True, cwd="/tmp")
 
 
@@ -139,10 +140,13 @@ def compare(src, out, tag, scale_src=1.0, scale_out=1.0):
 
 
 def main():
-    for path, label in ((BIN, "svg_grid"), (CONV, "svg_grid_convert")):
-        if not path.exists():
-            print(f"missing binary: {path} — run `cargo build` first")
-            return 1
+    if not BIN.exists():
+        print(f"missing binary: {BIN} — run `cargo build` first")
+        return 1
+    conv_help = subprocess.run([str(BIN), "convert", "--help"], capture_output=True, text=True)
+    if conv_help.returncode != 0:
+        print(f"`svg_grid convert --help` failed (rc={conv_help.returncode})")
+        return 1
     tmp = pathlib.Path(tempfile.mkdtemp(prefix="r37ev_"))
     have_render = RENDER.exists()
     if not have_render:

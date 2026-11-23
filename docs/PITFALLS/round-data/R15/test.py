@@ -36,7 +36,6 @@ SVG_GRID = HERE.parents[3]                  # round-data/R15 → PITFALLS → do
 INSTALL = SVG_GRID / "install.sh"
 FONT_SETUP = SVG_GRID / "fontlib" / "setup.sh"
 RELEASE = SVG_GRID / "target/release/svg_grid"
-RELEASE_CONVERT = SVG_GRID / "convert/target/release/svg_grid_convert"
 HOME = pathlib.Path(os.environ.get("HOME") or pathlib.Path.home())
 DATA_ROOT = HOME / "svg_grid/fontlib"
 DEFAULT_PREFIX = HOME / ".local/bin"
@@ -155,7 +154,7 @@ def main():
     # ── 2. --dry-run 零写入
     prefix_probe = tmp / "prefix-must-not-exist"
     root_before = snapshot(DATA_ROOT)
-    binaries_before = {p: stat_pair(p) for p in (RELEASE, RELEASE_CONVERT)}
+    binaries_before = {p: stat_pair(p) for p in (RELEASE,)}
     dry = install(["--dry-run", "--prefix", str(prefix_probe)])
     check(dry.returncode == 0, "`install.sh --dry-run` ⇒ 退出 0",
           f"rc={dry.returncode} stderr={dry.stderr[:300]!r}")
@@ -165,7 +164,7 @@ def main():
           "--dry-run 没写字体数据根（前后文件数/mtime 一字未变）",
           f"before={len(root_before or [])} after={len(snapshot(DATA_ROOT) or [])}")
     check({p: stat_pair(p) for p in binaries_before} == binaries_before,
-          "--dry-run 不触发 build（target/release 两个二进制 mtime/size 未变）")
+          "--dry-run 不触发 build（target/release 的 svg_grid mtime/size 未变）")
     check("would build" in dry.stdout and "would install" in dry.stdout,
           "--dry-run 打印将要做的事（would build / would install）", dry.stdout[:400])
 
@@ -197,8 +196,8 @@ def main():
               "报告：字体步骤报了数据根里的 face 数（8）", kinds["fonts"][0])
 
     installed = DEFAULT_PREFIX / "svg_grid"
-    # R18 起只有**一个**二进制：转换器成了 `svg_grid convert` 子命令（库依赖编进来），
-    # `svg_grid_convert` 不再安装。本轮的"装上了吗"断言随之改为「装一个、且旧的没留下」。
+    # R18 起只有**一个**二进制：转换器成了 `svg_grid convert` 子命令（R42 起是 `src/convert/`
+    # 模块），独立 `svg_grid_convert` 不再安装、也不再存在。断言是「装一个、且旧的没留下」。
     check(installed.is_file() and os.access(installed, os.X_OK),
           "二进制装进 <prefix> 且可执行", f"{DEFAULT_PREFIX}")
     check((DEFAULT_PREFIX / "svg_grid_convert").exists() is False,
@@ -313,7 +312,7 @@ def main():
     # ── 7. 无编译期路径（装到别处仍读 $HOME 数据根）
     checkout = str(SVG_GRID)
     if shutil.which("strings"):
-        for binary in (RELEASE, RELEASE_CONVERT, installed):
+        for binary in (RELEASE, installed):
             if not binary.exists():
                 skip(f"`strings {binary}`", "二进制不存在")
                 continue

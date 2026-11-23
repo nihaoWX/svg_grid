@@ -2,8 +2,8 @@
 # install.sh — the one command that puts svg_grid on this machine.
 #
 # Contract: ARCHITECTURE/install.md. Two artifacts, both idempotent, no symlinks:
-#   1) the ONE binary `svg_grid` — release-built from this crate (`convert/` is compiled
-#      INTO it as a library, so `svg_grid convert …` is a subcommand, not a second
+#   1) the ONE binary `svg_grid` — release-built from this crate (`src/convert/` is a
+#      module of it, so `svg_grid convert …` is a subcommand, not a second
 #      executable), copied into <prefix> (default ~/.local/bin);
 #   2) the skill that ships with it — the using side only (`SKILL.md` + `references/`),
 #      copied into the harness' skill dir: `~/.commandcode/skills/general-figure-guide/`
@@ -28,9 +28,10 @@ font_script="$here/fontlib/setup.sh"
 # ARCHITECTURE/, src/, docs/ would lead a using agent into development docs.
 skill_src="$here/docs/general-figure-guide"
 skill_files="SKILL.md references"
-# The converter used to be installed next to svg_grid; it is built in now, so an
-# older copy left in <prefix> would shadow nothing but confuse `command -v`. It is
-# removed once and said out loud (never silently).
+# The converter used to be a separate crate installed as its own binary; since R42 it
+# is the `src/convert/` module, so an older `svg_grid_convert` left in <prefix> would
+# shadow nothing but confuse `command -v`. It is removed once and said out loud
+# (never silently).
 stale_convert="svg_grid_convert"
 
 usage() {
@@ -41,7 +42,7 @@ usage: install.sh [--prefix <dir>] [--project <dir>] [--no-skill] [--no-fixtures
 Build svg_grid (release), copy that ONE binary into <prefix>, install the skill
 (general-figure-guide: SKILL.md + references/ only) into the harness' skill dir, then
 sync the fixture corpus and the font library into the data root $HOME/svg_grid. The
-dialect converter is compiled into svg_grid (`svg_grid convert …`), so no second
+dialect converter is a module of svg_grid (`svg_grid convert …`), so no second
 executable is installed — an older `svg_grid_convert` left in <prefix> by a previous
 install is removed and reported. Safe to re-run: the binary is overwritten, identical
 skill files and font files are left alone.
@@ -225,7 +226,7 @@ if [ "$check" -eq 1 ]; then
       "fix:  bash $here/install.sh    (builds first, then installs)"
   elif [ "$(sha_of "$main_bin")" != "$(sha_of "$prefix/svg_grid")" ]; then
     fail_item "binary $prefix/svg_grid is stale (installed != build artifact $main_bin)" \
-      "why:  src/ or convert/ changed after the last install" \
+      "why:  src/ changed after the last install" \
       "fix:  bash $here/install.sh"
   else
     printf 'OK: binary    %s  (== build artifact)\n' "$prefix/svg_grid"
@@ -281,7 +282,7 @@ if [ "$check" -eq 1 ]; then
   exit 0
 fi
 
-# ── 1. build the one crate in release (convert is a library dependency) ─────────────
+# ── 1. build the one crate in release (src/convert is a module of it) ──────────────
 if [ "$do_build" -eq 0 ]; then
   [ "$dry_run" -eq 0 ] || printf 'dry-run: would skip the build (--no-build)\n'
 else
@@ -289,7 +290,7 @@ else
     die "cargo not found (needed to build the release binary)" \
       "install Rust (https://rustup.rs) or source ~/.cargo/env, then re-run install.sh"
   if [ "$dry_run" -eq 1 ]; then
-    printf 'dry-run: would build svg_grid in %s (cargo build --release --offline; the convert crate is compiled in)\n' "$main_crate"
+    printf 'dry-run: would build svg_grid in %s (cargo build --release --offline; src/convert is part of the crate)\n' "$main_crate"
   else
     build_log=""
     if ! build_log="$(cd "$main_crate" && cargo build --release --offline 2>&1)"; then

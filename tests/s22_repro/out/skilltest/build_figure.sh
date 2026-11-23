@@ -9,7 +9,7 @@ set -euo pipefail
 cd "$(dirname "$0")"               # -> out/skilltest
 ROOT=../../../..                   # -> tools/svg_grid
 SVG="$ROOT/target/release/svg_grid"
-CVT="$ROOT/convert/target/release/svg_grid_convert"
+CVT="$ROOT/target/release/svg_grid"
 PY="micromamba run -n python-bio python"
 
 V="${1:-unif}"
@@ -51,7 +51,7 @@ echo "== font scales k: A/B=$K1 (s=$S1)  C/D=$K2 (s=$S2)  E=$KE (s=$SE)  F=$K3 (
 # ------------------------------------------------- 1. tag every raw panel ---
 for f in panels/*.svg; do
   b=$(basename "$f" .svg)
-  $CVT --input "$f" --output "work/tagged/$b.svg" >/dev/null
+  $CVT convert --input "$f" --output "work/tagged/$b.svg" >/dev/null
 done
 
 # ------------------------- 2. bake font / dash scaling into the tagged panels

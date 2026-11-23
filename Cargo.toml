@@ -15,9 +15,6 @@ fontdb = { version = "0.23", default-features = false, features = ["fs"] }
 # `doctor` counts the non-white pixels of the PNG it just produced (a fully white
 # raster means the run painted nothing), so it decodes PNG itself.
 png = "0.18"
-# The dialect converter. It stays a crate of its own (its own tests, its own
-# binary in the workspace) but the shipped `svg_grid` binary links it as a
-# library: `svg_grid convert …` is a thin shell over it and `doctor` calls it
-# in-process, so there is exactly ONE installed binary and no second executable
-# to look up on PATH.
-svg_grid_convert = { path = "convert" }
+# The dialect converter is a module of this crate (`src/convert/`, round R42): one
+# implementation, one installed binary. `svg_grid convert …` is a thin shell over
+# it and `doctor` calls it in-process.

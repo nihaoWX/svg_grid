@@ -1,12 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""`compose_s22` 第 1 节：把 sized 面板转成 tag 协议（`svg_grid_convert`）。"""
+"""`compose_s22` 第 1 节：把 sized 面板转成 tag 协议（`svg_grid convert`）。"""
 
 import os
 import re
 import subprocess
 
-from s22_common import ALL_PANELS, CONVERT, PANELS_SIZED, TAGGED
+from s22_common import ALL_PANELS, CONVERT, CONVERT_ARGS, PANELS_SIZED, TAGGED
 
 
 def convert_panels():
@@ -16,7 +16,7 @@ def convert_panels():
         src = os.path.join(PANELS_SIZED, panel + ".svg")
         dst = os.path.join(TAGGED, panel + ".svg")
         result = subprocess.run(
-            [CONVERT, "--input", src, "--output", dst, "--report"],
+            [CONVERT, *CONVERT_ARGS, "--input", src, "--output", dst, "--report"],
             capture_output=True, text=True,
         )
         svg = open(dst, encoding="utf-8").read() if os.path.exists(dst) else ""

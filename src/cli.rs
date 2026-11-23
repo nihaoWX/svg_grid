@@ -3,7 +3,7 @@
 //! `main.rs` only calls [`main`]. The help text lives in [`help`], the parser in
 //! [`parse`] (pure, unit-tested), the execution in [`execute`] (`plot-grid`), in
 //! [`doctor`] (the corpus self-check) and in [`convert`] (the thin shell over the
-//! `svg_grid_convert` library).
+//! [`svg_grid::convert`] module).
 //!
 //! Errors are typed, not flattened: [`CliError::Usage`] is "you typed it wrong"
 //! (exit 2), [`CliError::Config`] is "something is not installed where it is
@@ -113,10 +113,8 @@ fn run(args: Vec<String>) -> ExitCode {
         }
         Invocation::PlotGrid(args) => execute::run(*args),
         Invocation::Doctor(args) => doctor::execute(*args),
-        // The subcommand is a thin shell: the converter library prints its own
-        // messages and returns its own exit code, so nothing is re-formatted here
-        // (that is what keeps `svg_grid convert` byte-identical to the standalone
-        // `svg_grid_convert`).
+        // The subcommand is a thin shell: the converter module prints its own
+        // messages and returns its own exit code, so nothing is re-formatted here.
         Invocation::Convert(rest) => return convert::run(rest),
     };
 

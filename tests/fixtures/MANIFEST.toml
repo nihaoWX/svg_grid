@@ -17,11 +17,11 @@
 #
 # Baseline measurement (2026-11-04). Every entry was run through the real two-stage
 # pipeline, no parameter tuning:
-#   svg_grid_convert --input <id>.svg --output <tmp>/tagged.svg
+#   svg_grid convert --input <id>.svg --output <tmp>/tagged.svg
 #   svg_grid plot-grid --input <tmp>/tagged.svg --output <tmp>/o.svg \
 #                      --output-png <tmp>/o.png --png-dpi 300
-# Binaries: ~/.local/bin/svg_grid_convert and ~/.local/bin/svg_grid (the in-repo
-# target/release/ has svg_grid only — there is no convert build there).
+# Binaries: ~/.local/bin/svg_grid (the in-repo target/release/ has the same one
+# binary; `convert` is a subcommand of it since R42).
 # Result: 55 pass (A), 1 unsupported (B: matplotlib/mathtext), 2 known defects
 # (C: ggplot2/gradient_fill, matplotlib/bars_grouped — kept at expect = "pass" on
 # purpose so `doctor` keeps reporting them as FAIL; see the per-entry notes).

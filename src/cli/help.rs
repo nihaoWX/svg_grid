@@ -90,8 +90,7 @@ diagnostics:
                           successful run writes nothing to stderr; errors are still
                           reported as before.
 
-convert (graphics dialect -> tag protocol; the same code the standalone
-`svg_grid_convert` binary runs, now built into this one):
+convert (graphics dialect -> tag protocol; built into this binary):
   --input <path>          the SVG a plotting tool produced (svglite/ggplot2/
                           matplotlib); required. `-i` is the short form.
   --output <path>         where to write the tagged SVG; required unless --check.
@@ -107,9 +106,8 @@ convert (graphics dialect -> tag protocol; the same code the standalone
                           without it a successful conversion is silent.
   An input that already is a complete conversion product exits 0; with --output
   it is copied verbatim, so `convert --input a.svg --output b.svg` always
-  produces b.svg. Its diagnostics are prefixed `svg_grid convert:` (the standalone
-  `svg_grid_convert` binary prefixes its own name) and its exit codes are
-  unchanged: 0 = success/compatible, 1 = incompatible input or error.
+  produces b.svg. Its diagnostics are prefixed `svg_grid convert:` and its exit
+  codes are unchanged: 0 = success/compatible, 1 = incompatible input or error.
 
 doctor (self-check: run the whole fixture corpus end to end):
   --fixtures <dir>        corpus to run. Resolution order: this flag, then

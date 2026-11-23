@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """`compose_fig2` 的组图与转换：convert / 逐块 compose / stack。
 
-第 1 节（`svg_grid_convert`）与第 2、3 节（三次 `plot-grid`）都在这里。
+第 1 节（`svg_grid convert`）与第 2、3 节（三次 `plot-grid`）都在这里。
 """
 
 import os
@@ -13,7 +13,7 @@ import sys
 from fig2_common import (
     BLOCKS,
     BLOCKS_DIR,
-    CONVERT,
+    CONVERT, CONVERT_ARGS,
     GRID,
     HERE,
     OUT,
@@ -33,7 +33,7 @@ def convert_panels():
             src = os.path.join(PANELS, name) if os.path.exists(os.path.join(PANELS, name)) \
                 else os.path.join(OUT, name)
             dst = os.path.join(TAGGED, name)
-            result = subprocess.run([CONVERT, "--input", src, "--output", dst, "--report"],
+            result = subprocess.run([CONVERT, *CONVERT_ARGS, "--input", src, "--output", dst, "--report"],
                                     capture_output=True, text=True)
             svg = open(dst, encoding="utf-8").read() if os.path.exists(dst) else ""
             rows.append(dict(
@@ -50,7 +50,7 @@ def convert_panels():
                 rect=svg.count("<rect"),
             ))
             if result.returncode != 0:
-                sys.stdout.write(f"\n$ {CONVERT} --input {src} --output {dst}\n")
+                sys.stdout.write(f"\n$ {CONVERT} convert --input {src} --output {dst}\n")
                 sys.stdout.write("  [stderr] " + result.stderr.strip() + "\n")
                 raise SystemExit(f"convert failed for {name}")
     sys.stdout.write(f"\nconverted {len(rows)} panels -> {os.path.relpath(TAGGED, HERE)}\n")

@@ -12,7 +12,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY=/home/nihao/micromamba/envs/python-bio/bin/python
-CONVERT=/home/nihao/bioagentforge/tools/svg_grid/convert/target/release/svg_grid_convert
+CONVERT=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
 GRID=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
 cd "$HERE"
 
@@ -21,7 +21,7 @@ echo "== 1. render the RDKit MolDraw2DSVG panel (p-toluic acid, 300x200) =="
 
 echo
 echo "== 2. convert (must exit 0; the unit-bearing lengths must become plain numbers) =="
-"$CONVERT" --input mol.svg --output mol.tagged.svg
+"$CONVERT" convert --input mol.svg --output mol.tagged.svg
 px=$(grep -c 'px' mol.tagged.svg || true)
 echo "  residue: $px \`px\` occurrence(s) (want 0)"
 test "$px" = 0

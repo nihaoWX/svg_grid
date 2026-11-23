@@ -196,7 +196,7 @@ fn the_first_stage_is_in_process_and_has_no_binary_to_miss() {
         "the report line must say the stage is in process: {CONVERT_STAGE}"
     );
     assert!(
-        CONVERT_STAGE.contains("svg_grid_convert"),
+        CONVERT_STAGE.contains("convert"),
         "it must still name the converter that ran: {CONVERT_STAGE}"
     );
 }

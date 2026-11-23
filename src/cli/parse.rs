@@ -69,7 +69,7 @@ pub(crate) enum Invocation {
     PlotGrid(Box<PlotGridArgs>),
     Doctor(Box<super::doctor::DoctorArgs>),
     /// `convert …`: the unconsumed tail, handed to the converter's own parser
-    /// (`svg_grid_convert::cli::run_args`). This crate models no `convert` flags of
+    /// (`svg_grid::convert::cli::run_args_as`). This crate models no `convert` flags of
     /// its own — the library's surface is the only one there is.
     Convert(Vec<String>),
 }

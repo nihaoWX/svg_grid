@@ -6,7 +6,7 @@
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PY=/home/nihao/micromamba/envs/python-bio/bin/python
-CONVERT=/home/nihao/bioagentforge/tools/svg_grid/convert/target/release/svg_grid_convert
+CONVERT=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
 GRID=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
 cd "$HERE"
 
@@ -15,7 +15,7 @@ echo "== 1. render the matplotlib dialect panel (log axes + LogNorm cb + mathtex
 
 echo
 echo "== 2. convert (must exit 0; the only stderr is the benign <style> note) =="
-"$CONVERT" --input panel.svg --output panel.tagged.svg --report
+"$CONVERT" convert --input panel.svg --output panel.tagged.svg --report
 
 echo
 echo "== 3. geometry equivalence (original vs converted) =="

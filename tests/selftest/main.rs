@@ -18,6 +18,7 @@
 mod autoconvert;
 mod common;
 mod compose;
+mod convert_cli;
 mod defs;
 mod doctor;
 mod fonts;

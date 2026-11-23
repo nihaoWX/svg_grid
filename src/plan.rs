@@ -9,7 +9,7 @@
 
 use std::path::Path;
 
-use svg_grid_convert::{Conversion, ConvertError, Finding};
+use crate::convert::{Conversion, ConvertError, Finding};
 
 use crate::dom;
 use crate::error::{Result, SvgGridError};
@@ -284,10 +284,10 @@ fn plan_grid_checked(
 /// The source is passed as text and the result is a string: no path is written,
 /// so `plot-grid` can never modify (or leave a temporary file next to) the panel
 /// the user pointed at. A failure is rephrased as an actionable `InvalidInput`:
-/// name the input, show the first few converter findings, and point at the
-/// standalone command that prints the full report.
+/// name the input, show the first few converter findings, and point at
+/// `svg_grid convert`, which prints the full report.
 fn auto_convert(input: &Path, source: &str) -> Result<(String, Vec<String>)> {
-    match svg_grid_convert::convert(source, false) {
+    match crate::convert::convert(source, false) {
         Ok(Conversion::Converted(converted)) => {
             let converted = *converted;
             Ok((converted.svg, converted.warnings))

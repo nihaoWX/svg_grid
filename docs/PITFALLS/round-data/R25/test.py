@@ -16,7 +16,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                       # round-data/R25 → PITFALLS → docs → svg_grid
 BIN = SVG_GRID / "target/debug/svg_grid"
-CONVERT = SVG_GRID / "convert/target/debug/svg_grid_convert"
+CONVERT = SVG_GRID / "target/debug/svg_grid"      # R42：转换器是 `convert` 子命令
 WARNINGS_MD = SVG_GRID / "ARCHITECTURE/warnings.md"
 FONT_DIR = pathlib.Path.home() / "svg_grid/fontlib"
 
@@ -262,7 +262,7 @@ def main():
     else:
         skip("W8 字体库没有该族", f"{FONT_DIR} 里没有 .ttf（环境问题，不是行为差异）")
 
-    # V1（转换器那一侧，前缀更长：`svg_grid_convert: warning: `）
+    # V1（转换器那一侧，前缀更长：`svg_grid convert: warning: `）
     print("\n== ① V1（convert 的 <style> 告警）==")
     conv_src = tmp / "conv_in.svg"
     conv_src.write_text(
@@ -272,10 +272,10 @@ def main():
         '<rect x="1" y="1" width="10" height="10" style="width: 5;"/>\n'
         '<g data-panel-group="1"><rect x="2" y="2" width="5" height="5"/></g></svg>\n'
     )
-    conv = run([CONVERT, "--input", conv_src, "--output", tmp / "conv_out.svg", "--check",
-                "--verbose"])
+    conv = run([CONVERT, "convert", "--input", conv_src, "--output", tmp / "conv_out.svg",
+                "--check", "--verbose"])
     conv_warn = [line for line in conv.stderr.splitlines()
-                 if line.startswith("svg_grid_convert: warning:")]
+                 if line.startswith("svg_grid convert: warning:")]
     check(conv.returncode == 0, "V1：--check 成功", f"rc={conv.returncode} {conv.stderr[:200]}")
     check(any("<style> CSS block" in line for line in conv_warn),
           "V1：<style> CSS 块出声（doctor 的码词还在）", "\n".join(conv_warn))

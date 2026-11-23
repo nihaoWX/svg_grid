@@ -5,10 +5,11 @@
 四族：
 
 ① **一个二进制，`convert` 是子命令**：`~/.local/bin` 里只有 `svg_grid`（没有 `svg_grid_convert`），
-   且 `svg_grid convert …` 与工作区里仍能构建的 `convert/target/debug/svg_grid_convert` 在**全量 58 条
+   且**装机版** `svg_grid convert …` 与**仓库内** `target/debug/svg_grid convert …` 在**全量 58 条
    fixture × 4 种模式**（`--output` / `--check` / `--report` / `--force`）+ 错误面 + 幂等/半成品/不兼容分支上
-   **逐字节相同**（stdout / stderr / 退出码 / 产出的 SVG 文件）。唯一的**有意**差异是 `--help`：
-   它在取值之前被特判，所以 `svg_grid convert --help` 打的是 `svg_grid` 的完整帮助（rc=0、只写 stdout）。
+   **逐字节相同**（stdout / stderr / 退出码 / 产出的 SVG 文件）。R42 把转换器并入 `src/convert/` 之后，
+   "对照的旧二进制"已经不存在，于是对照组换成"同一份源码的仓库构建"——比较的仍是行为面，而不是装机漂移。
+   `--help` 仍在取值之前被特判，所以 `svg_grid convert --help` 打的是 `svg_grid` 的完整帮助（rc=0、只写 stdout）。
 ② **装机版 `svg_grid doctor` 全量语料**（cwd=`/tmp`、干净环境）：rc=0、`57 pass / 0 fail / 1 skip`，
    58 条逐条一行且格式合规，唯一的 SKIP 打出 `why`，W1 = W7 = W9 = 0，每个 PASS 的 PNG 都有墨水，
    报告里 `convert:` 行说明第一段是**进程内**的库。
@@ -32,7 +33,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                        # round-data/R18 → PITFALLS → docs → svg_grid
 BIN = SVG_GRID / "target/debug/svg_grid"          # 仓库内 debug（与旧二进制的对照组同代）
-OLD_CONVERT = SVG_GRID / "convert/target/debug/svg_grid_convert"
+WORKSPACE = SVG_GRID / "target/debug/svg_grid"     # R42：仓库构建，对照组（旧独立二进制已删除）
 FIXTURES = SVG_GRID / "tests/fixtures"
 MANIFEST = FIXTURES / "MANIFEST.toml"
 PREFIX = pathlib.Path.home() / ".local/bin"
@@ -113,7 +114,7 @@ def write(path, text):
 
 # ── ① 逐字节对照 ────────────────────────────────────────────────────────────────────
 def same(label, args, verbose=False):
-    """`svg_grid convert <args>` vs `svg_grid_convert <args>`：四样都要一致。
+    """仓库构建 vs 装机版 `svg_grid convert <args>`：四样都要一致。
 
     参数里的 `{out}` 换成两边的输出路径（路径不同是设计如此的，比对前在两边流里
     归一成一个占位符，于是只有真正的行为差异才会让它红）。
@@ -122,13 +123,11 @@ def same(label, args, verbose=False):
     for path in (old_out, new_out):
         if path.exists():
             path.unlink()
-    old = run([OLD_CONVERT, *[a.replace("{out}", str(old_out)) for a in args]])
+    old = run([WORKSPACE, "convert", *[a.replace("{out}", str(old_out)) for a in args]])
     new = run([INSTALLED, "convert", *[a.replace("{out}", str(new_out)) for a in args]])
 
     def norm(text, out_path):
-        # 输出路径两边不同（设计如此）⇒ 归一；R19 起程序名前缀也随调用方
-        # （子命令说 `svg_grid convert:`，独立二进制说 `svg_grid_convert:`），
-        # 同一句话的两种署名不算行为差异。
+        # 输出路径两边不同（设计如此）⇒ 归一；程序名前缀两边都是 `svg_grid convert:`。
         text = text.replace(str(out_path), "OUT")
         for prog in ("svg_grid convert", "svg_grid_convert"):
             text = text.replace(prog, "PROG")
@@ -158,7 +157,7 @@ def same(label, args, verbose=False):
 
 
 def family_one():
-    print("\n== ① 一个二进制：`svg_grid convert` 与旧 `svg_grid_convert` 逐字节相同 ==")
+    print("\n== ① 一个二进制：`convert` 是子命令；装机版与仓库构建逐字节相同 ==")
     check(not (PREFIX / "svg_grid_convert").exists(),
           "`~/.local/bin` 里只有 `svg_grid`：没有 `svg_grid_convert`",
           sorted(p.name for p in PREFIX.iterdir() if "svg_grid" in p.name))
@@ -207,7 +206,7 @@ viewBox='0 0 288 216'>
           "全量 58 条 × 4 种模式（--output/--check/--report/--force）逐字节相同",
           f"cases={cases} mismatches={mismatches[:5]}")
 
-    # 错误面 / 边界分支：同样逐字节（含退出码 1 与 `svg_grid_convert:` 前缀）
+    # 错误面 / 边界分支：同样逐字节（含退出码 1 与 `svg_grid convert:` 前缀）
     extra = [
         ("unknown flag", ["--bogus"]),
         ("unknown short flag", ["-x"]),
@@ -251,14 +250,13 @@ fill='#000000'>y</text></g>
           "解析错仍是**退出 1**（convert 自己的一档，不并进 svg_grid 的 2/3）+ 前缀随调用方 "
           "（子命令是 `svg_grid convert:`，R19 起）", f"rc={error.returncode} {error.stderr[:300]}")
 
-    # `--help`：唯一的有意差异
-    old_help = run([OLD_CONVERT, "--help"])
+    # `--help`：在取值之前被特判，打的是 `svg_grid --help` 的全文
     new_help = run([INSTALLED, "convert", "--help"])
     top_help = run([INSTALLED, "--help"])
-    check(old_help.returncode == 0 and new_help.returncode == 0
+    check(new_help.returncode == 0
           and new_help.stdout == top_help.stdout and new_help.stderr == "",
-          "`convert --help` ⇒ rc=0、只写 stdout、打的是 `svg_grid --help`（有意差异，"
-          "`-h/--help` 在取值前特判）", new_help.stderr[:200])
+          "`convert --help` ⇒ rc=0、只写 stdout、打的是 `svg_grid --help`"
+          "（`-h/--help` 在取值前特判）", new_help.stderr[:200])
     missing = [flag for flag in CONVERT_FLAGS if flag not in top_help.stdout]
     check(not missing and "svg_grid convert --input" in top_help.stdout,
           "`svg_grid --help` 覆盖 convert 的全部 flag（帮助覆盖单测同口径）", missing)
@@ -296,8 +294,8 @@ def family_two(faces):
           "全量：SKIP 打出了 MANIFEST 的 `why`（不静默跳过）", why[:2])
     convert_line = next((line for line in full.stdout.splitlines()
                          if line.startswith("convert: ")), "")
-    check("in-process" in convert_line and "svg_grid_convert" in convert_line,
-          "全量：`convert:` 行说明第一段是**进程内**的库（不是某个可执行文件的路径）",
+    check("in-process" in convert_line and "convert" in convert_line,
+          "全量：`convert:` 行说明第一段是**进程内**的模块（不是某个可执行文件的路径）",
           convert_line)
     info(f"全量 doctor 用时 {elapsed:.1f}s（58 张、两段、串行）")
 
@@ -397,14 +395,15 @@ def family_four():
 def main():
     global TMP
     TMP = pathlib.Path(tempfile.mkdtemp(prefix="r18-rounddata-"))
-    print(f"# 仓库内旧二进制：{OLD_CONVERT}\n# 装机版：{INSTALLED}\n# 字体目录：{FONT_DIR}\n")
+    print(f"# 仓库构建：{WORKSPACE}\n# 装机版：{INSTALLED}\n# 字体目录：{FONT_DIR}\n")
 
     # ── 0. 前置
     check(BIN.is_file() and os.access(BIN, os.X_OK),
           "仓库内 `target/debug/svg_grid` 存在且可执行", str(BIN))
-    check(OLD_CONVERT.is_file() and os.access(OLD_CONVERT, os.X_OK),
-          "工作区里 `convert/target/debug/svg_grid_convert` 仍可构建、可执行（对照组）",
-          str(OLD_CONVERT))
+    check(not (SVG_GRID / "convert").exists()
+          and (SVG_GRID / "src/convert/mod.rs").is_file(),
+          "R42：工作区里没有独立的 `convert/` crate，转换器是 `src/convert/` 模块",
+          f"convert/ exists={(SVG_GRID / 'convert').exists()}")
     check(INSTALLED.is_file() and os.access(INSTALLED, os.X_OK),
           "装机版 `~/.local/bin/svg_grid` 存在且可执行（先跑 install.sh）", str(INSTALLED))
     if FAILS:

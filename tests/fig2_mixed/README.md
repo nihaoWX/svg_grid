@@ -75,7 +75,7 @@ width); height is derived → **4961 × 7016**, i.e. A4 portrait
 | panel-box → cell placement | every panel box lands exactly on its analytic cell (`<0.05` px) |
 | cell aspect vs canvas aspect | identical to 5 decimals everywhere (no distortion) |
 | `plot-grid` stderr | **0 bytes on all four calls** (no W1–W5 warning) |
-| `svg_grid_convert` stderr | only the known benign `<style>` block note on the matplotlib panel |
+| `svg_grid convert` stderr | only the known benign `<style>` block note on the matplotlib panel |
 | dialect residue in `Figure2.svg` | `path=0 use=0 symbol=0 g_transform=0 image_transform=0` |
 | `Figure2.png` | 4961 × 7016, pHYs 600 dpi, ink (non-white) **33.69 %** |
 | longest all-white row band | **100 px** (< 200) |
@@ -190,7 +190,7 @@ mismatch.
 * Only the band-A heatmap was re-emitted as vector. Panels **B (RDKit)** and **C
   (ChimeraX)** have no vector source here: B *could* be vector
   (`rdkit.Chem.Draw.MolDraw2DSVG` emits pure `<path>` + `<rect>`), but
-  `svg_grid_convert` fails its post-conversion self-check on that dialect
+  `svg_grid convert` fails its post-conversion self-check on that dialect
   (“output still contains 37 unsupported node(s)”), so it was left as a bitmap
   wrapper. B/C panels were not attempted as vectors.
 * `Figure2.png` is RGBA (resvg output); the project's own figures are RGB. Not

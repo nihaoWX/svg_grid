@@ -15,8 +15,8 @@
 ③ **体积与模块树**：所有 `tests/**/*.rs` ≤ 20000 B；源码里没有 `include!(`（R8 的教训：rustfmt 看不见）；
    每个非 `mod.rs`/`main.rs` 的 `.rs` 都被上层 `mod` 声明；`selftest/main.rs` 只做 `mod` 声明且 ≤ 4500 B。
 ④ **前缀随调用方**（本轮要修的 R18 遗留）：`svg_grid convert` 的错误/告警/`already converted` 前缀是
-   `svg_grid convert:`（usage 行同）；独立二进制仍是 `svg_grid_convert:`（usage 行同）；
-   `doctor` 的告警分类仍认得子命令前缀（端到端：`<style>` 图 ⇒ `warnings=1` + `V1`，不是"只是没炸"）。
+   `svg_grid convert:`（usage 行同）；R42 删掉独立二进制之后，这一族改为断言"没有任何诊断再自称
+   `svg_grid_convert:`"，并保留 `doctor` 的告警分类（端到端：`<style>` 图 ⇒ `warnings=1` + `V1`）。
 ⑤ **回归**：R8/R9/R14 + R18（R18 的 ④ 内部逐轮跑 R4–R17，含 R15/R16/R17；不静默略过）。
    R18 的 ① 里「逐字节相同 / 前缀」三类断言被本轮裁决**有意**取代（R18 的 `test.py` 不在本轮允许改动范围），
    本脚本把它们**逐条列出**并且只容忍这三类，R18 其余断言一条都不许红。
@@ -37,7 +37,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                        # round-data/R19 → PITFALLS → docs → svg_grid
 TESTS = SVG_GRID / "tests"
 BIN = SVG_GRID / "target/debug/svg_grid"           # 仓库内 debug（与对照组的旧二进制同代）
-CONVERT = SVG_GRID / "convert/target/debug/svg_grid_convert"
+CONVERT = SVG_GRID / "target/debug/svg_grid"    # R42：没有独立转换器了；保留名字仅供对照
 INSTALLED = pathlib.Path.home() / ".local/bin/svg_grid"
 FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
                         or pathlib.Path.home() / "svg_grid/fontlib")
@@ -245,7 +245,7 @@ def doctor_counts_v1():
 
 
 def family_four():
-    print("\n== ④ 前缀随调用方：`svg_grid convert:` vs `svg_grid_convert:` ==")
+    print("\n== ④ 前缀随调用方：一律 `svg_grid convert:`（R42 后不再有独立二进制）==")
     panel = style_panel()
 
     bad = run([BIN, "convert", "--bogus"])
@@ -272,16 +272,12 @@ def family_four():
           and "already converted" in copied.stdout,
           "stdout 的 `already converted` 行也用同一个前缀（不只 stderr）", copied.stdout[:300])
 
-    old_bad = run([CONVERT, "--bogus"])
-    check(old_bad.returncode == 1 and old_bad.stderr.startswith("svg_grid_convert: ")
-          and "usage: svg_grid_convert --input" in old_bad.stderr,
-          "独立二进制 `svg_grid_convert --bogus` ⇒ rc=1 + 前缀/usage 仍是 `svg_grid_convert`",
-          f"rc={old_bad.returncode} stderr={old_bad.stderr[:300]}")
-    old_warn = run([CONVERT, "--input", panel, "--output", TMP / "tagged-old.svg"])
-    old_lines = warning_lines(old_warn.stderr)
-    check(old_warn.returncode == 0 and old_lines
-          and all(line.startswith("svg_grid_convert: warning: ") for line in old_lines),
-          "独立二进制的告警行仍是 `svg_grid_convert: warning: `", old_warn.stderr[:300])
+    # R42 把转换器并入 `src/convert/`：独立二进制及其前缀随之下线。断言换成迁移后的不变量。
+    check(not (SVG_GRID / "convert").exists() and (SVG_GRID / "src/convert/mod.rs").is_file(),
+          "R42：独立 `convert/` crate 已删除，转换器是 `src/convert/` 模块",
+          f"convert/ exists={(SVG_GRID / 'convert').exists()}")
+    check("svg_grid_convert:" not in bad.stderr,
+          "诊断里不再出现 `svg_grid_convert:` 这一自称", bad.stderr[:200])
 
     if INSTALLED.is_file():
         installed = run([INSTALLED, "convert", "--bogus"])
@@ -306,7 +302,7 @@ def family_four():
 ROUNDS = ["R8", "R9", "R14"]
 
 # R18 的 ① 里「逐字节相同 / 前缀」三类断言被本轮裁决有意取代（前缀按定义不同了）。R18 的 test.py
-# 不在本轮的允许改动范围内，故这里逐条列出并只容忍这三类；别的断言红一条都不放过。
+# 在 R42 里已按单二进制改写，所以这三类现在应当全绿；容忍清单保留为兜底，别的断言红一条都不放过。
 SUPERSEDED = ("逐字节相同", "`svg_grid_convert:` 前缀")
 
 
@@ -344,14 +340,12 @@ def family_five():
 def main():
     global TMP
     TMP = pathlib.Path(tempfile.mkdtemp(prefix="r19-rounddata-"))
-    print(f"# 仓库内：{BIN}\n# 对照组：{CONVERT}\n# 装机版：{INSTALLED}\n# 字体：{FONT_DIR}\n")
+    print(f"# 仓库内：{BIN}\n# 装机版：{INSTALLED}\n# 字体：{FONT_DIR}\n")
 
     check(BIN.is_file() and os.access(BIN, os.X_OK),
           "`target/debug/svg_grid` 存在且可执行（先 cargo build --offline）", str(BIN))
-    check(CONVERT.is_file() and os.access(CONVERT, os.X_OK),
-          "`convert/target/debug/svg_grid_convert` 存在且可执行（对照组）", str(CONVERT))
     if FAILS:
-        print("\n== 前置不成立：先 `cargo build --offline`（两个 crate） ==")
+        print("\n== 前置不成立：先 `cargo build --offline` ==")
         return 1
 
     family_one()

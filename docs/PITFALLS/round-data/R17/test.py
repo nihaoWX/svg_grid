@@ -11,7 +11,7 @@
 ③ **`--only` 只跑命中项**；`--json` 可被 `json.loads` 且字段齐（rc / 告警码 / 墨水 / 耗时）；
    `--keep` 留住中间产物。
 ④ **配置错只留给语料**：语料目录不存在 ⇒ rc=3 + 一句英文 + `Fix:`；R18 起第一段是库调用，
-   `PATH` 里没有 `svg_grid_convert` **不再**是配置错（旧轮的那条 exit 3 断言已随之翻面）。
+   `PATH` 里没有转换器可执行文件 **不再**是配置错（R42 起转换器是同一二进制的 `convert` 子命令）。
 ⑤ **装机版 + 语料目录解析**：`~/.local/bin/svg_grid doctor`（cwd=`/tmp`、干净环境）跑通全量；
    `SVG_GRID_FIXTURES` 指向只含 1 条的临时目录 ⇒ 只跑那 1 条（`--fixtures` > env > 数据根 > 仓库）。
 ⑥ **回归** R4–R16 的 `test.py` 全绿（R16 自己会重跑 R4–R15，整段约 7–9 分钟；没有静默略过）。
@@ -31,7 +31,7 @@ import time
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                       # round-data/R17 → PITFALLS → docs → svg_grid
 BIN = SVG_GRID / "target/debug/svg_grid"         # 仓库内 debug：~/.local/bin 上是旧版本
-CONVERT = SVG_GRID / "convert/target/debug/svg_grid_convert"
+CONVERT = SVG_GRID / "target/debug/svg_grid"      # R42：转换器是 `convert` 子命令
 FIXTURES = SVG_GRID / "tests/fixtures"
 MANIFEST = FIXTURES / "MANIFEST.toml"
 FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
@@ -72,15 +72,16 @@ def doctor_env(path_dirs):
 
 
 def doctor(args, with_convert=True, extra_env=None):
-    """跑 doctor；`with_convert=False` 时 PATH 里只剩一个空目录（模拟没装第一段）。"""
+    """跑 doctor；两条路径都只给 `svg_grid` 本身（R42：第一段在进程内，PATH 里不需要
+    任何转换器可执行文件）。`with_convert=False` 给一个空目录，模拟"什么都没装"。"""
     if not with_convert:
         env = doctor_env([TMP / "empty-path"])
     else:
         bin_dir = TMP / "bin"
         bin_dir.mkdir(exist_ok=True)
-        link = bin_dir / CONVERT.name
+        link = bin_dir / BIN.name
         if not link.exists():
-            link.symlink_to(CONVERT)
+            link.symlink_to(BIN)
         env = doctor_env([bin_dir])
     env.update(extra_env or {})
     return run([BIN, "doctor", *args], env=env)
@@ -152,11 +153,12 @@ def main():
     # ── 0. 前置
     check(BIN.is_file() and os.access(BIN, os.X_OK),
           "仓库内 `target/debug/svg_grid` 存在且可执行", str(BIN))
-    check(CONVERT.is_file() and os.access(CONVERT, os.X_OK),
-          "仓库内 `convert/target/debug/svg_grid_convert` 存在且可执行（不是 ~/.local/bin 的旧版）",
-          str(CONVERT))
+    conv_help = run([str(BIN), "convert", "--help"])
+    check(conv_help.returncode == 0,
+          "`svg_grid convert --help` 可用（R42：转换器已并入主二进制）",
+          f"rc={conv_help.returncode} {conv_help.stderr[:200]}")
     if FAILS:
-        print("\n== 前置不成立：先 `cargo build --offline`（两个 crate） ==")
+        print("\n== 前置不成立：先 `cargo build --offline` ==")
         return 1
     entries = manifest_ids()
     files = sorted(FIXTURES.rglob("*.svg"))
@@ -183,8 +185,8 @@ def main():
         convert_line = next((line for line in full.stdout.splitlines()
                              if line.startswith("convert: ")), "")
         # R18 起第一段是**库**调用（进程内），所以这一行是说明而不是路径。
-        check("in-process" in convert_line and "svg_grid_convert" in convert_line,
-              "全量：`convert:` 行说明第一段是进程内的 `svg_grid_convert` 库（没有外部二进制可找）",
+        check("in-process" in convert_line and "convert" in convert_line,
+              "全量：`convert:` 行说明第一段是进程内的 `svg_grid::convert` 模块（没有外部二进制可找）",
               convert_line)
         lines = verdict_lines(full.stdout)
         check(len(lines) == 58, f"全量：58 条逐条一行（实际 {len(lines)} 行）",
@@ -360,9 +362,9 @@ expect = "pass"
     (TMP / "empty-path").mkdir(exist_ok=True)
     no_convert = run([BIN, "doctor", "--fixtures", FIXTURES],
                      env=doctor_env([TMP / "empty-path"]))
-    # R18：doctor 直接调 convert 库，PATH 里没有 `svg_grid_convert` 也必须照跑。
+    # R18：doctor 直接调 convert 库，PATH 里没有独立的转换器也必须照跑。
     check(no_convert.returncode == 0,
-          "PATH 里没有任何 `svg_grid_convert` ⇒ doctor 仍退出 0（第一段是库调用）",
+          "PATH 里没有任何转换器可执行文件 ⇒ doctor 仍退出 0（第一段是进程内模块）",
           f"rc={no_convert.returncode}\n{no_convert.stderr[-500:]}")
     check(summary_of(no_convert.stdout) is not None
           and summary_of(no_convert.stdout)[1] == 0,

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-r"""V1: prove `svg_grid_convert` is a **geometry-preserving** rewrite of the
+r"""V1: prove `svg_grid convert` is a **geometry-preserving** rewrite of the
 matplotlib dialect — purely mechanically, without looking at a rendering.
 
 For every text run (the `<text>` anchor *and* every `<tspan>` anchor, in document

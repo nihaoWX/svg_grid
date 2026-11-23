@@ -244,9 +244,9 @@ fn jobs_do_not_change_the_verdict() {
 }
 
 /// The first stage is a **library** call: with `PATH` reduced to a directory that
-/// holds nothing at all, `doctor` still runs the whole corpus. There is no
-/// `svg_grid_convert` to find, so there is no exit-3 "first stage missing" path
-/// either (`ARCHITECTURE/cli.md`, R18).
+/// holds nothing at all, `doctor` still runs the whole corpus. There is no external
+/// converter to find, so there is no exit-3 "first stage missing" path either
+/// (`ARCHITECTURE/cli.md`, R18; R42 made the converter a module of this crate).
 #[test]
 fn the_first_stage_needs_no_external_binary() {
     let Some(bins) = ready() else { return };

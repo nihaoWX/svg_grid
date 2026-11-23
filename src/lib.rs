@@ -1,3 +1,4 @@
+pub mod convert;
 mod dom;
 mod error;
 mod geom;

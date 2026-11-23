@@ -225,7 +225,7 @@ pub(crate) fn run_one(context: &Context, fixture: &Fixture) -> Outcome {
     if outcome.convert_rc != Some(0) {
         outcome.step = "convert";
         outcome.problems.push(format!(
-            "stage 1 (svg_grid_convert) exited with rc={}",
+            "stage 1 (convert) exited with rc={}",
             outcome.convert_rc.unwrap_or(-1)
         ));
         if outcome.tagged_bytes == 0 {
@@ -333,7 +333,7 @@ pub(crate) fn judge(stage: &StageResult) -> Vec<String> {
     let mut problems = Vec::new();
     if stage.convert_rc != 0 {
         problems.push(format!(
-            "stage 1 (svg_grid_convert) exited with rc={}",
+            "stage 1 (convert) exited with rc={}",
             stage.convert_rc
         ));
     }
@@ -472,11 +472,11 @@ fn convert_in_process(input: &Path, output: &Path) -> (i32, String) {
     let mut out: Vec<u8> = Vec::new();
     let mut err: Vec<u8> = Vec::new();
     // Stage 1 also opts into diagnostics: doctor classifies converter warnings.
-    let options = svg_grid_convert::Options {
+    let options = svg_grid::convert::Options {
         verbose: true,
-        ..svg_grid_convert::Options::default()
+        ..svg_grid::convert::Options::default()
     };
-    let result = svg_grid_convert::cli::run_in(
+    let result = svg_grid::convert::cli::run_in(
         super::super::convert::SUBCOMMAND,
         input,
         Some(output),

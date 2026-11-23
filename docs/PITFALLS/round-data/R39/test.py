@@ -18,7 +18,7 @@ R39 的证据而不是 R38，是因为 R38 的证据只谈相位/平移，单位
 
 二进制定位（可用环境变量覆盖）：
   SVG_GRID_BIN          默认 <repo>/target/debug/svg_grid
-  SVG_GRID_CONVERT_BIN  默认 <repo>/convert/target/debug/svg_grid_convert
+  SVG_GRID_CONVERT_BIN  默认 <repo>/target/debug/svg_grid（R42：转换器是它的 `convert` 子命令）
   SVG_GRID_RENDER_BIN   默认 /tmp/d1_eval/render/target/release/d1render （渲染对照，缺失即 FAIL）
   SVG_GRID_CAIRO_PYTHON 默认 ~/.venv/bin/python（能 import cairosvg 才启用第二渲染器）
 渲染器缺失时渲染对照类判据 **FAIL**；确实要跳过请显式传 `--allow-skip`。
@@ -34,7 +34,8 @@ import zlib
 HERE = pathlib.Path(__file__).resolve().parent
 SVG_GRID = HERE.parents[3]                      # round-data/R39 → PITFALLS → docs → svg_grid
 BIN = pathlib.Path(os.environ.get("SVG_GRID_BIN", SVG_GRID / "target/debug/svg_grid"))
-CONV = pathlib.Path(os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "convert/target/debug/svg_grid_convert"))
+CONV = pathlib.Path(os.environ.get("SVG_GRID_CONVERT_BIN", SVG_GRID / "target/debug/svg_grid"))
+CONVERT_ARGS = ["convert"]   # R42：转换器是主二进制的 `convert` 子命令
 RENDER = pathlib.Path(os.environ.get("SVG_GRID_RENDER_BIN", "/tmp/d1_eval/render/target/release/d1render"))
 CAIRO_PYTHON = pathlib.Path(os.environ.get("SVG_GRID_CAIRO_PYTHON", str(pathlib.Path.home() / ".venv/bin/python")))
 ALLOW_SKIP = "--allow-skip" in sys.argv
@@ -291,20 +292,19 @@ def family_c():
           f"xor={xor} maxdiff={md} ink_src={si} ink_out={oi}")
 
 
-# ── D. 账本更正所依据的事实（Blocker 2）：独立二进制仍在，只是不再安装 ─────────────
+# ── D. 账本更正所依据的事实（Blocker 2）：R42 之后独立二进制真的没了 ────────────────
 def family_d():
-    toml = (SVG_GRID / "convert/Cargo.toml").read_text()
-    check('[[bin]]' in toml and 'name = "svg_grid_convert"' in toml,
-          "D1 convert/Cargo.toml 仍声明 [[bin]] svg_grid_convert（R19 retire 的「已合并/不存在」不成立）",
-          toml[:400])
+    check(not (SVG_GRID / "convert").exists() and (SVG_GRID / "src/convert/mod.rs").is_file(),
+          "D1 R42：独立 `convert/` crate 已删除，转换器是 `src/convert/` 模块",
+          f"convert/ exists={(SVG_GRID / 'convert').exists()}")
     check(CONV.exists() and os.access(CONV, os.X_OK),
-          "D2 独立二进制仍可构建（convert/target/debug/svg_grid_convert 存在）",
-          f"缺 {CONV}（先 cd convert && cargo build --offline）")
+          "D2 转换器仍可用（同一二进制的 `convert` 子命令）",
+          f"缺 {CONV}（先 cargo build --offline）")
     if CONV.exists():
-        p = subprocess.run([str(CONV), "--help"], capture_output=True, text=True)
+        p = subprocess.run([str(CONV), *CONVERT_ARGS, "--help"], capture_output=True, text=True)
         help_text = p.stdout + p.stderr
-        check("svg_grid_convert" in help_text,
-              "D3 独立二进制的 --help 仍自称 svg_grid_convert", help_text[:400])
+        check(p.returncode == 0 and "svg_grid_convert" not in help_text,
+              "D3 `svg_grid convert --help` 不再自称 svg_grid_convert", help_text[:400])
     install = (SVG_GRID / "install.sh").read_text()
     check('stale_convert="svg_grid_convert"' in install and
           'rm -f -- "$prefix/$stale_convert"' in install,

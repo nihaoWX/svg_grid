@@ -17,7 +17,7 @@ set -euo pipefail
 
 ROOT=/home/nihao/bioagentforge/tools/svg_grid
 SVG="$ROOT/target/release/svg_grid"
-CONV="$ROOT/convert/target/release/svg_grid_convert"
+CONV="$ROOT/target/release/svg_grid"
 OUT=/home/nihao/bioagentforge/tools/svg_grid/tests/s22_repro/out/skilltest4
 PY="micromamba run -n python-bio python"
 cd "$OUT"
@@ -48,7 +48,7 @@ echo "target cell widths: A/B=$CELL_AB  C/D=$CELL_CD  E=$CELL_E  F=$CELL_F" >&2
 # ---- step 1: tag panels (svg -> protocol: panel box + data-scale groups) -------
 for p in fig1_pairwise_matched_cos fig2_shared_ecotype_count fig3_empty_factors \
          fig4_transferability fig5_joint_nmf fig6_joint_k7_composition_pcolormesh; do
-  $CONV --input panels/$p.svg --output tagged/$p.svg
+  $CONV convert --input panels/$p.svg --output tagged/$p.svg
 done
 
 # ---- step 2: normalise each panel so its long side == its target cell width ----

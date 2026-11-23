@@ -13,7 +13,8 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))          # tools/svg_grid
-CONVERT = os.path.join(ROOT, "convert/target/release/svg_grid_convert")
+CONVERT = os.path.join(ROOT, "target/release/svg_grid")
+CONVERT_ARGS = ["convert"]   # R42: the converter is the `convert` subcommand
 GRID = os.path.join(ROOT, "target/release/svg_grid")
 
 OUT = os.path.join(HERE, "out")

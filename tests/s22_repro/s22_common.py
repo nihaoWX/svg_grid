@@ -17,7 +17,8 @@ from PIL import Image, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SVG_GRID_ROOT = os.path.dirname(os.path.dirname(HERE))          # tools/svg_grid
-CONVERT = os.path.join(SVG_GRID_ROOT, "convert/target/release/svg_grid_convert")
+CONVERT = os.path.join(SVG_GRID_ROOT, "target/release/svg_grid")
+CONVERT_ARGS = ["convert"]   # R42: the converter is the `convert` subcommand
 GRID = os.path.join(SVG_GRID_ROOT, "target/release/svg_grid")
 
 OUT = os.path.join(HERE, "out")

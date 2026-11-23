@@ -8,7 +8,7 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 SG=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
-CV=/home/nihao/bioagentforge/tools/svg_grid/convert/target/release/svg_grid_convert
+CV=/home/nihao/bioagentforge/tools/svg_grid/target/release/svg_grid
 
 # ---- geometry (px) ---------------------------------------------------------
 # W=4961;  per-row margins: top=150 (panel-letter band), right=50, bottom=B, left=50; gap=80
@@ -23,7 +23,7 @@ CV=/home/nihao/bioagentforge/tools/svg_grid/convert/target/release/svg_grid_conv
 # ---- step 1: tag the raw matplotlib panels ---------------------------------
 mkdir -p tagged rows
 for f in panels/*.svg; do
-  "$CV" --input "$f" --output "tagged/$(basename "$f")"
+  "$CV" convert --input "$f" --output "tagged/$(basename "$f")"
 done
 
 # ---- step 2: one plot-grid call per row (labels are added at this level) ----

@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""Run compose_s22.py with every `plot-grid` / `svg_grid_convert` stderr captured
+"""Run compose_s22.py with every `plot-grid` / `svg_grid convert` stderr captured
 and its byte length reported, so V3 can state the *actual* stderr volume per call
 (the script itself discards stderr on success)."""
 import os
@@ -16,7 +16,7 @@ _real = subprocess.run
 
 def run(cmd, **kw):
     res = _real(cmd, **kw)
-    if cmd and os.path.basename(cmd[0]) in ("svg_grid", "svg_grid_convert"):
+    if cmd and os.path.basename(cmd[0]) == "svg_grid":
         err = res.stderr or ""
         if isinstance(err, bytes):
             err = err.decode("utf-8", "replace")

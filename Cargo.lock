@@ -889,15 +889,6 @@ dependencies = [
  "quick-xml",
  "ravif",
  "resvg",
- "svg_grid_convert",
-]
-
-[[package]]
-name = "svg_grid_convert"
-version = "0.1.0"
-dependencies = [
- "png",
- "quick-xml",
 ]
 
 [[package]]

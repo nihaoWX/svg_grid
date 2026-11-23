@@ -1,11 +1,11 @@
 //! `svg_grid convert …`: the converter as a subcommand of the one binary.
 //!
 //! These run the real `svg_grid` executable, so the process-level exit codes and
-//! the files it writes are exercised. The *conversion* itself is covered by the
-//! converter crate's own `tests/cli.rs` (it drives `svg_grid_convert`); what is
-//! asserted here is the seam — the subcommand reaches the same library, writes the
-//! same file, keeps the `0`/`1` exit codes, and prefixes its diagnostics with its
-//! own name (`svg_grid convert:`, not the standalone binary's `svg_grid_convert:`).
+//! the files it writes are exercised. The *conversion* itself is covered by
+//! `tests/selftest/convert_cli/mod.rs` (the former converter crate's CLI tests);
+//! what is asserted here is the seam — the subcommand reaches the same module,
+//! writes the same file, keeps the `0`/`1` exit codes, and prefixes its diagnostics
+//! with its own name (`svg_grid convert:`; R42 removed the standalone binary).
 
 use std::fs;
 use std::path::Path;
@@ -100,9 +100,9 @@ fn check_reports_without_writing_and_exits_zero() {
 }
 
 /// The diagnostics name the **caller**: `svg_grid convert:` for the subcommand, so
-/// the line points at a command the reader can run (the standalone binary says
-/// `svg_grid_convert:` — asserted in the converter crate's `tests/cli.rs`). The exit
-/// code stays the converter's one bit: 1, not the CLI's 2/3 tiers.
+/// the line points at a command the reader can run (R42 deleted the standalone
+/// binary that used to say `svg_grid_convert:`). The exit code stays the converter's
+/// one bit: 1, not the CLI's 2/3 tiers.
 #[test]
 fn the_diagnostics_name_the_subcommand_and_keep_the_one_bit_exit_code() {
     let bins = Binaries::discover();
