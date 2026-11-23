@@ -69,6 +69,19 @@ grep -o '<text[^>]*>[^<]*</text>' cent.out.svg
 
 修的时候两处都要改（`ARCHITECTURE/tag-protocol.md` 已登记"path 双实现防漂移"，DOM 解析是第二对）。
 
+## 范围：只有文本节点中招，属性值正常
+
+属性值走 `quick_xml` 的 `decode_and_unescape_value`（`src/dom.rs:128`），数字实体在那里已被正确解码：
+
+```bash
+# <rect x="&#49;0" y="10" width="20" height="20"/>
+svg_grid plot-grid --input attr.svg --width 200 --ncol 1 --plot-margin 0 --output o.svg
+grep -o '<rect x="[^"]*" y="[^"]*"' o.svg     # x="10"  ← 正确
+```
+
+只有 `Event::GeneralRef`（文本节点里的实体）走 `resolve_reference`。所以修的时候只需改
+`resolve_reference` 这一处（两个文件各一份），不必动属性解析。
+
 ## 影响面
 
 - `tests/fixtures/**/*.svg`：**0 个**含 `&#`（所以 220 fixture 回归抓不到）。
