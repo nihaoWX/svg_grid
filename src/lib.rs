@@ -25,6 +25,7 @@ use plan::{collect_auto_conversion_diagnostics, prepare, PreparedInput};
 
 pub use error::{Result, SvgGridError};
 pub(crate) use label_conflicts::validate_label_conflicts;
+pub use label_letters::normalize_label;
 pub use layout::Margins;
 pub use plan::{
     plan_grid, plan_grid_with_diagnostics, plan_grid_with_labels, GridPlan, GridRequest,
@@ -37,30 +38,6 @@ pub use raster::{
     FONT_DIR_ENV,
 };
 pub use warnings::{classify, describe_passthrough, Passthrough, WARNING_CODES};
-
-/// Trim a panel letter and collapse internal whitespace runs to one space.
-///
-/// An inherited `data-svg-grid-label` text and an explicit `--labels` entry must
-/// compare the same way: `A`, `" A "` and `"A  B"` are `A`, `A` and `A B`.
-///
-/// Only the four whitespace characters SVG's default `xml:space="default"`
-/// collapses are folded (U+0020, U+0009, U+000A, U+000D). U+00A0 is *content*,
-/// not layout whitespace, and stays significant (R51: `A` and `A&#160;` render
-/// to identical pixels but are different label strings, as in the R48 base).
-/// Zero-width characters are removed instead: U+200B/U+200C/U+200D/U+FEFF add
-/// no ink and no advance, so `A` and `A\u{200b}` are the same letter (R51:
-/// both reference renderers produce byte-identical PNGs).
-pub fn normalize_label(text: &str) -> String {
-    let without_zero_width: String = text
-        .chars()
-        .filter(|c| !matches!(c, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}'))
-        .collect();
-    without_zero_width
-        .split([' ', '\t', '\n', '\r'])
-        .filter(|part| !part.is_empty())
-        .collect::<Vec<_>>()
-        .join(" ")
-}
 
 #[derive(Debug, Clone)]
 pub enum SvgInput {

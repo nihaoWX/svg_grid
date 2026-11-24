@@ -7,6 +7,7 @@ use quick_xml::{Reader, Writer};
 use crate::convert::error::ConvertError;
 use crate::dom::{
     codepoint_label, decode_reference, first_invalid_xml_char, invalid_reference_in_raw,
+    strip_synthetic_range,
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -136,7 +137,13 @@ fn element_from_start(
         }
         let value = attr
             .decode_and_unescape_value(reader.decoder())
-            .map_err(|error| ConvertError::Xml(format!("attribute `{key}`: {error}")))?
+            .map_err(|error| {
+                let message = error.to_string();
+                ConvertError::Xml(format!(
+                    "attribute `{key}`: {}",
+                    strip_synthetic_range(&message)
+                ))
+            })?
             .into_owned();
         if let Some(c) = first_invalid_xml_char(&value) {
             return Err(ConvertError::Xml(format!(
@@ -316,6 +323,34 @@ mod tests {
             );
             assert!(error.contains(reference), "{reference} => {error}");
             assert!(error.contains(codepoint), "{reference} => {error}");
+        }
+    }
+    /// R52: offsets in `quick_xml` escape errors index the synthesized `&name;`
+    /// fragment, not the document; both range spellings are stripped while
+    /// messages without a range stay byte-identical.
+    #[test]
+    fn synthetic_ranges_are_stripped_from_escape_errors() {
+        assert_eq!(
+            strip_synthetic_range("at 1..5: unrecognized entity `nbsp`"),
+            "unrecognized entity `nbsp`"
+        );
+        assert_eq!(
+            strip_synthetic_range("at 120..400: unrecognized entity `foo`"),
+            "unrecognized entity `foo`"
+        );
+        assert_eq!(
+            strip_synthetic_range(
+                "Error while escaping character at range 1..6: Cannot find ';' after '&'"
+            ),
+            "Error while escaping character: Cannot find ';' after '&'"
+        );
+        for unchanged in [
+            "invalid character reference: unexpected number sign",
+            "character reference &#1; decodes to U+0001, which is not a legal XML 1.0 character",
+            "at 1..5 x",
+            "at range 1..5 x",
+        ] {
+            assert_eq!(strip_synthetic_range(unchanged), unchanged);
         }
     }
 }

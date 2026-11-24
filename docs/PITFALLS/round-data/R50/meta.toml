@@ -60,8 +60,8 @@ R47 只改了文本路径的解码方式，属性路径的同一个洞在 R47 �
 `cargo fmt --all --check` OK；`cargo clippy --offline --all-targets -- -D warnings` OK；
 `./install.sh` 后 `sha256sum ~/.local/bin/svg_grid target/release/svg_grid` 同为
 57cb41b01f804384d8b1de34b13e46bb95434fbe9d6cb54dfb7d9a8fb44314c0；`svg_grid doctor` 57 pass / 0 fail / 1 skip。
-语料逐字节：220 个 `tests/**/*.svg` 的 `convert` 输出 + 58 个 `tests/fixtures/**/*.svg` 的
-`plot-grid --width 600 --ncol 1` 输出，与 base（/tmp/r46base/target/release/svg_grid @196da47）
+语料逐字节：214 个 `tests/**/*.svg`（全仓 217，另 3 个在 R28 data 里）的 `convert` 输出 + 58 个 `tests/fixtures/**/*.svg` 的
+`plot-grid --width 600 --ncol 1` 输出，与 base（/tmp/r50base/target/release/svg_grid @e0c6033，sha256 75def0b8…）
 0 差异（语料 0 个数字实体）。旧证据 R3..R49 顶层跑 44/45 绿，仅 R19 既有失效（已 retire，不计入）。
 
 单文件：src/dom.rs 16969 B、src/convert/dom.rs 11821 B、tests/selftest/textref/mod.rs 15828 B、
@@ -69,6 +69,8 @@ src/error.rs 4221 B，均 ≤20000 B。
 
 账本更正（R47）：R47-F7 `1-413` → `1-442`；R47-F1 `80-96` → `174-186`；R47-F2 `82-93` → `95-105`；
 R47-F4 `178-245` → `280-459`；R47-F5 `186-233` → `207-321`。
+（R52 复核：只有 R47-F7 成立；其余 4 条的右侧坐标取自 `1fbc3c3` 树，R47 自己的锚点 `8aca0d1` 上
+分别为 80-96 / 82-93 / 178-245 / 186-233，见 R52 账本 R52-F1..R52-F5。）
 """
 
 how_to_run = """

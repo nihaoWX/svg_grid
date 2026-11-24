@@ -16,6 +16,8 @@ use std::process::{Command, Output};
 use quick_xml::events::Event;
 use quick_xml::Reader;
 
+mod undefined;
+
 const PANEL: &str = r#"<svg xmlns="http://www.w3.org/2000/svg" width="400" height="80">
   <rect data-panel-box="main" x="0" y="0" width="400" height="80" fill="none"/>
   <text x="10" y="50" font-size="20" font-family="Arial">{BODY}</text>
@@ -83,6 +85,32 @@ fn read(path: &Path) -> String {
     fs::read_to_string(path).unwrap()
 }
 
+/// True when `text` contains a `quick_xml`-style synthetic byte range (`at N..M:`).
+/// Such offsets index the parser's `&name;` fragment, never the input document.
+fn has_synthetic_range(text: &str) -> bool {
+    let bytes = text.as_bytes();
+    let mut from = 0;
+    while let Some(found) = text[from..].find("at ") {
+        let mut index = from + found + "at ".len();
+        let start = index;
+        while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+            index += 1;
+        }
+        if index > start && text[index..].starts_with("..") {
+            index += 2;
+            let end = index;
+            while bytes.get(index).is_some_and(u8::is_ascii_digit) {
+                index += 1;
+            }
+            if index > end && text[index..].starts_with(':') {
+                return true;
+            }
+        }
+        from += found + "at ".len();
+    }
+    false
+}
+
 #[test]
 fn plot_grid_decodes_character_references_in_text() {
     let input = write("plot_grid.svg", PANEL, "37&#176;C &#215;2 &#177;1");
@@ -110,6 +138,7 @@ fn plot_grid_rejects_an_undefined_named_entity_in_text() {
     assert_eq!(result.status.code(), Some(1), "{:?}", result);
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(stderr.contains("unrecognized entity"), "{stderr}");
+    assert!(!has_synthetic_range(&stderr), "{stderr}");
     assert!(!output.exists(), "no output may be written on failure");
 }
 
@@ -122,6 +151,7 @@ fn convert_rejects_an_undefined_named_entity_in_text() {
     assert_eq!(result.status.code(), Some(1), "{:?}", result);
     let stderr = String::from_utf8_lossy(&result.stderr);
     assert!(stderr.contains("unrecognized entity"), "{stderr}");
+    assert!(!has_synthetic_range(&stderr), "{stderr}");
     assert!(!output.exists(), "no output may be written on failure");
 }
 

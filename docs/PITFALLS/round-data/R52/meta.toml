@@ -1,0 +1,122 @@
+id = "R52"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "A（P3）未解析实体的文案带假 range：`<text>a&nbsp;b</text>` 修前（582f6f1）输出 `svg_grid convert: XML error: reference &nbsp; cannot be resolved: at 1..5: unrecognized entity `nbsp``，`at 1..5` 是 quick_xml 对合成串 `&{reference};`（src/dom.rs:126）的字节偏移，不是文档坐标（同一个 `&nbsp;` 放第 12 列仍报 1..5）。属性路径同病：`data-x=\"a&foo;b\"` 报 `at 1..4`。",
+  "B（P3）第二种拼法只在属性路径出现：未终止引用 `data-x=\"a&nbsp\"` 修前输出 `attribute `data-x`: Error while escaping character at range 1..6: Cannot find ';' after '&'`（EscapeError::UnterminatedEntity 的 Display，quick-xml-0.39.4/src/escape.rs:64），不匹配 `at \\d+\\.\\.\\d+`，只按正则收口会漏。",
+  "C（P2）账本：`modify R47 --by R50` 记的 5 处行号更正里只有 R47-F7（1-413 → 1-442）为真，其余 4 处把 R50 提交树（1fbc3c3）的坐标写成了 R47 的坐标。R47 自己的锚点 8aca0d1 上实测：R47-F1 80-96（记 174-186）、R47-F2 82-93（记 95-105）、R47-F4 178-245（记 280-459，文件共 245 行）、R47-F5 186-233（记 207-321，文件共 233 行）。",
+  "D（P2）元数据：docs/PITFALLS/round-data/R50/meta.toml:63-64 写“220 个 tests/**/*.svg”与 base `/tmp/r46base @196da47`（sha 99fd8cb5…）；实测 214（git ls-files '*.svg' 全仓 217，另 3 个在 R28 data 里；220 来自 rglob 把 6 个被 gitignore 的生成物算进去），base 实为 `/tmp/r50base @e0c6033`（sha 75def0b8…）。",
+  "E（P3）R50 自己的 findings 行号越界 1–2 行：F1 is_xml_char 记 54-60 ⇒ 实为 54-59；F2 decode_reference 记 78-98 ⇒ 实为 78-96；F4 element_from_start 记 217-247 ⇒ 实为 217-245；同轮报告里 first_invalid_xml_char 记 62-65 ⇒ 实为 62-64、numeric_reference_codepoint 记 100-114 ⇒ 实为 100-110。其余 8 条评审确认精确，不动。",
+  "F（P3）src/lib.rs 19587 B / 上限 20000 B，只剩 413 B 余量（R8/R9 门禁）。",
+]
+
+closures = [
+  { finding = "R52-F1", tier = "检查" },
+  { finding = "R52-F2", tier = "检查" },
+  { finding = "R52-F3", tier = "检查" },
+  { finding = "R52-F4", tier = "检查" },
+  { finding = "R52-F5", tier = "检查" },
+  { finding = "R52-F6", tier = "检查" },
+  { finding = "R52-F7", tier = "检查" },
+  { finding = "R52-F8", tier = "检查" },
+  { finding = "R52-F9", tier = "检查" },
+  { finding = "R52-F10", tier = "检查" },
+  { finding = "R52-F11", tier = "检查" },
+  { finding = "R52-F12", tier = "代码" },
+  { finding = "R52-F13", tier = "代码" },
+  { finding = "R52-F14", tier = "代码" },
+  { finding = "R52-F15", tier = "代码" },
+  { finding = "R52-F16", tier = "检查" },
+]
+
+run_before = ["R51", "R50", "R49"]
+touched = ["R47", "R50"]
+
+note = """
+修法：
+  A/B 一份“剥 range”逻辑，两条路径共用（src/dom.rs:71-116）：
+    `pub(crate) fn strip_synthetic_range(message: &str) -> String` 同时处理前缀 `at N..M: `
+    （range_prefix，src/dom.rs:97-102）与中缀 ` at range N..M`（range_len，src/dom.rs:105-116，
+    保留其后的 `:`）；数字/`..`/`:` 任一不匹配就原样返回，所以本来没有 range 的文案逐字不变。
+    调用点：src/dom.rs:137（decode_reference 的 Err 分支——文本路径与属性路径的
+    invalid_reference_in_raw 都走这里）、src/dom.rs:285 与 src/convert/dom.rs:144
+    （两个 DOM 的 decode_and_unescape_value map_err，覆盖未终止引用）。
+    判据只有一份，src/convert/dom.rs:10 从 crate::dom 导入——沿用 R47 建立的
+    “src/dom.rs 判据被 src/convert/dom.rs 复用”的防漂移做法。
+  C 账本 append-only：不改 R47/R50 任何字段，R52 追加 R52-F1..F5（related 挂 R47-F1/F2/F4/F5/F7）
+    与 R52-F6..F10（related 挂 R50-F1/F2/F4 及报告里的两个函数），symptom/reason 写明
+    “R50 的 modify 误用了 1fbc3c3 树的坐标，本条按 R47 自己的锚点 8aca0d1 更正” /
+    “R50 记录越界 1–2 行，按 1fbc3c3 实测定准”。
+  D R50/meta.toml:63-64 改成 214（全仓 217，另 3 个在 R28 data 里）与
+    /tmp/r50base/target/release/svg_grid @e0c6033，sha256 75def0b8…；其后追加 R52 复核段。
+    R50/test.py 里没有硬编码 220/r46base（grep 为空），未动，断言一条也没放宽。
+  E R50 的 5 处行号用 R52 新 finding 更正，R50 原记录保留。
+  F normalize_label（函数体 + 长 doc comment）整体搬到 src/label_letters.rs:25-47，
+    src/lib.rs:28 用 `pub use label_letters::normalize_label;` 保持外部路径
+    svg_grid::normalize_label 不变（src/cli/execute.rs:184 用的就是这条路）。纯机械搬迁。
+
+三列数字（base = /tmp/r50base/target/release/svg_grid @e0c6033 sha256 75def0b8…；
+“修前” = HEAD 582f6f1 的二进制 /tmp/r52old sha256 70958cf8…；“修后” = 本轮）：
+  用例                         base                                  修前                                    修后
+  A1 文本 a&nbsp;b              at 1..5: unrecognized entity `nbsp`    reference &nbsp; … at 1..5: …            reference &nbsp; … 无 range
+  A2 文本 a&bogus;b             at 1..6                                reference &bogus; … at 1..6: …            reference &bogus; … 无 range
+  A3 plot-grid 面板 a&nbsp;b    at 1..5                                svg_grid: SVG XML error: … at 1..5: …      svg_grid: SVG XML error: … 无 range
+  B1 属性 a&foo;b               at 2..5                                attribute `data-x`: … at 1..4: …          attribute `data-x`: … 无 range
+  B2 属性 a&nbsp（未终止）      at range 1..6                          attribute `data-x`: … at range 1..6: …    attribute `data-x`: Error while escaping character: …
+  C1 文本 a&#1;b                rc=0（漏判）                           character reference &#1; decodes to U+0001…  逐字不变
+  C2 属性 a&#1;b                rc=0（漏判）                           attribute `data-x`: character reference &#1;…  逐字不变
+  C3 文本 a&#0;b                invalid character reference: 0x0 …     character reference &#0; (U+0000) …        逐字不变
+  C4 文本 a&#-1;b               invalid character reference: unexpected number sign   reference &#-1; cannot be resolved: …  逐字不变
+  修后二进制上 `at \\d+\\.\\.\\d+` 与 `at range ` 零命中（A/B/C 族逐条断言）。
+
+变异（每条给出“改了哪一行 → 红了哪些测试”）：
+  M1 src/dom.rs:77 strip_synthetic_range 开头 `return message.to_string();`（等于不剥）⇒ 7 红：
+     lib convert::dom::tests::synthetic_ranges_are_stripped_from_escape_errors；
+     selftest textref::convert_rejects_an_undefined_named_entity_in_text、
+     textref::plot_grid_rejects_an_undefined_named_entity_in_text、
+     textref::undefined::{convert_text_undefined_entity_message_is_exact,
+     convert_attribute_undefined_entity_message_is_exact,
+     convert_attribute_unterminated_entity_message_is_exact,
+     convert_other_undefined_named_entity_still_fails_exactly}（lib 280/1、selftest 176/6）。
+  M2 src/lib.rs:28 删掉 `pub use label_letters::normalize_label;` ⇒ 编译红：
+     error[E0425]: cannot find function `normalize_label` in the crate root ×2
+     （src/label_letters.rs:157 与 src/label_conflicts.rs:91 的 crate::normalize_label）。
+  M3 R50/meta.toml 把 214 改回 220 ⇒ 证据 3 红：E/meta says 214、E/meta has no stale 220、
+     b_unterminated（该次运行同时带着 M4 的残留，见下）。
+  M4 src/dom.rs:82 中缀分支改成 `if let Some(at) = None::<usize>`（只剥前缀）⇒ 3 红：
+     lib convert::dom::tests::synthetic_ranges_are_stripped_from_escape_errors；
+     selftest textref::undefined::convert_attribute_unterminated_entity_message_is_exact；
+     证据 b_unterminated（lib 280/1、selftest 181/1、证据 110/1）。
+
+回归：`cargo test --offline` 522（281 lib + 59 main + 182 selftest；基线 517，+5，未删任何既有测试）；
+`cargo fmt --all --check` OK；`cargo clippy --offline --all-targets -- -D warnings` OK；
+`./install.sh` 后 `sha256sum ~/.local/bin/svg_grid target/release/svg_grid` 同为
+1c483bb1a5dc565afc09c9b76393cbd7a449139f1b71c2176a9bd3e9b5ccb01d；`svg_grid doctor` 57 pass / 0 fail / 1 skip。
+语料逐字节：214 个 `tests/**/*.svg`（全仓 217，另 3 个在 R28 data 里）的 `convert` 输出 + 58 个
+`tests/fixtures/**/*.svg` 的 `plot-grid --width 600 --ncol 1` 输出，与 base
+（/tmp/r50base/target/release/svg_grid @e0c6033，sha256 75def0b8…）0 差异（rc/stdout/stderr/产物字节全比）；
+`--report` 214 个与 `--plan` 58 个同样 0 差异。
+旧证据 R3..R51 顶层跑 47/48 绿，仅 R19 既有失效（已 retire，不计入）。
+证据脚本 111 项全绿（1 skip = 未给 SVG_GRID_OLD_BIN）；指向修前 HEAD（/tmp/r52old，582f6f1）时
+5 项红（a_text / a_other_name / A/plot-grid text message is exact / b_attr / b_unterminated）⇒ 有牙；
+给 SVG_GRID_OLD_BIN 时 114 项全绿。
+
+单文件：src/dom.rs 19027 B、src/convert/dom.rs 13180 B、src/lib.rs 18491 B、src/label_letters.rs 13748 B、
+tests/selftest/textref/mod.rs 16853 B、tests/selftest/textref/undefined.rs 4032 B、
+docs/PITFALLS/round-data/R52/test.py 11744 B，均 ≤20000 B。
+
+不做（登记在报告里，未实现）：docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md 那条
+（classify 取表序第一个命中码）是既有已知问题；R50 评审的 P3-3..P3-8 不在本轮派单范围。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R52/test.py
+# 有牙：指向修复前的二进制，A/B 族必须红（至少 3 条）
+SVG_GRID_BIN=/tmp/r52old/target/debug/svg_grid python3 docs/PITFALLS/round-data/R52/test.py
+# 同时给修前二进制，D 族（修前必须红）不再 skip
+SVG_GRID_OLD_BIN=/tmp/r52old/target/debug/svg_grid python3 docs/PITFALLS/round-data/R52/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R49/run_old_evidence.sh
+"""

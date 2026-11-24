@@ -22,6 +22,30 @@ use std::collections::HashMap;
 use crate::dom::{Element, Node};
 use crate::ink::{parse_number, style_prop, use_target, MAX_USE_DEPTH, NON_RENDERED};
 
+/// Trim a panel letter and collapse internal whitespace runs to one space.
+///
+/// An inherited `data-svg-grid-label` text and an explicit `--labels` entry must
+/// compare the same way: `A`, `" A "` and `"A  B"` are `A`, `A` and `A B`.
+///
+/// Only the four whitespace characters SVG's default `xml:space="default"`
+/// collapses are folded (U+0020, U+0009, U+000A, U+000D). U+00A0 is *content*,
+/// not layout whitespace, and stays significant (R51: `A` and `A&#160;` render
+/// to identical pixels but are different label strings, as in the R48 base).
+/// Zero-width characters are removed instead: U+200B/U+200C/U+200D/U+FEFF add
+/// no ink and no advance, so `A` and `A\u{200b}` are the same letter (R51:
+/// both reference renderers produce byte-identical PNGs).
+pub fn normalize_label(text: &str) -> String {
+    let without_zero_width: String = text
+        .chars()
+        .filter(|c| !matches!(c, '\u{200b}' | '\u{200c}' | '\u{200d}' | '\u{feff}'))
+        .collect();
+    without_zero_width
+        .split([' ', '\t', '\n', '\r'])
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 /// One letter an input already carries: the marker's index and its rendered text.
 pub(crate) struct InheritedLetter {
     pub(crate) marker: String,

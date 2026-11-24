@@ -68,6 +68,53 @@ pub(crate) fn codepoint_label(code: u32) -> String {
     format!("U+{code:04X}")
 }
 
+/// Remove the synthetic byte ranges `quick_xml` writes into escape errors.
+///
+/// They index a fragment this crate synthesized (`&name;`), never the document
+/// (round-data/R52: `&nbsp;` at column 12 was reported as `at 1..5`), so drop
+/// them; the entity name and the reason stay. Text and attribute paths in both
+/// DOMs share this function so the wording cannot drift.
+pub(crate) fn strip_synthetic_range(message: &str) -> String {
+    let message = match range_prefix(message) {
+        Some(len) => &message[len..],
+        None => message,
+    };
+    if let Some(at) = message.find(" at range ") {
+        let tail = &message[at + " at range ".len()..];
+        if let Some(len) = range_len(tail) {
+            if tail[len..].starts_with(':') {
+                let mut stripped = String::with_capacity(message.len());
+                stripped.push_str(&message[..at]);
+                stripped.push_str(&tail[len..]);
+                return stripped;
+            }
+        }
+    }
+    message.to_string()
+}
+
+/// Length of the `at N..M: ` prefix `quick_xml` writes, when `text` starts with it.
+fn range_prefix(text: &str) -> Option<usize> {
+    let rest = text.strip_prefix("at ")?;
+    let len = range_len(rest)?;
+    rest[len..].strip_prefix(": ")?;
+    Some("at ".len() + len + ": ".len())
+}
+
+/// Length of an `N..M` byte range at the start of `text`, when it has one.
+fn range_len(text: &str) -> Option<usize> {
+    let start = text.bytes().take_while(u8::is_ascii_digit).count();
+    if start == 0 {
+        return None;
+    }
+    let rest = text[start..].strip_prefix("..")?;
+    let end = rest.bytes().take_while(u8::is_ascii_digit).count();
+    if end == 0 {
+        return None;
+    }
+    Some(start + "..".len() + end)
+}
+
 /// Decode one reference (`reference` is the text between `&` and `;`) and reject
 /// anything that is not a legal XML 1.0 character.
 ///
@@ -85,13 +132,17 @@ pub(crate) fn decode_reference(reference: &str) -> std::result::Result<String, S
             )),
             None => Ok(decoded.into_owned()),
         },
-        Err(error) => Err(match numeric_reference_codepoint(reference) {
-            Some(code) => format!(
-                "character reference {literal} ({}) is not a legal XML 1.0 character: {error}",
-                codepoint_label(code)
-            ),
-            None => format!("reference {literal} cannot be resolved: {error}"),
-        }),
+        Err(error) => {
+            let message = error.to_string();
+            let error = strip_synthetic_range(&message);
+            Err(match numeric_reference_codepoint(reference) {
+                Some(code) => format!(
+                    "character reference {literal} ({}) is not a legal XML 1.0 character: {error}",
+                    codepoint_label(code)
+                ),
+                None => format!("reference {literal} cannot be resolved: {error}"),
+            })
+        }
     }
 }
 
@@ -227,7 +278,13 @@ fn element_from_start(reader: &Reader<&[u8]>, start: &BytesStart<'_>) -> Result<
         }
         let attr_value = attr
             .decode_and_unescape_value(reader.decoder())
-            .map_err(|error| SvgGridError::Xml(format!("attribute `{attr_name}`: {error}")))?
+            .map_err(|error| {
+                let message = error.to_string();
+                SvgGridError::Xml(format!(
+                    "attribute `{attr_name}`: {}",
+                    strip_synthetic_range(&message)
+                ))
+            })?
             .into_owned();
         if let Some(c) = first_invalid_xml_char(&attr_value) {
             return Err(SvgGridError::Xml(format!(
