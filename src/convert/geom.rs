@@ -47,6 +47,23 @@ pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
         }]);
     }
 
+    // The root `width`/`height` are copied verbatim into the product even when a
+    // `viewBox` decides the canvas, so a non-finite one is an illegal number in
+    // the output no renderer may see. A unit-bearing size (`504pt`, `100%`) is
+    // left to the branches below: it is not a number this gate can judge.
+    for attr in ["width", "height"] {
+        if let Some(value) = root.attr(attr) {
+            if let Some((_, number)) = plain_number(value) {
+                if !number.is_finite() {
+                    return Err(vec![svg_finding(format!(
+                        "root {attr}={value:?} is not a finite number; the composer copies it into \
+                         the product verbatim, where `inf`/`NaN` is not a legal SVG length"
+                    ))]);
+                }
+            }
+        }
+    }
+
     if let Some(view_box) = root.attr("viewBox") {
         let parts: Vec<&str> = view_box.split_whitespace().collect();
         let values: Option<Vec<f32>> = if parts.len() == 4 {
@@ -63,6 +80,12 @@ pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
         };
         let width = values[2];
         let height = values[3];
+        if !values.iter().all(|value| value.is_finite()) {
+            return Err(vec![svg_finding(format!(
+                "viewBox={view_box:?} contains a number that is not finite; the composer would \
+                 write `inf`/`NaN` into the panel box, which no renderer accepts"
+            ))]);
+        }
         if width <= 0.0 || height <= 0.0 {
             return Err(vec![svg_finding(format!(
                 "canvas from viewBox={view_box:?} has non-positive size ({width} x {height}); \
@@ -90,6 +113,8 @@ pub(crate) fn canvas_box(root: &Element) -> Result<CanvasBox, Vec<Finding>> {
              such as `pt` would be rejected"
         ))]);
     };
+    // A non-finite size was already rejected by the root `width`/`height` loop
+    // above (it runs for every document, with or without a `viewBox`).
     if width_value <= 0.0 || height_value <= 0.0 {
         return Err(vec![svg_finding(format!(
             "canvas size must have positive width and height, got {width_value} x {height_value}"
@@ -162,5 +187,54 @@ mod tests {
         );
         assert_eq!(findings.len(), 1);
         assert!(findings[0].reason.contains("viewBox"), "{:?}", findings[0]);
+    }
+
+    /// R65: `1e999` parses to `inf`, so a finite check cannot live in `parse_f32`.
+    /// The composer copies the root `width`/`height` into the product verbatim even
+    /// when a `viewBox` decides the canvas, so a non-finite root size is fatal.
+    #[test]
+    fn non_finite_root_size_is_rejected() {
+        let findings = incompatible(
+            r#"<svg width='1e999' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<circle cx='1' cy='1' r='1'/></svg>"#,
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0].reason.contains("width") && findings[0].reason.contains("1e999"),
+            "{:?}",
+            findings[0]
+        );
+    }
+
+    #[test]
+    fn non_finite_viewbox_is_rejected() {
+        let findings = incompatible(
+            r#"<svg width='100' height='80' viewBox='0 0 1e999 80' xmlns='http://www.w3.org/2000/svg'>
+<circle cx='1' cy='1' r='1'/></svg>"#,
+        );
+        assert_eq!(findings.len(), 1);
+        assert!(
+            findings[0].reason.contains("viewBox") && findings[0].reason.contains("not finite"),
+            "{:?}",
+            findings[0]
+        );
+    }
+
+    #[test]
+    fn non_finite_canvas_without_viewbox_is_rejected() {
+        for value in ["NaN", "-inf", "1e999"] {
+            let source = format!(
+                "<svg width='{value}' height='80' xmlns='http://www.w3.org/2000/svg'>\
+<circle cx='1' cy='1' r='1'/></svg>"
+            );
+            let findings = incompatible(&source);
+            assert_eq!(findings.len(), 1, "{value}: {findings:?}");
+            assert!(
+                findings[0].reason.contains("not a finite number")
+                    || findings[0].reason.contains("not finite"),
+                "{value}: {:?}",
+                findings[0]
+            );
+        }
     }
 }

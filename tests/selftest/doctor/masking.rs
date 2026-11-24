@@ -54,13 +54,18 @@ fn dangling_panel(id: &str) -> String {
     )
 }
 
-/// The W7 panel (`x="inf"` is kept verbatim) plus a path whose `d` carries the
-/// `--labels has ` phrase; the path data itself is kept verbatim too.
+/// The W7 panel (`radius="2 3 4"` is kept verbatim) plus a path whose `d` carries
+/// the `--labels has ` phrase; the path data itself is kept verbatim too. The
+/// overflowing rect supplies W6 so all three codes are in play.
+///
+/// R65: the kept value must be *malformed but finite*; the old `x="inf"` is now
+/// refused by `convert`, so the fixture would fail at the convert stage.
 const W7_MASKED_PANEL: &str = "\
 <svg width=\"100pt\" height=\"80pt\" viewBox=\"0 0 100 80\" xmlns=\"http://www.w3.org/2000/svg\">
 <rect data-panel-box=\"main\" x=\"0\" y=\"0\" width=\"100\" height=\"80\" fill=\"none\" stroke=\"none\"/>
 <g data-scale=\"xy\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"30\" fill=\"#3366cc\"/>
-<rect x=\"inf\" y=\"10\" width=\"20\" height=\"20\" fill=\"#000000\"/>
+<filter id=\"fm\"><feMorphology operator=\"dilate\" radius=\"2 3 4\"/></filter>
+<rect x=\"200\" y=\"10\" width=\"20\" height=\"20\" fill=\"#000000\" filter=\"url(#fm)\"/>
 <path d=\"M0 0 --labels has 3\" fill=\"none\" stroke=\"#000000\"/></g>
 </svg>
 ";

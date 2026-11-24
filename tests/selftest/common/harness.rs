@@ -78,13 +78,19 @@ fill=\"#000000\">y label</text></g>
 </svg>
 ";
 
-/// A tagged panel with one attribute the composer cannot rewrite (`x="inf"`):
-/// the run still succeeds (rc=0) but prints W7, which `doctor` must FAIL.
+/// A tagged panel with one attribute the composer cannot rewrite (`radius="2 3 4"`
+/// is three numbers, not one or two) and content past the canvas edge (W6): the run
+/// still succeeds (rc=0) but prints W7, which `doctor` must FAIL.
+///
+/// R65: the kept value must be *malformed but finite*. It used to be `x="inf"`,
+/// which `convert` now refuses outright (a product may not carry `inf`), so the
+/// fixture died at the convert stage and never reached the composer's W7.
 const W7_PANEL: &str = "\
 <svg width=\"100pt\" height=\"80pt\" viewBox=\"0 0 100 80\" xmlns=\"http://www.w3.org/2000/svg\">
 <rect data-panel-box=\"main\" x=\"0\" y=\"0\" width=\"100\" height=\"80\" fill=\"none\" stroke=\"none\"/>
 <g data-scale=\"xy\"><rect x=\"10\" y=\"10\" width=\"40\" height=\"30\" fill=\"#3366cc\"/>
-<rect x=\"inf\" y=\"10\" width=\"20\" height=\"20\" fill=\"#000000\"/></g>
+<filter id=\"fm\"><feMorphology operator=\"dilate\" radius=\"2 3 4\"/></filter>
+<rect x=\"200\" y=\"10\" width=\"20\" height=\"20\" fill=\"#000000\" filter=\"url(#fm)\"/></g>
 </svg>
 ";
 

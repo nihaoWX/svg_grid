@@ -4,7 +4,7 @@
 R55's review proved the old gate was toothless by feeding it synthetic counts:
 it asserted `>=` against a stale snapshot (190 / 60 / 57 / 73), so deleting 388
 of the 579 tests still went green. R57 changed the gate to **exact equality**
-against the previous round's real counts (598 = 306 + 59 + 233).
+against the previous round's real counts (read from round-data/R19/test.py).
 
 This demo does not touch the repository and does not run `cargo test`: it
 imports `round-data/R19/test.py` as a module, replaces `cargo_test_targets`
@@ -75,16 +75,16 @@ def main():
     rows = [
         # (label, counts, must_be_red)
         ("exact snapshot", dict(snapshot), False),
-        ("total -1 (597)", {**snapshot, LIB: snapshot[LIB] - 1}, True),
-        ("total +1 (599)", {**snapshot, LIB: snapshot[LIB] + 1}, True),
-        ("lib -1 (305)", {**snapshot, LIB: snapshot[LIB] - 1}, True),
-        ("lib +1 (307)", {**snapshot, LIB: snapshot[LIB] + 1}, True),
-        ("main -1 (58)", {**snapshot, MAIN: snapshot[MAIN] - 1}, True),
-        ("main +1 (60)", {**snapshot, MAIN: snapshot[MAIN] + 1}, True),
-        ("selftest -1 (232)", {**snapshot, SELF: snapshot[SELF] - 1}, True),
-        ("selftest +1 (234)", {**snapshot, SELF: snapshot[SELF] + 1}, True),
+        ("total -1", {**snapshot, LIB: snapshot[LIB] - 1}, True),
+        ("total +1", {**snapshot, LIB: snapshot[LIB] + 1}, True),
+        ("lib -1", {**snapshot, LIB: snapshot[LIB] - 1}, True),
+        ("lib +1", {**snapshot, LIB: snapshot[LIB] + 1}, True),
+        ("main -1", {**snapshot, MAIN: snapshot[MAIN] - 1}, True),
+        ("main +1", {**snapshot, MAIN: snapshot[MAIN] + 1}, True),
+        ("selftest -1", {**snapshot, SELF: snapshot[SELF] - 1}, True),
+        ("selftest +1", {**snapshot, SELF: snapshot[SELF] + 1}, True),
         # R55's toothless snapshot: 190/60/57/73 as lower bounds.
-        ("R55 lower-bound snapshot (60/57/73)", {LIB: 60, MAIN: 57, SELF: 73}, True),
+        ("R55 lower-bound snapshot", {LIB: 60, MAIN: 57, SELF: 73}, True),
         ("all tests deleted", {LIB: 0, MAIN: 0, SELF: 0}, True),
     ]
 

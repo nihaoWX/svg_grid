@@ -11,6 +11,7 @@ use std::collections::HashSet;
 use crate::convert::affine::{parse_transform, Affine};
 use crate::convert::dom::{Element, Node};
 use crate::convert::error::Finding;
+use crate::convert::finite;
 use crate::convert::transform::transform_supported;
 
 pub(crate) fn scan(root: &Element) -> Vec<Finding> {
@@ -215,11 +216,16 @@ fn walk_scan(
         _ => {}
     }
 
-    for bad in non_numeric_geometry(element) {
+    for bad in finite::unusable(element) {
+        let detail = match bad.kind {
+            finite::Unusable::NotANumber => "is not a plain number",
+            finite::Unusable::NotFinite => "is not a finite number",
+        };
         push!(
             element.name.as_str(),
             format!(
-                "geometry attribute {bad} is not a plain number, so the composer cannot rewrite it"
+                "geometry attribute {}={:?} {detail}, so the composer cannot rewrite it",
+                bad.attr, bad.value
             ),
         );
     }
@@ -239,50 +245,6 @@ fn walk_scan(
             );
         }
     }
-}
-
-/// Attributes the composer parses with `geom::parse_f32`. Anything present but
-/// not a plain number (after `%` resolution) would make the composer bail out,
-/// so we fail closed instead of emitting a broken file.
-fn non_numeric_geometry(element: &Element) -> Vec<String> {
-    let geometry: &[&str] = match element.name.as_str() {
-        "circle" => &["cx", "cy", "r"],
-        "ellipse" => &["cx", "cy", "rx", "ry"],
-        "text" => &["x", "y"],
-        "use" => &["x", "y", "width", "height"],
-        "line" => &["x1", "y1", "x2", "y2"],
-        "rect" => &["x", "y", "width", "height"],
-        "image" => &["x", "y", "width", "height"],
-        _ => &[],
-    };
-
-    let mut bad = Vec::new();
-    for attr in geometry
-        .iter()
-        .copied()
-        .chain(std::iter::once("stroke-width"))
-    {
-        if let Some(value) = element.attr(attr) {
-            if value.trim().parse::<f32>().is_err() {
-                bad.push(attr.to_string());
-            }
-        }
-    }
-
-    if matches!(element.name.as_str(), "polyline" | "polygon") {
-        if let Some(points) = element.attr("points") {
-            'outer: for pair in points.split_whitespace() {
-                if let Some((x, y)) = pair.split_once(',') {
-                    if x.trim().parse::<f32>().is_err() || y.trim().parse::<f32>().is_err() {
-                        bad.push("points".to_string());
-                        break 'outer;
-                    }
-                }
-            }
-        }
-    }
-
-    bad
 }
 
 #[cfg(test)]

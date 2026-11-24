@@ -222,6 +222,22 @@ def source_svg(body, policy="xy", width=100, height=80):
             % (width, height, width, height, WHITE, policy, body))
 
 
+def panel_svg(body, policy="xy", width=100, height=80):
+    """The same body, but already tagged: `plot-grid` composes it directly.
+
+    R65 made `convert` refuse a non-finite number, so an untagged source with
+    `1e999` never reaches the composer any more. The composer's own W7 policy
+    (keep the value verbatim, never write `inf`/`NaN`) is still reachable for a
+    panel that already carries the tag protocol — that is what this helper is
+    for.
+    """
+    return ('<svg xmlns="http://www.w3.org/2000/svg" width="%d" height="%d" '
+            'viewBox="0 0 %d %d">%s<rect data-panel-box="main" x="0" y="0" width="%d" '
+            'height="%d" visibility="hidden" pointer-events="none"/>'
+            '<g data-scale="%s">%s</g></svg>'
+            % (width, height, width, height, WHITE, width, height, policy, body))
+
+
 def oracle_svg(body, sx, sy, width=100, height=80, canvas=(400, 400)):
     """The source body wrapped in the transform the cell really applies."""
     cw, ch = canvas
@@ -583,17 +599,29 @@ def family_f7():
         old_rc, _ = compose(BEFORE, src, old_out, 200, verbose=True)
         new_rc, err = compose(BIN, src, new_out, 200, verbose=True)
         old_svg = old_out.read_text() if old_out.is_file() else ""
-        new_svg = new_out.read_text() if new_out.is_file() else ""
         check("inf" in old_svg, "%s: before binary writes inf (teeth)" % name,
               attr_in(old_svg, tag, attr_name))
-        check(new_rc == 0, "%s: rc stays 0" % name, "rc=%d" % new_rc)
-        check(attr_in(new_svg, tag, attr_name) == value,
-              "%s: %s kept byte for byte" % (name, attr_name),
-              attr_in(new_svg, tag, attr_name))
-        check("inf" not in new_svg and "NaN" not in new_svg,
-              "%s: no inf/NaN in the output" % name)
-        check("non-finite" in err and value in err, "%s: W7 names the value" % name,
-              err.strip().splitlines()[-1][:160] if err.strip() else "rc=%d" % old_rc)
+        # R65: the untagged source is now refused by the in-memory converter.
+        check(new_rc == 2 and not new_out.is_file(),
+              "%s: R65 起未打 tag 的源被 convert 拒绝（rc=2，不写产物）" % name,
+              "rc=%d wrote=%s" % (new_rc, new_out.is_file()))
+        check(attr_name in err and value in err and "not a finite number" in err,
+              "%s: 拒绝文案点名属性与值" % name,
+              err.strip().splitlines()[-1][:160] if err.strip() else "")
+        # The composer's W7 policy is unchanged for an already-tagged panel.
+        tagged = tmp(name + "-tagged.svg")
+        tagged.write_text(panel_svg(body))
+        tagged_out = tmp(name + "-tagged-out.svg")
+        tagged_rc, tagged_err = compose(BIN, tagged, tagged_out, 200, verbose=True)
+        tagged_svg = tagged_out.read_text() if tagged_out.is_file() else ""
+        check(tagged_rc == 0 and attr_in(tagged_svg, tag, attr_name) == value,
+              "%s: 已打 tag 的面板仍把 %s 保原文" % (name, attr_name),
+              attr_in(tagged_svg, tag, attr_name))
+        check("inf" not in tagged_svg and "NaN" not in tagged_svg,
+              "%s: 已打 tag 的产物里没有 inf/NaN" % name)
+        check("non-finite" in tagged_err and value in tagged_err,
+              "%s: W7 仍点名该值" % name,
+              tagged_err.strip().splitlines()[-1][:160] if tagged_err.strip() else "")
         row(name, "inf", "verbatim", "attribute oracle", "d1", "n/a")
 
 

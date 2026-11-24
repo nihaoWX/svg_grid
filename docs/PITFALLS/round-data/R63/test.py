@@ -46,8 +46,11 @@ W7 = "could not be rewritten, kept verbatim"
 PANEL = TMP / "panel.svg"
 W7SVG = TMP / "w7.svg"
 # Inlined on purpose: a tracked `*.svg` under round-data/ would change the whole
-# repository's svg count that R52/test.py (family E) pins, and would put a
-# fixture with a non-finite stroke-width back into the corpus R63 measures.
+# repository's svg count that R52/test.py (family E) pins.
+# R65: the second kept value is `radius="2 3 4"`, not `stroke-width="1e999"` — a
+# non-finite number is now refused by `convert` outright, so the fixture would die
+# before reaching the composer's W7. Three numbers where one or two are required is
+# still finite, still unrewritable, and still echoed verbatim (two attributes).
 PANEL.write_text(
     '<svg width="100" height="80" viewBox="0 0 100 80" '
     'xmlns="http://www.w3.org/2000/svg">\n'
@@ -64,12 +67,14 @@ W7SVG.write_text(
     'patternTransform="wobble(1)"><rect width="10" height="10" '
     'fill="#cccccc"/></pattern>\n'
     '<filter id="fb"><feGaussianBlur stdDeviation="2 3 4"/></filter>\n'
+    '<filter id="fm"><feMorphology operator="dilate" radius="2 3 4"/></filter>\n'
     '</defs>\n'
     '<rect data-panel-box="main" x="0" y="0" width="100" height="80" '
     'fill="none" stroke="none"/>\n'
     '<rect x="10" y="10" width="30" height="20" fill="url(#pw)" '
-    'filter="url(#fb)" stroke-width="1e999"/>\n'
-    '<rect x="50" y="10" width="30" height="20" fill="#000000"/>\n'
+    'filter="url(#fb)" stroke-width="2"/>\n'
+    '<rect x="50" y="10" width="30" height="20" fill="#000000" '
+    'filter="url(#fm)"/>\n'
     '</svg>\n',
     encoding="utf-8")
 PASSED, FAILED = [], []

@@ -68,9 +68,13 @@ W9_BODY = (
     '<g data-scale="xy"><rect x="10" y="10" width="40" height="30" '
     'fill="url(#{ID})"/></g>'
 )
+# R65: the W7 cause must stay *finite* (`convert` now refuses `x="inf"` outright,
+# so the fixture would die at the convert stage). `radius="2 3 4"` is three numbers
+# where one or two are required: finite, unrewritable, still echoed verbatim.
 W7_BODY = (
     '<g data-scale="xy"><rect x="10" y="10" width="40" height="30" fill="#3366cc"/>'
-    '<rect x="inf" y="10" width="20" height="20" fill="#000000"/>'
+    '<filter id="fm"><feMorphology operator="dilate" radius="2 3 4"/></filter>'
+    '<rect x="200" y="10" width="20" height="20" fill="#000000" filter="url(#fm)"/>'
     '<path d="M0 0 --labels has 3" fill="none" stroke="#000000"/></g>'
 )
 
@@ -161,7 +165,8 @@ def main():
             tmp,
             "w7clean",
             '<g data-scale="xy"><rect x="10" y="10" width="40" height="30" fill="#3366cc"/>'
-            '<rect x="inf" y="10" width="20" height="20" fill="#000000"/></g>',
+            '<filter id="fm"><feMorphology operator="dilate" radius="2 3 4"/></filter>'
+            '<rect x="200" y="10" width="20" height="20" fill="#000000" filter="url(#fm)"/></g>',
         )
         clean_result, payload = doctor(BIN, clean)
         check(

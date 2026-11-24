@@ -3,12 +3,12 @@
 
 Families
   A  the R19 snapshot is EXACT: `BASELINE` / `COUNTS` in round-data/R19/test.py
-     equal what a real `cargo test --offline` prints this round (711 = 419 + 59 + 233),
+     equal what a real `cargo test --offline` prints this round (724 = 432 + 59 + 233),
      and the assertions use `==`. A lower bound (`>=`) is the R55 defect: it tolerated
      deleting 388 of 579 tests and still went green (R55 review P1-1).
   B  the gate has teeth: `gate_demo.py` feeds synthetic count tables into R19's
      `family_two()` and every table except the exact snapshot must be RED
-     (597/599 totals, 305/307 lib, 58/60 main, 232/234 selftest, R55's 190 shape,
+     (total ± 1, lib ± 1, main ± 1, selftest ± 1, R55's 190 shape,
      all tests deleted).
   C  `temp_path()` is unique per process: 8 concurrent runs that all report the same
      pid (an `LD_PRELOAD` shim pins `getpid()`), run the same test with one shared
@@ -197,7 +197,7 @@ def family_a():
             f"snapshot {snapshot[target]} vs measured {counts[target]}",
         )
     check(
-        sum(counts.values()) == baseline == 711,
+        sum(counts.values()) == baseline == 724,
         "A/total snapshot is exact this round",
         f"snapshot {baseline} vs measured {sum(counts.values())}",
     )
@@ -220,15 +220,15 @@ def family_b():
             rows[found.group("label").strip()] = (found.group("verdict"), int(found.group("red")))
     expected = {
         "exact snapshot": "GREEN",
-        "total -1 (597)": "RED",
-        "total +1 (599)": "RED",
-        "lib -1 (305)": "RED",
-        "lib +1 (307)": "RED",
-        "main -1 (58)": "RED",
-        "main +1 (60)": "RED",
-        "selftest -1 (232)": "RED",
-        "selftest +1 (234)": "RED",
-        "R55 lower-bound snapshot (60/57/73)": "RED",
+        "total -1": "RED",
+        "total +1": "RED",
+        "lib -1": "RED",
+        "lib +1": "RED",
+        "main -1": "RED",
+        "main +1": "RED",
+        "selftest -1": "RED",
+        "selftest +1": "RED",
+        "R55 lower-bound snapshot": "RED",
         "all tests deleted": "RED",
     }
     for label, want in expected.items():

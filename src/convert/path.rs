@@ -239,6 +239,40 @@ fn tokenize(d: &str) -> Result<Vec<(u8, Vec<f32>)>, String> {
     Ok(segments)
 }
 
+/// Every number in `d` that parses to a non-finite `f32` (`1e999` → `inf`).
+///
+/// The scan gate needs this *before* flattening: [`read_number`] accepts an
+/// overflowing exponent, so `d="M 1e999 0 L 10 10"` flattens to `inf`
+/// coordinates and the product carries a number no renderer may see. Command
+/// letters and `Z`/`z` are skipped by the same tokenizer, so a legal command
+/// sequence is never reported.
+pub(crate) fn non_finite_numbers(d: &str) -> Vec<String> {
+    let bytes = d.as_bytes();
+    let mut index = 0usize;
+    let mut found = Vec::new();
+    while index < bytes.len() {
+        let byte = bytes[index];
+        if byte.is_ascii_alphabetic() {
+            index += 1;
+            continue;
+        }
+        if byte.is_ascii_whitespace() || byte == b',' {
+            index += 1;
+            continue;
+        }
+        let start = index;
+        match read_number(bytes, &mut index) {
+            Some(value) if !value.is_finite() => {
+                found.push(d[start..index].to_string());
+            }
+            Some(_) => {}
+            // Not a number at all: `tokenize` reports it with its own wording.
+            None => index = start + 1,
+        }
+    }
+    found
+}
+
 fn skip_separators(bytes: &[u8], index: &mut usize) {
     while *index < bytes.len() && (bytes[*index].is_ascii_whitespace() || bytes[*index] == b',') {
         *index += 1;

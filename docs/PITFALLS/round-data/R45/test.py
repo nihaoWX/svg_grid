@@ -69,9 +69,14 @@ FIXTURES = {
   <rect x="-10" y="10" width="40" height="30" fill="#000000"/>
 </svg>
 """,
+    # R65: the kept value must be malformed but *finite* — `convert` now refuses a
+    # non-finite number outright (it used to pass through to the composer's W7), so
+    # the old `x="inf"` died at the convert stage. `radius="2 3 4"` is three numbers
+    # where one or two are required: finite, unrewritable, and still echoed verbatim.
     "w7": """<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" viewBox="0 0 100 80">
   <rect x="10" y="10" width="40" height="30" fill="#000000"/>
-  <rect x="inf" y="10" width="20" height="20" fill="#000000"/>
+  <filter id="fm"><feMorphology operator="dilate" radius="2 3 4"/></filter>
+  <rect x="10" y="50" width="20" height="20" fill="#000000" filter="url(#fm)"/>
 </svg>
 """,
     # W9 must reach the composer: the converter refuses a dangling reference in a

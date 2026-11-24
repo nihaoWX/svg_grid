@@ -54,6 +54,7 @@ mod base64;
 pub mod cli;
 mod dom;
 mod error;
+mod finite;
 mod geom;
 mod options;
 mod path;

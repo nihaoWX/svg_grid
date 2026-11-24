@@ -1,0 +1,62 @@
+id = "R65"
+date = "2026-11-25"
+verdict = "修复"
+
+family = [
+  "P1：`convert --check` 对非有限数判 compatible —— 判据是 `value.trim().parse::<f32>().is_err()`，而 `1e999` 解析成功得 `inf`、`NaN` 解析成功得 `NaN`，所以两者都漏判；写模式 rc=0 且把非法数值原样写进产物（`d` 甚至被展平成 `points=\"inf,NaN 10,10\"`）。修法：新增 `src/convert/finite.rs`，判据改成「解析失败 或 !is_finite()」，并覆盖 circle/ellipse/text/use/line/rect/image 的几何属性、polyline|polygon 的 `points`、`path` 的 `d`（逐 token，命令字母与 Z/z 不误报）、`stroke-width`、`font-size`、`textLength`、`<stop offset>`、fe* 的 stdDeviation/dx/dy/radius/baseFrequency/scale、以及内联 `style` 里的长度 token。",
+  "P1：`path` 的 `d` 必须逐 token 判，不能整串 parse：`M 1e999 0 L 10 10` 里只有第一个数是 inf，命令字母必须跳过。新增 `src/convert/path.rs::non_finite_numbers`，复用已有的 `read_number`，遇到畸形文本不报（那是 `tokenize` 的职责，保持既有 `failed to flatten <path d=…>: missing argument for path command 'M'` 文案不变）。",
+  "P1：根 `<svg>` 的 width/height 与 viewBox 也是入口：composer 在 viewBox 决定画布时仍把根 width/height 原样抄进产物，所以 `width=\"1e999\"` 即使有合法 viewBox 也会写出 `inf`。`src/convert/geom.rs::canvas_box` 加三处 fail-closed：根 width/height 非有限、viewBox 四个数里有非有限、无 viewBox 时画布尺寸非有限（第三处实测不可达，已删并留注释说明由第一处兜住）。",
+  "P1：R19 的计数门只钉「有几条 `#[test]`」，把某条函数体换成 `{}` 计数不变、照样全绿。新增 `docs/PITFALLS/round-data/R65/gate_assertions.py`：逐条读 `src/**/*.rs` 与 `tests/**/*.rs` 里每个 `#[test]` 的函数体（花括号配对，跳过字符串/raw string/字符字面量/生命周期/注释），要求至少一次断言式调用（assert*/debug_assert*/panic!/unreachable! 宏，或 `.expect(`/`.unwrap(`/`.unwrap_err(`，或调用一个自身含断言宏的树内函数——只跟一跳），并禁止 `#[ignore]`；失败时点名「哪个文件、哪条测试」。R19/test.py 的 family_two 在计数检查之后调用它。",
+  "P1：W7 的既有 fixture 用 `x=\"inf\"` 触发「值被保原文」，而 doctor 是**在进程内**调转换器的（`src/cli/doctor/run.rs`），所以新门一上，这些 fixture 在 convert 阶段就 rc=1，W7 根本到不了。断言不动，只把触发值换成「畸形但有限」的 `feMorphology radius=\"2 3 4\"`（三个数，要求一或两个）：`tests/selftest/common/harness.rs` 的 `W7_PANEL`、`tests/selftest/doctor/masking.rs` 的 `W7_MASKED_PANEL`、R45 的 `FIXTURES[\"w7\"]`、R53 的 `W7_BODY`/`w7clean`、R63 的 `W7SVG`。R63 的 W7SVG 是唯一走 `auto_convert` 的（未打 panel box），它原来的 `stroke-width=\"1e999\"` 必须去掉。",
+  "登记不改（C）：obb clipPath body 里引用 pattern 的残留（R62 记 16000/255、R64 复核）本轮给出一次判定实验：**建不出有判别力的 fixture**。理由实测——(a) 把 clip body 的填充从纯色换成 pattern，d1render 的产物与纯色对照 xor **0/0**（pattern 在 obb clip body 里对 d1render 完全无影响）；(b) 两台渲染器在**不含 pattern** 的纯色 obb clip 对照上就已经不一致（d1render ink 4000 / cairosvg ink 8000，cairosvg 2.9.1 把 `clip-path` 当 no-op，连 userSpace 的 `simple.svg` 都整块画红）；(c) 因此 pattern 版的跨渲染器差异与纯色对照完全相同，0/0 形式不存在，该残留对两台 oracle 都没有判别力。结论：只登记，不改代码；语料 0 命中。",
+  "不在本轮：`tspan` 视觉序、W6 假阳性、`--rel-widths` 0 宽、obb clipPath 的实现（C 只要一次判定实验 + 口径）、composer 侧 `src/path/parse.rs` 的同类非有限数入口（本轮只收 convert 门；composer 侧由 R60/R61 的 W7 口径覆盖）。",
+]
+
+closures = [
+  { finding = "R65-F1", tier = "代码" },
+  { finding = "R65-F2", tier = "代码" },
+  { finding = "R65-F3", tier = "代码" },
+  { finding = "R65-F4", tier = "代码" },
+  { finding = "R65-F5", tier = "检查" },
+  { finding = "R65-F6", tier = "检查" },
+  { finding = "R65-F7", tier = "代码" },
+  { finding = "R65-F8", tier = "代码" },
+  { finding = "R65-F9", tier = "代码" },
+  { finding = "R65-F10", tier = "代码" },
+  { finding = "R65-F11", tier = "代码" },
+  { finding = "R65-F12", tier = "登记" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61", "R62", "R62b", "R63", "R64", "R64b",
+]
+touched = [
+  { round = "R19", why = "测试总数 711→724（BASELINE 与 COUNTS.lib 419→432；R65 的 finite.rs 10 条 + geom.rs 3 条），并在 family_two 末尾加一条调用 R65 的 gate_assertions.py" },
+  { round = "R57", why = "第 6/200 行写死的总数 711→724（724 = 432 + 59 + 233）；gate_demo.py 的行标签去掉过期数字" },
+  { round = "R64b", why = "BASELINE 的 lib 419→432（同一份精确计数）" },
+  { round = "R45", why = "FIXTURES[\"w7\"] 的触发值从 x=\"inf\" 换成 feMorphology radius=\"2 3 4\"（断言不动；新门让 x=\"inf\" 在 convert 阶段就 rc=1）" },
+  { round = "R53", why = "W7_BODY 与 w7clean 的触发值同上替换（断言不动）" },
+  { round = "R63", why = "W7SVG 的触发值同上替换，并去掉 stroke-width=\"1e999\"（该 fixture 未打 panel box，会走 auto_convert）" },
+]
+
+note = """
+为什么认定同类：R63 评审 P2 已写明「convert --check 对非有限值仍判 compatible」；根因是判据只问「能不能 parse」，没问「parse 出来是不是有限数」。
+根因与建议修法（已证）：`1e999`/`NaN`/`inf` 都能 parse 成 f32，`is_err()` 因此为假；改成 `!is_finite()` 即闭合，且 `1e-45`/`0`/`-0`/`.5`/`1.`/`+1`/`1E3`/`5px`/`50%` 全部仍合法（实测 16 个合法对照 rc=0 且产物逐字节不变）。
+怎么修才不弄坏前面：新门只加在 convert 的 scan 阶段，composer 的 W7 口径（畸形但有限的值保原文）不动；语料 214 个 convert（含 --report）与 58 个 fixture 的 plot-grid（含 --plan）对 base e0c6033 逐字节 0 差。
+口径：非有限数 = `inf`/`-inf`/`NaN`（任何拼写）或溢出成 inf 的十进制（`1e999`）；单位后缀 `px`/`%` 先剥再判，`font-size`/`textLength`/`<stop offset>` 只判数字前缀（`40px` 合法）。
+"""
+
+how_to_run = """
+cd <repo> && python3 docs/PITFALLS/round-data/R65/test.py        # rc=0 全过（58 checks；A/B/C/D/E/T 六族）
+SVG_GRID_PIN_BIN=/tmp/r65_before_bin python3 docs/PITFALLS/round-data/R65/test.py   # 有牙：A 族 18 条必须红（rc=1）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R65/test.py   # 缺二进制必须 rc=2（不静默 skip）
+
+修前二进制（本轮 code_before bfe5e12 的构建，sha256 0ff7d7750e3d5c4af6ab0ae6ec9ddcf6e460fc4c8421606d276778eb392f7f03）：
+git worktree add --detach /tmp/r65base bfe5e12
+cd /tmp/r65base && cargo build --release --offline && cp target/release/svg_grid /tmp/r65_before_bin
+"""
