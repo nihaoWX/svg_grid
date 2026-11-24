@@ -130,8 +130,9 @@
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
 1. **滤镜图元长度不随面板缩放**：门控是 `primitiveUnits`（默认 `userSpaceOnUse` ⇒ 要缩），缺省
-   `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。同族：filter 自身没写区域时
-   `rewrite_rect` 补 0 ⇒ 只有 `href` 的 filter（继承区域）与无区域 filter 内容整块消失（R46 起）。
+   `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。同族：filter/mask 自身没写区域时
+   `rewrite_rect` 补 0 ⇒ 只有 `href` 的 filter（继承区域，R46 起）、无区域 filter 与无区域 mask（均 pre-existing）
+   内容整块消失。
 2. **定义体长度量**：定义体 `<text>` 的 `font-size`（`1512`）、viewBox/obb 父 pattern 下内层定义多缩一次
    （`12160/25280/27200`）。`patternTransform`/`gradientTransform` 已由 R55 收口；嵌套 `<pattern>` 与
    pattern 外 `clip-path` 实测 `xor 0`。
