@@ -32,7 +32,8 @@
 | R51 字母查重剩余缺口（嵌套 marker 重复计数、`<defs>`+`<use>`、NBSP、关键字大小写、`fill="none"`） | ✅ 已修（收集器抽成 `label_letters.rs`；关键字大小写按渲染器保持敏感，只剥 `!important`） | `bae128d`；R51 |
 | R52 R50 评审的账本/文案收尾（R47 行号被误改、R50 meta 语料数、假 range `at 1..5`、`lib.rs` 体积） | ✅ 已修（`strip_synthetic_range` 唯一实现；append-only 更正 R47 真实行号；`normalize_label` 搬进 `label_letters.rs`） | `6d32738`；R52 |
 | R53 `classify` 取表序第一个命中码（W9/W7 门禁可被用户内容打成 PASS）+ 短语副本 + `R17` 死变量 | ✅ 已修（`classify` 收集全部命中码；短语单一来源；补记 R45 行号漂移） | `a0025cf`；R53 |
-| R54 字母判据的误伤面（`url(#missing)`、`fill-opacity=0`、祖先 opacity/stroke-width 继承、style 级联） | ⏳ 进行中 | R54 |
+| R54 字母判据的误伤面（`url(#missing)`、`fill-opacity=0`、祖先 opacity/stroke-width 继承、style 级联、`<symbol>` 经 `<use>`、嵌套文本切口） | ✅ 已修（新增 `label_paint.rs` 继承五字段 + url 可解析性判墨；`style_prop` 剥注释/后声明胜/`!important` 优先） | `3bb8516`；R54 |
+| R55 `patternTransform` / `gradientTransform` 里的长度量不跟随面板缩放 | ⏳ 进行中 | R55 |
 
 ## 1. 先读什么（按顺序）
 
@@ -130,7 +131,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 528**：284 lib + 59 bin + 185 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 560**：294 lib + 59 bin + 207 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -182,8 +183,8 @@
    R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用；
    R48 收掉字母查重的漏判与误伤；R49 收掉嵌套定义克隆的重复 id；R50 收掉非 XML 1.0 字符被解码进产物；
    R51 收掉字母查重的剩余缺口；R52 收掉诊断文案的合成偏移与账本行号；R53 收掉告警码遮蔽。
-   **进行中 = R54**（字母判据的误伤面：不可解析 `url()`、opacity/stroke-width 继承、style 级联）。
-4. 交付前全量复核：`cargo test`（单 crate **528**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   **进行中 = R55**（`patternTransform`/`gradientTransform` 的长度量：共轭 `S·P·S⁻¹`）。
+4. 交付前全量复核：`cargo test`（单 crate **560**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
