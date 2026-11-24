@@ -41,7 +41,7 @@
 | R60 R59 评审 P1：光源 `z`/`pointsAtZ` 该用 RMS 而非几何平均、光源 `x/y` 只乘不平移、obb 下光源改写被跳过 | ✅ 已修（spot 4×5 37011/206→0、point 95008/2→0、obb 100170/242→0、两 cell 5277/238→0） | `72a05e7`；R60 |
 | R61 R60 评审 P2：输入有限但乘积溢出仍写 `inf`/`NaN`（`x="1e38"` 配 s=8 ⇒ `x="inf" width="NaN"`） | ✅ 已修（`scaled_finite` 判乘积；溢出一律逐字节保原文 + W7；原子组保 rect 四边/cx cy/points/d/filter 数） | `9dc3c05`；R61 |
 | R62 R61 评审：内容域第二条轴（verbatim body 出边不传 policy、多域按域克隆）+ `<ellipse>` 从未被缩放 + 账本补 modify | ✅ 已修（`Slot::{UserSpace,Verbatim}`、按域克隆 `--svg-grid-verbatim`、href 按自身 body 域选靶；`rewrite_ellipse`；评审 7876c46/cc66d4b FAIL → 终版 PASS 有条件） | `b6f6741`；R62 |
-| R63 R62 评审：W7 默认不可见（值被保原文时 stderr 0 字节、rc=0 ⇒ 静默错图）+ 测试硬化（椭圆 `ry` 变异存活、三层 gradient-href 断言被削） | ✅ 已修（`emit` 按 `classify` 逐行取码，只放行含 W7 的行；其余码与 `note:` 仍静音、footer 文案不变；214+58 成功运行仍 0 字节） | `fea3fc4`；R63 |
+| R63 R62 评审：W7 默认不可见（值被保原文时 stderr 0 字节、rc=0 ⇒ 静默错图）+ 测试硬化（椭圆 `ry` 变异存活、三层 gradient-href 断言被削） | ✅ 已修（`emit` 按 `classify` 逐行取码，只放行含 W7 的行；其余码与 `note:` 仍静音、footer 文案不变；214+58 成功运行仍 0 字节。评审 PASS 有条件：仅 `plot-grid` 路径；`convert --check` 对非有限值仍判 compatible ⇒ Known Issues） | `fea3fc4`；R63 |
 | R64 `<use>` 引用的 `<defs>` 普通元素不被缩放（`<defs><rect width="10">` 经 `<use>` 仍 10 ⇒ xor 300/255）+ `<foreignObject>`/`<switch>` 被 `convert` 静默放行 | ⏳ 进行中 | R64 |
 
 ## 1. 先读什么（按顺序）

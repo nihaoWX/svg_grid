@@ -15,15 +15,16 @@
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W6/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变），
-  **W7（值被原文保留）例外：非 verbose 也打**（R63：数字与几何不一致属必要信息）；
+  **W7（值被原文保留）例外：`plot-grid` 路径非 verbose 也打**（R63；`convert` 不缩放，其 `--check`
+  对 `stroke-width="1e999"` 仍判 compatible ⇒ 见 Known Issues）；
   **W3（给已带字母的输入再加非空字母）rc=2**、**W8（缺标签字体族）rc=3**，两者都**不写产物**、不依赖 `--verbose`；
   正常路径 stderr 0 字节；`convert` 子命令同样受静音控制（契约见 `ARCHITECTURE/warnings.md`）。
 - **`src/convert/`（R42 起并入主库，子命令 `svg_grid convert`）**：R `svglite`/matplotlib/`pdftocairo -svg`
   三种来源可入流水线；`<path>` 出形态决策表、`clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、
   `style` 百分比解析、`<defs>` mask/marker/filter 与 pattern 单位语义（R37–R41）。
   **D1 已修**：≥3 子路径的填充 path 改为展平多轮廓 `<path>`（M/L/Z），字形孔不再填死。
-- **成品交付前检查**：`scripts/check_deliverable.py`（薄壳 + `deliverable_checks/` 包）两条检查
-  （死白带 / 外框 2 px 墨迹 = 0），`--selftest` 可自证；判据的**唯一来源**（见 `ARCHITECTURE/check-deliverable.md`）。
+- **成品交付前检查**：`scripts/check_deliverable.py`（薄壳 + `deliverable_checks/` 包）两条检查（死白带 /
+  外框 2 px 墨迹 = 0），`--selftest` 自证；判据唯一来源见 `ARCHITECTURE/check-deliverable.md`。
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
@@ -41,10 +42,10 @@
 
 - 2026-11-24 **R63 W7 默认可见 + 测试硬化**：`warnings.emit` 改用 `classify` 逐行取码，只放行含 W7 的行
   （其余码与 `note:` 仍静音、footer 文案不变）；W7 触发默认 stderr 263 B、rc/产物字节不变，214+58 成功仍 0 字节。补 R62 评审两处承重测试（椭圆 `ry` 各向异性、gradient 三层 `href`）。测试 699→701，
-  提交 `fea3fc4`+`8d0d15b`（fixture 改为运行时内联，不进全仓 svg 计数）。
+  提交 `fea3fc4`+`8d0d15b`（fixture 运行时内联，不进全仓 svg 计数）。
 - 2026-11-24 **R62 内容域第二条轴 + `<ellipse>`**：body 已被渲染器映射的定义（pattern/marker 有 viewBox、
   `patternContentUnits`/mask/filter 为 obb）其出边引用的定义**完全不缩**；user space 与 verbatim 共用时按域克隆
-  （`--svg-grid-verbatim` 排最后、撞名加序号），单域不克隆、克隆沿引用图传递。八组 12160/32000/31200/800/
+  （`--svg-grid-verbatim` 后缀、撞名加序号），单域不克隆、克隆沿引用图传递。八组 12160/32000/31200/800/
   1376/16000/18720 全 xor 0；`href` 继承的定义按**自己 body 的域**选靶（3 层传递）。补 `<ellipse>`
   （`cx/cy` 成对、`rx` 按 x、`ry` 按 y、单半径补写成对、`--check` 拒非数值）。测试 674→699，提交
   `7876c46`+`cc66d4b`+`45dc842`+`b6f6741`；评审 PASS 有条件（见 Known Issues 2–3）。
@@ -53,11 +54,11 @@
   （100170/242→0）、图元子区域按 units 改写（16984→0）；R61 把乘积非有限也**逐字节保原文 + W7**
   （`scaled_finite` 统一 8 处，按原子组保 rect 四边、`cx cy`、`points`、`d`、filter 1–2 数）。测试 643→674，
   提交 `72a05e7`、`9dc3c05`。
-- 2026-11-24 **R57–R59 证据卫生 + 滤镜图元/定义体字号/光源双值**：R57 把 R19 用例数从下限改回**精确相等**、
-  `temp_path()` 加纳秒 `process_tag()` 修 pid 复用假红、R55 语料 220→214（`140ed0a`+`a724c08`）；R58 新增
-  `filters.rs`，图元长度按 `primitiveUnits` 门控（各向异性写**双值** `8 10`⇒0，几何平均 `8.944`⇒69016 弃用）、
-  定义体 `font-size` 随面板缩、filter/mask 不再凭空补 0 区域（`c4c522f`）；R59 修 `feSpotLight` 位置与单轴
-  双值（`--svg-grid` 缺因子按 1.0）、畸形长度回 rc=0+W7、obb `clipPath` 字号不缩（`081293e`）。测试 598→643。
+- 2026-11-24 **R57–R59 证据卫生 + 滤镜图元/字号/光源双值**：R57 把 R19 用例数改回**精确相等**、`temp_path()`
+  加纳秒 `process_tag()` 修 pid 复用假红、R55 语料 220→214（`140ed0a`+`a724c08`）；R58 新增 `filters.rs`，
+  图元长度按 `primitiveUnits` 门控（各向异性写**双值** `8 10`⇒0，几何平均 `8.944`⇒69016 弃用）、定义体
+  `font-size` 随面板缩、filter/mask 不再凭空补 0 区域（`c4c522f`）；R59 修 `feSpotLight` 位置与单轴双值、
+  畸形长度回 rc=0+W7、obb `clipPath` 字号不缩（`081293e`）。测试 598→643。
 - 2026-11-24 **R55–R56 paint server 共轭 + 字母判据收口**：R55 新增 `src/transform/transforms.rs`，按
   `T' = S·T·S⁻¹` 共轭 `patternTransform`/userSpace `gradientTransform`（等向保关键字、各向异性纯平移写
   `translate`、带旋转写 `matrix`）；R56 同属性多条 `!important` 取**文档序第一个**（跟 resvg 0.47）、
@@ -124,49 +125,49 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
-1. **滤镜图元长度的残余**（R58 按 `primitiveUnits` 门控、R59 修光源与单轴、R60 光源进 user space）：只剩
-   各向异性 `feImage`（640/127）、`feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值
-   无法精确）登记不修；`feConvolveMatrix`/`feDistantLight` 不动。
-2. **内容域与图元的残余**（R62 已收口主面）：obb `clipPath` body 引用 pattern 仍 `16000/255`（本轮**明确登记
-   不修**；评审给出可 0/0 的手工候选 ⇒ 缺的是"正确语义"判定，不是无解）；单轴 `data-scale` 配 `rotate`/`stroke`
-   的 `<ellipse>` 仍错（`920/405261`、`881/305344`），但既有 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制、
-   非本轮引入。
-3. **`<foreignObject>`/`<switch>` 被 `convert` 静默放行**：`convert --check` 说 compatible、stderr 0 字节、产物
+1. **滤镜图元长度的残余**（R58 门控、R59/R60 光源与单轴）：只剩各向异性 `feImage`（640/127）、
+   `feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值无法精确）登记不修。
+2. **`convert --check` 对非有限数值仍判 compatible**：`stroke-width="1e999"` 的未打标输入 ⇒ rc=0、stderr 0 B、
+   原样保留，随后 `plot-grid` 才打 W7 ⇒ "compatible" 不等于"合成后几何一致"，待加非有限检测。
+3. **内容域与图元的残余**（R62 收口主面）：obb `clipPath` body 引用 pattern 仍 `16000/255`（不修；
+   评审给出可 0/0 的手工候选 ⇒ 缺的是"正确语义"判定，不是无解）；单轴 `data-scale` 配 `rotate`/`stroke` 的
+   `<ellipse>` 仍错（`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制。
+4. **`<foreignObject>`/`<switch>` 被 `convert` 静默放行**：`convert --check` 说 compatible、stderr 0 字节、产物
    原样保留；`plot-grid` 只缩 `<switch>` 里的 rect、`foreignObject` 四边不动 ⇒ 浏览器会画错位（resvg/cairosvg
    都不渲染它，今天像素看不出）。语料 0 命中 ⇒ 零回归风险，待排期。
-4. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
+5. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
    `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
    需要视觉序模型，登记待排期。
-5. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+6. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
    **精确相等**（701 = 409+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
    测试名做锚，未做。
 
 ## 其他未决项
 
-- **两条检查对负载敏感**：`labels::visibility::markers_in_non_rendered_subtrees_do_not_collide` 与
-  `R57/test.py` A 族在并发 `cargo` 下偶发红（单跑全绿）⇒ 门禁需串行跑。
+- **两条检查疑似对负载敏感**（R63 评审压载 40/40 与满负载 3 轮**未复现**）：`labels::visibility::` 与
+  `R57/test.py` A 族早前偶发红 ⇒ 仍串行跑，并让 R57 失败时带出测试名。
 - **`--rel-widths` 部分为 0 静默产出 0 宽格子**（低优先）：`0,1` 首列 cell 宽 0、面板不可见，与其余 `rel_*` fail-closed 不一致。
 - **嵌套组图累积偏差**（非变形）：A4 目标 1000×1414 拼出 1532.48（+8.4%）；嵌套中间步一律 `--plot-margin 0`。
 - **无跨格（span/merge）能力**：FLAGS 只有 `nrow/ncol/rel-*/gap`；"A 占 2×2" 只能嵌套近似。
 - **W6 在嵌套输出上是假阳性**：越界数字来自残留的 `visibility="hidden"` 内层 panel-box rect（ink walker 只跳
   `display:none`）；`left` 是 `0.75em/字符` 上界估算（高估约 6.4×）。
-- **合成时面板内容不再被面板画布裁剪**：超出面板的元素会渲染到成品外边距（密集版式可能压相邻面板）。
-  严格复刻需在 cell 上补 clip——**尚未做**（见 `ARCHITECTURE/layout.md` §2）。
-- **固定 `--plot-margin` 时"溢出字母带但没出画布"的字母仍被静默裁**（W5 只覆盖"越出画布"）：按需要自行留足。
-- **W6 的容差 1 px 保留、不加豁免**（已知会为真实的小越界出声，如 S39-C 修好后仍报
-  `right by 1.537 px`，成品 24 px margin 掩盖得住）——**待用户裁决**是否放宽或按侧豁免。
+- **合成时面板内容不再被面板画布裁剪**：超出面板的元素会渲到成品外边距（可能压相邻面板）。
+  严格复刻需给 cell 补 clip——**尚未做**（见 `ARCHITECTURE/layout.md` §2）。
+- **固定 `--plot-margin` 时"溢出字母带但没出画布"的字母仍被静默裁**（W5 只覆盖"越出画布"）：自行留足。
+- **W6 容差 1 px 保留、不加豁免**（会为真实小越界出声，如 S39-C 仍报 `right by 1.537 px`，24 px margin
+  掩盖得住）——**待用户裁决**是否放宽或按侧豁免。
 - **`convert/` 对 RDKit `MolDraw2DSVG` 的结论需重测**（旧记录取自 2026-09-20 前）；2D 结构式目前走位图。
 - **`<path>` 出形态的已知边界**：判断"是否描边"只看图元自身声明；描边只来自祖先 `<g stroke=…>` 时多子轮廓
   仍会描出连接边（两个方言实测 0 例，**明确不做**，见 `ARCHITECTURE/convert.md`）。
 - **镜像（负）等比 + 旋转弧**会静默失真（守卫只判 `|sx| ≠ |sy|`）——**当前 CLI 不可达**，仅登记
   （见 `ARCHITECTURE/tag-protocol.md` §4）。
-- **跨行字号不一致**：逐行按各自格宽归一化（保证 `s = 1`）⇒ 不同行纸面字号不同（S22 实测
-  5.85 / 3.96 / 9.10 pt）。这是 `s = 1` 的代价，已在 `02a` 写明。
+- **跨行字号不一致**：逐行按各自格宽归一化（保证 `s = 1`）⇒ 不同行纸面字号不同（S22：5.85/3.96/9.10 pt）。
+  这是 `s = 1` 的代价，已在 `02a` 写明。
 - **无"文字条"能力**（`ggdraw + draw_label`）：标题条需先做成"只有文字的面板"。**复刻图总高 5639 vs
   5764（2.2%）未 root-cause**：band/margin 模型差异。
-- **`--rel-heights` 微调行高会纵向拉伸该行面板**（改变格子宽高比 ⇒ 会告警）：自然纵横比布局的必然结果，
-  要既改行高又不变形只能改画布宽或面板纵横比。**垫片 `--input none` 的自然纵横比按 1:1 计**。
+- **`--rel-heights` 微调行高会纵向拉伸该行面板**（改变格子宽高比 ⇒ 会告警）：自然纵横比布局的必然结果。
+  **垫片 `--input none` 的自然纵横比按 1:1 计**。
 - **`AlignMode` 未使用**。**版面可读性天花板**：一行 3 面板 + 固定画布宽 ⇒ 纸面字号 ~3.8 pt。
   **matplotlib 之外的方言未覆盖**（仍 fail-closed）。**path 双实现防漂移**（R5）：`src/path/` 与
   `src/convert/path.rs` 各一份，改一侧必须看另一侧。
