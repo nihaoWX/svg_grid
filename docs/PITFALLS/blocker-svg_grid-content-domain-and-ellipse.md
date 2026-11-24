@@ -70,6 +70,19 @@ python3 docs/PITFALLS/round-data/R62/test.py     # A 组 8 个用例
   R46 的 `A4_copy` 与 R49 的 `A1–A5` 旧证据当场变红抓到；修法是把元素自己的
   slot（verbatim body 时仍是 `Verbatim`）传给子节点，并加单测
   `a_group_data_scale_reaches_its_children` 钉死。修后 R46/R49 全绿。
+- 复审 P1-b（同一语义面的第二处漏，首版 7876c46 引入、cc66d4b 未覆盖）：定义到定义的
+  `href`/`xlink:href` 是**引用者 body 的出边**，域要按“定义自己 body 是否被映射”选，
+  而不是按引用者落在哪个槽。典型形态：`<pattern id="p" width="20" viewBox="0 0 20 20"
+  href="#q"/>` 被 user space 的 rect 直接引用 ⇒ `p` 的 tile 按 user space 缩放（20→40，
+  正确），但它的 `href` 必须指到 `q--svg-grid-verbatim`（q 在 viewBox 单位里读），
+  否则 tile 先被放大再用 viewBox 映射，等于缩两次（12800/255）。
+  修法：`Copies::out_slot(element, inherited)` 先问 `domains::body_is_verbatim`
+  （body 被映射 ⇒ `Verbatim`，梯度按沿 href 解析后的 `gradientUnits` 判），
+  再问元素自己的 slot / `data-scale` / 继承；`rewrite_references` 与子节点继承都用它。
+  因此 `url(#…)` 边与 `href` 边同一口径，且沿链传递（`p → q → r`：p 指 q--verbatim，
+  q--verbatim 指 r--verbatim，q 仍指 r）。梯度 obb 同理：`h` 的 `gradientUnits`
+  解析为 objectBoundingBox ⇒ 它 href 继承的 `g` 在 bbox 单位里，取 verbatim 副本
+  （16000/126）；对照 ① 里 `h` 只被 verbatim body 引用，本来就指对了，保持 0/0、字节不变。
 
 ### B ellipse
 
@@ -110,6 +123,16 @@ B 组（800×640，s=8；b4 的 oracle 是手写的 800×640 椭圆文档，因�
 | b4 `data-scale="x"` | 0；20/20/10 | 0；160/20/80/10 | 手写文档 | 2959/255 | 0/0 |
 | b5 `rx="abc"` | 0；写出产物、ink 0；`convert --check` rc=0 “compatible” | 2；不写产物；`convert --check` rc=1 “geometry attribute rx is not a plain number” | 失败即产物 | — | — |
 
+E 组（P1-b，200×160，s=2；修前 = 首版 `cc66d4b` 的二进制，oracle = 源@2；对照的产物
+字节与首版一致）：
+
+| 用例 | 修前 rc/产物 | 修后 rc/产物 | oracle | 修前 xor/md | 修后 xor/md |
+|---|---|---|---|---|---|
+| e1 pattern `href`（p 在 user space、body 有 viewBox） | 0；p.href=`#q`、q 20/20、q--verbatim 10/10 | 0；p 40/40、p.href=`#q--svg-grid-verbatim` | 源@2 | 12800/255 | 0/0 |
+| e3b obb 梯度沿 `href` 继承 userSpaceOnUse 梯度 | 0；单个 `g` x2=1、h.href=`#g` | 0；`g` x2=1 + `g--svg-grid-verbatim` x2=0.5、h.href=`#g--svg-grid-verbatim` | 源@2 | 16000/126 | 0/0 |
+| e4 三层链 p→q→r | 0；p.href=`#q`（q--verbatim→r--verbatim 已对） | 0；p.href=`#q--svg-grid-verbatim` | 源@2 | 2304/255 | 0/0 |
+| e2 对照（h 只被 verbatim body 引用） | 0；h.href=`#g--svg-grid-verbatim` | 0；与首版逐字节相同 | 源@2 | 0/0 | 0/0 |
+
 D 组（只登记、不改；修前修后同一数字，两侧二进制一致）：obb clipPath body 引用 pattern
 仍 xor 16000/255（把 tile 缩到 8 也仍是 16000/255，没有正确写法）；obb mask 引用 pattern
 的两种拼写都 0/0（无判别力）；单坐标梯度、tile 的 x/y 与 width/height、filter/mask
@@ -126,6 +149,8 @@ D 组（只登记、不改；修前修后同一数字，两侧二进制一致）
 | M5 scan 不检查 ellipse | `a_non_numeric_ellipse_radius_is_rejected` | B/b5 |
 | M6 dispatch 去掉 ellipse 臂 | ellipse 5 条单测（b1/b2/b3/b4/样式半径） | B/b1…b4 |
 | M7 子节点不继承容器 data-scale（复审修复前的形态） | `a_group_data_scale_reaches_its_children` | R46 `A4_copy`、R49 `A1–A5` |
+| M8 `out_slot` 去掉 body 域优先（P1-b 修复前的形态） | `a_href_chain_is_transitive`、`a_bounding_box_gradient_href_stays_verbatim`、`a_definition_href_follows_its_own_content_domain`、`a_shared_gradient_is_copied_per_domain`、`three_domains_are_two_copies_because_both_verbatim_slots_agree` | A/v4、A/n4、A/m3 及 E 组 3 例 × 2 条断言 |
+| M9 梯度永远不算 verbatim | `a_bounding_box_gradient_href_stays_verbatim` | E/e3b |
 
 ## 6 未做清单（有理由）
 
@@ -134,12 +159,17 @@ D 组（只登记、不改；修前修后同一数字，两侧二进制一致）
 - A3 的“1 attribute / 保留 2 个”：同一个 atom-group 只记一个 offender，同上。
 - R61 `test.py:258-259` 失败只打印 `err[-160:]`：失败打印便利，不影响结论。
 - ellipse 半径只写在 inline `style`：d1render 两种拼写都不画，写属性会造出源图没有的几何。
+- obb clipPath body 引用 pattern（m4）：仍 xor 16000/255，把 pattern tile 缩到 8 也仍是
+  16000/255 —— renderer 在 obb clipPath 里如何把 pattern 映射到目标盒没有可用的正确
+  写法，**只登记不改**；同一组里 obb mask 引用 pattern 的两种拼写都 0/0（无判别力）。
+  这两条由 `round-data/R62/test.py` 的 C 族按数字钉住（m4=16000/255，m2/n1/n2=0/0），
+  `meta.toml` 的 note 同文登记。
 
 ## 7 验收
 
-- `cargo test --offline`：696 = 404 lib + 59 main + 233 selftest（基线 674；R19/R57 同轮更新）。
+- `cargo test --offline`：699 = 407 lib + 59 main + 233 selftest（基线 674；R19/R57 同轮更新）。
 - `cargo fmt --all --check`、`cargo clippy --offline --all-targets -- -D warnings` 干净。
-- `./install.sh` 后两侧 sha256 相同：`2495107bcf1e5e0cc580746bcd747abd8b2d414429fe77305ed31d5ac1ffcfb3`。
+- `./install.sh` 后两侧 sha256 相同：`57ff16d1760deb527c87f673d130fa48c5c0297d0ea379788b0cc82abd97933e`。
 - `svg_grid doctor`：57 pass / 0 fail / 1 skip。
 - 语料 214 个 `tests/**/*.svg` 的 `convert` 产物与 `/tmp/r50base/target/release/svg_grid`
   （@e0c6033）逐字节 0 差异；58 个 fixture 的 `plot-grid` 0 差异。

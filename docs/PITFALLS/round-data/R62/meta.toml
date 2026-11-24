@@ -7,6 +7,7 @@ family = [
   "P2（R61 评审）：<ellipse> 从未被重写（dispatch.rs 只有 circle 分支），cx/cy/rx/ry 一律原样留在 100×80 坐标里；convert --check 还报 compatible。修法：cx/cy 坐标对、rx 走 x、ry 走 y；只写一个半径时 SVG 规定另一个与之相等，缺失半径按自己的轴因子补写（data-scale=x 时补写值=源值），position/none 保持原字节；scan.rs 的 non_numeric_geometry 加 ellipse（fail-closed），tag-protocol.md 支持列表补 ellipse。",
   "口径：R61 评审遗留四处更正证书写进 R61/meta.toml（M2 红名计数 13/15、语料 214 含 user_tests 6 个、SVG_GRID_BEFORE_BIN、F1 的 lines_after 含 helper）+ W7 仅 --verbose 可见的前提；三条可选 P3 本轮不做（双 W7 归属与 A3 计数会改 W7 文案与证据期望，失败打印属诊断便利）。",
   "登记不改：obb clipPath 引用 pattern 修前修后都 16000/255（把 tile 缩到 8 也仍是 16000/255，没有正确写法）；obb mask 引用 pattern 的 0/0 在两种拼写下都成立（无判别力）；线/径向梯度单坐标、pattern tile 的 x/y 与 width/height、filter/mask 区域各自独立——只登记数字，不补对。",
+  "复审补漏（P1-b，首版 7876c46 引入、cc66d4b 未覆盖）：定义到定义的 href/xlink:href 是引用者 body 的出边，域要按“定义自己 body 是否被映射”选，而不是按引用者落槽。p 被 user space 的 rect 直接引用时 tile 仍按面板缩放（20→40），但它的 href 必须指到 q--svg-grid-verbatim（12800/255，改后 0/0）；梯度沿 href 解析 gradientUnits，obb 继承的 userSpace 梯度取 verbatim 副本（h href g--svg-grid-verbatim，16000/126→0/0）；三层链 p→q→r 传递（2304/255→0/0）。修法：Copies::out_slot 先问 domains::body_is_verbatim，再问 slot/data-scale/继承，url() 与 href 同口径。对照（h 只被 verbatim body 引用）保持 0/0 且产物字节不变。",
   "实测（四列表在 test.py 末尾）：修前 = abc0d22 的 target/release/svg_grid，修后 = 本轮提交；oracle 是源图按 s 用 d1render 直接渲染。A 组 8 个用例修后 xor 0、md 0，两个对照产物与修前逐字节相同；B 组 b1-b4 xor 0、b5 从 rc=0+写出产物变成 rc=2 且 convert --check rc=1。",
 ]
 
@@ -28,8 +29,8 @@ run_before = [
   "R60", "R61",
 ]
 touched = [
-  { round = "R19", why = "测试总数 674→696（BASELINE 与 COUNTS.lib 404；defs.rs 的 5 条 R46 断言搬进 tests_r62/tests_r62b，另加 22 条，含复审修复的容器继承单测）" },
-  { round = "R57", why = "第 6/200 行写死的总数 674→696（696 = 404 + 59 + 233）" },
+  { round = "R19", why = "测试总数 674→699（BASELINE 与 COUNTS.lib 407；defs.rs 的 5 条 R46 断言搬进 tests_r62/tests_r62b，另加 25 条，含容器继承与 href 换域单测）" },
+  { round = "R57", why = "第 6/200 行写死的总数 674→699（699 = 407 + 59 + 233）" },
   { round = "R61", why = "meta.toml 四处口径更正 + 环境变量名 SVG_GRID_BEFORE_BIN + 三条可选 P3 未做的理由" },
 ]
 
@@ -50,10 +51,14 @@ cp -r fontlib /tmp/r62before/
 (cd /tmp/r62before && cargo build --release --offline)
 # 本脚本默认 BEFORE=/tmp/r62_before_bin，可用 SVG_GRID_BEFORE_BIN 覆盖。
 
-# 全绿（41 checks）
+# 全绿（52 checks；A/B/C/D/E 五族）
 python3 docs/PITFALLS/round-data/R62/test.py
-# 有牙：把被测二进制指回 R61 ⇒ A/B 两组必须红（rc=1）
+# 有牙（一）：把被测二进制指回 R61 ⇒ A/B 两组必须红（rc=1）
 SVG_GRID_BIN=/tmp/r62_before_bin python3 docs/PITFALLS/round-data/R62/test.py
+# 有牙（二）：把被测二进制指回首版 R62（cc66d4b，PREV 默认 /tmp/r62_cc66_bin）
+# ⇒ E 组 3 条必须红（e1 12800/255、e3b 16000/126、e4 2304/255）
+SVG_GRID_BIN=/tmp/r62_cc66_bin SVG_GRID_PREV_BIN=/tmp/r62_cc66_bin \
+  python3 docs/PITFALLS/round-data/R62/test.py
 # 缺二进制/渲染器必须 rc=1（--allow-skip 才允许 skip）
 SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
 SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
@@ -75,6 +80,10 @@ SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
      err 尾巴）本轮不做：前两条要改 W7 的 offender 模型与文案，会牵动大量证据期望，
      换来的只是诊断措辞；第三条只影响失败时的可读性。均已在 R61/meta.toml 登记。
 
+  7) href 出边的域由定义自己 body 是否被映射决定：user space 里被 url() 引用的定义
+     tile 照样缩放，但它 href 的目标要取 verbatim 副本；链式传递，梯度也参与。
+
 旧证据说明：本轮按目录逐个跑 R3..R61 的 test.py（每个都是纯黑盒、指向本轮二进制），
-结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 696=404+59+233。复审修复了容器 data-scale 下传的回归（R46/R49 旧证据抓到），并加了对应单测。
+结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 699=407+59+233。复审修复了两处回归/漏：
+容器 data-scale 下传（R46/R49 旧证据抓到）与 href 换域（P1-b，登记为 R62b 轮，finding R62b-F1）。
 """

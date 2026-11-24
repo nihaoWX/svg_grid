@@ -36,7 +36,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use super::domains::{self, Slot};
 use super::hoist::hoist_outside;
-use super::links::{internal_target, map_url_references};
+use super::links::{internal_target, map_url_references, IdIndex};
 use super::patterns::PatternIndex;
 use super::{parse_policy, ScalePolicy};
 use crate::dom::{Element, Node};
@@ -85,7 +85,9 @@ impl DefsPlan {
 /// Copy every definition that more than one policy references, then repoint the
 /// references. Definitions with zero or one referrer are left structurally alone.
 pub(super) fn split(root: &mut Element) -> DefsPlan {
-    let refs = referrers(root);
+    let patterns = PatternIndex::collect(root);
+    let links = IdIndex::collect(root);
+    let refs = referrers(root, &patterns, &links);
     // A nested definition that is also referenced from outside its enclosing
     // definition cannot be instantiated correctly inside each outer copy: the
     // outside reference needs its own copy at the top level. Move it there once
@@ -117,7 +119,6 @@ pub(super) fn split(root: &mut Element) -> DefsPlan {
         wanted.insert(id.clone(), ordered);
     }
 
-    let patterns = PatternIndex::collect(root);
     if !wanted.is_empty() {
         let mut copies = Copies {
             wanted,
@@ -125,6 +126,7 @@ pub(super) fn split(root: &mut Element) -> DefsPlan {
             used,
             slots: &slots,
             patterns: &patterns,
+            links: &links,
         };
         split_children(root, Slot::UserSpace(ScalePolicy::None), &mut copies, None);
     }
@@ -132,10 +134,13 @@ pub(super) fn split(root: &mut Element) -> DefsPlan {
 }
 
 /// The slots of the elements that reference each definition, transitively.
-pub(super) fn referrers(root: &Element) -> HashMap<String, BTreeSet<Slot>> {
-    let patterns = PatternIndex::collect(root);
+pub(super) fn referrers(
+    root: &Element,
+    patterns: &PatternIndex,
+    links: &IdIndex,
+) -> HashMap<String, BTreeSet<Slot>> {
     let mut gather = Gather::default();
-    collect(root, ScalePolicy::None, None, &patterns, &mut gather);
+    collect(root, ScalePolicy::None, None, patterns, links, &mut gather);
 
     // `refs[D]` is `direct[D]` plus the referrer set of every definition that
     // points at `D`. A mapped body maps every incoming slot to `Verbatim` before
@@ -184,6 +189,7 @@ fn collect(
     inherited: ScalePolicy,
     enclosing: Option<&str>,
     patterns: &PatternIndex,
+    links: &IdIndex,
     gather: &mut Gather,
 ) {
     let policy = element
@@ -195,9 +201,10 @@ fn collect(
         .filter(|_| is_definition(element))
         .map(str::to_string);
     if let (Some(id), true) = (owner.as_deref(), is_definition(element)) {
-        gather
-            .bodies
-            .insert(id.to_string(), domains::body_is_verbatim(element, patterns));
+        gather.bodies.insert(
+            id.to_string(),
+            domains::body_is_verbatim(element, patterns, links),
+        );
     }
     // References inside a definition belong to its whole subtree, not to the
     // leaf element that happens to spell the `url(#…)`.
@@ -220,7 +227,7 @@ fn collect(
     }
     for child in &element.children {
         if let Node::Element(child) = child {
-            collect(child, policy, enclosing, patterns, gather);
+            collect(child, policy, enclosing, patterns, links, gather);
         }
     }
 }
@@ -263,6 +270,7 @@ struct Copies<'a> {
     used: HashSet<String>,
     slots: &'a HashMap<String, Slot>,
     patterns: &'a PatternIndex,
+    links: &'a IdIndex,
 }
 
 impl Copies<'_> {
@@ -286,11 +294,21 @@ impl Copies<'_> {
         name
     }
 
-    /// The slot `element`'s own references are repointed with. A definition that
-    /// is instantiated verbatim points at the verbatim copy of whatever it
-    /// references; every other element keeps the R46 rule (its `data-scale`, else
-    /// the inherited slot), so untouched input keeps its bytes.
-    fn reference_slot(&self, element: &Element, inherited: Slot) -> Slot {
+    /// The slot `element`'s own references are repointed with — which is also the
+    /// slot its children inherit.
+    ///
+    /// A body the renderer maps decides this **before** the slot the element was
+    /// instantiated in: a `<pattern>` with a `viewBox` is a tile scaled in panel
+    /// user space, but everything reached from inside that body — `url(#…)` and
+    /// `href` alike — lives in viewBox units. Choosing the slot here instead of at
+    /// each `url()` is what makes the `href` edge follow the same rule as a paint
+    /// reference (round-data/R62 group E). A definition instantiated verbatim and
+    /// every other element keep the R46 rule (its `data-scale`, else the inherited
+    /// slot), so untouched input keeps its bytes.
+    fn out_slot(&self, element: &Element, inherited: Slot) -> Slot {
+        if domains::body_is_verbatim(element, self.patterns, self.links) {
+            return Slot::Verbatim;
+        }
         if is_definition(element) {
             let verbatim = element
                 .attr("id")
@@ -323,17 +341,8 @@ fn split_children(
         // Read before any reference is rewritten: `body_is_verbatim` resolves the
         // original `href` chain. A mapped body belongs to the verbatim domain
         // whatever the slot around it says (round-data/R62).
-        let body = if domains::body_is_verbatim(&current, copies.patterns) {
-            Slot::Verbatim
-        } else {
-            inherited
-        };
         if let Some((slot, first)) = narrow {
-            let body = if body.is_verbatim() {
-                body
-            } else {
-                copies.reference_slot(&current, slot)
-            };
+            let out = copies.out_slot(&current, slot);
             // Inside a copy of an outer definition every nested definition is
             // instantiated under **this copy's** domain only. Splitting it by its
             // full referrer set would emit one copy per outer copy and leave
@@ -350,13 +359,13 @@ fn split_children(
                     }
                 }
             }
-            rewrite_references(&mut current, slot, copies);
-            split_children(&mut current, body, copies, Some((body, first)));
+            rewrite_references(&mut current, out, copies);
+            split_children(&mut current, out, copies, Some((out, first)));
             parent.children[index] = Node::Element(current);
             index += 1;
             continue;
         }
-        let own = copies.reference_slot(&current, inherited);
+        let own = copies.out_slot(&current, inherited);
         let id = current.attr("id").map(str::to_string);
         let list = id.as_ref().and_then(|id| copies.wanted.get(id)).cloned();
         match list {
@@ -368,13 +377,9 @@ fn split_children(
                         let id = id.clone().unwrap_or_default();
                         version.set_attr("id", copies.name(&id, *slot));
                     }
-                    let body = if domains::body_is_verbatim(&version, copies.patterns) {
-                        Slot::Verbatim
-                    } else {
-                        *slot
-                    };
-                    rewrite_references(&mut version, *slot, copies);
-                    split_children(&mut version, body, copies, Some((body, position == 0)));
+                    let out = copies.out_slot(&version, *slot);
+                    rewrite_references(&mut version, out, copies);
+                    split_children(&mut version, out, copies, Some((out, position == 0)));
                     if position == 0 {
                         parent.children[index] = Node::Element(version);
                     } else {
@@ -385,8 +390,7 @@ fn split_children(
             }
             _ => {
                 rewrite_references(&mut current, own, copies);
-                let body = if body.is_verbatim() { body } else { own };
-                split_children(&mut current, body, copies, None);
+                split_children(&mut current, own, copies, None);
                 parent.children[index] = Node::Element(current);
             }
         }

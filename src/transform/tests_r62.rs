@@ -14,6 +14,7 @@ use std::collections::BTreeMap;
 
 use super::defs::{referrers, split};
 use super::domains::Slot;
+use super::patterns::PatternIndex;
 use super::transform_svg;
 use super::ScalePolicy;
 use crate::dom::{self, Element, Node};
@@ -82,7 +83,9 @@ fn nested_attr(svg: &str, id: &str, child: &str, attr_name: &str) -> Option<Stri
 
 fn refs_of(svg: &str) -> BTreeMap<String, Vec<Slot>> {
     let root = dom::parse(svg).unwrap();
-    referrers(&root)
+    let patterns = PatternIndex::collect(&root);
+    let links = crate::transform::links::IdIndex::collect(&root);
+    referrers(&root, &patterns, &links)
         .into_iter()
         .map(|(id, set)| (id, set.into_iter().collect()))
         .collect()
@@ -151,6 +154,30 @@ fn a_definition_inherits_the_policies_of_the_definitions_that_reference_it() {
         refs["d"], refs["p"],
         "so is the gradient its body fills with"
     );
+
+    // A gradient `href` chain is a reference like any other: every layer is
+    // instantiated under the slots of the definition that owns the chain
+    // (worth pinning: R62's first cut lost this third layer, and a definition
+    // whose own body is mapped must take the *verbatim* copy of the target).
+    let refs = refs_of(
+        r##"<svg xmlns="http://www.w3.org/2000/svg">
+              <defs>
+                <pattern id="p" width="2" height="2"><rect fill="url(#d)"/></pattern>
+                <linearGradient id="d" gradientUnits="userSpaceOnUse" href="#base" x1="10"/>
+                <linearGradient id="base" gradientUnits="userSpaceOnUse" href="#root" x2="100"/>
+                <linearGradient id="root" gradientUnits="userSpaceOnUse" x2="50"/>
+              </defs>
+              <g data-scale="xy"><rect width="10" height="10" fill="url(#p)"/></g>
+              <g data-scale="x"><rect width="10" height="10" fill="url(#p)"/></g>
+            </svg>"##,
+    );
+    for id in ["p", "d", "base", "root"] {
+        assert_eq!(
+            refs[id],
+            vec![slot(ScalePolicy::Xy), slot(ScalePolicy::X)],
+            "`{id}` must follow the pattern's slots through the whole href chain"
+        );
+    }
 }
 
 #[test]

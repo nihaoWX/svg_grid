@@ -39,6 +39,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[4]
 BIN = Path(os.environ.get("SVG_GRID_BIN", str(ROOT / "target/release/svg_grid")))
 BEFORE = Path(os.environ.get("SVG_GRID_BEFORE_BIN", "/tmp/r62_before_bin"))
+# The binary of the first R62 cut (cc66d4b): the pre-fix build for the P1-b group E.
+PREV = Path(os.environ.get("SVG_GRID_PREV_BIN", "/tmp/r62_cc66_bin"))
 RENDER = Path(os.environ.get("SVG_GRID_RENDER_BIN", "/tmp/d1_eval/render/target/release/d1render"))
 FONTDIR = ROOT / "fontlib"
 TMP = Path(tempfile.mkdtemp(prefix="r62-evidence-"))
@@ -303,6 +305,48 @@ B4_ORACLE = ('<svg xmlns="http://www.w3.org/2000/svg" width="800" height="640" '
              '<ellipse cx="160" cy="20" rx="80" ry="10" fill="red"/></svg>')
 
 
+# E: a definition-to-definition `href` is an out-edge of the referrer's **body**,
+# so it follows the body's content domain — even when the referrer itself was
+# instantiated in panel user space (R62 review P1-b).
+CASE_E1 = doc('<defs>'
+              '<pattern id="q" patternUnits="userSpaceOnUse" width="10" height="10">'
+              '<rect width="10" height="10" fill="#0a0"/></pattern>'
+              '<pattern id="p" patternUnits="userSpaceOnUse" width="20" height="20" '
+              'viewBox="0 0 20 20" href="#q"/></defs>'
+              '<g data-scale="xy"><rect width="50" height="80" fill="url(#q)"/>'
+              '<rect x="50" width="50" height="80" fill="url(#p)"/></g>')
+
+CASE_E2 = doc('<defs>' + gradient("g", "10") +
+              '<linearGradient id="h" href="#g"/>'
+              '<pattern id="pv" patternUnits="userSpaceOnUse" width="20" height="20" '
+              'viewBox="0 0 10 10"><rect width="10" height="10" fill="url(#h)"/>'
+              '</pattern></defs>'
+              '<g data-scale="xy"><rect width="40" height="80" fill="url(#g)"/>'
+              '<rect x="40" width="60" height="80" fill="url(#pv)"/></g>')
+
+CASE_E3B = doc('<defs><linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" '
+               'x2="0.5" y2="0"><stop offset="0" stop-color="#000"/>'
+               '<stop offset="1" stop-color="#fff"/></linearGradient>'
+               '<linearGradient id="h" gradientUnits="objectBoundingBox" href="#g"/>'
+               '</defs><g data-scale="xy"><rect width="50" height="80" fill="url(#g)"/>'
+               '<rect x="50" width="50" height="80" fill="url(#h)"/></g>')
+
+CASE_E4 = doc('<defs>'
+              '<pattern id="r" patternUnits="userSpaceOnUse" width="4" height="4">'
+              '<rect width="4" height="4" fill="#0a0"/></pattern>'
+              '<pattern id="q" patternUnits="userSpaceOnUse" width="8" height="8" href="#r"/>'
+              '<pattern id="p" patternUnits="userSpaceOnUse" width="20" height="20" '
+              'viewBox="0 0 20 20" href="#q"/></defs>'
+              '<g data-scale="xy"><rect width="40" height="80" fill="url(#q)"/>'
+              '<rect x="40" width="60" height="80" fill="url(#p)"/></g>')
+
+
+def hrefs(svg):
+    """`href` targets with the composer's cell prefix stripped."""
+    return sorted(h.replace("svg-grid-cell0-", "")
+                  for h in re.findall(r'href="#([^"]+)"', svg))
+
+
 def ellipse_attrs(svg):
     found = elements(svg, "ellipse")
     if len(found) != 1:
@@ -458,6 +502,43 @@ def main():
         else:
             skip("A/%s control keeps its old bytes" % name, "no pre-fix binary")
 
+    # ── E: href follows the referrer body's domain ─────────────────────────
+    print("\n── E: a definition's `href` edge follows its own content domain ──")
+    for name, svg, before, assertion in [
+        ("e1_pattern_href", CASE_E1, (12800, 255), lambda s: (
+            widths(s, "pattern", "width") == ["10", "20", "40"]
+            and "q--svg-grid-verbatim" in hrefs(s), hrefs(s))),
+        ("e3b_gradient_href", CASE_E3B, (16000, 126), lambda s: (
+            widths(s, "linearGradient", "x2") == ["0.5", "1"]
+            and "g--svg-grid-verbatim" in hrefs(s), hrefs(s))),
+        ("e4_three_layers", CASE_E4, (2304, 255), lambda s: (
+            widths(s, "pattern", "width") == ["16", "4", "40", "8", "8"]
+            and hrefs(s) == ["q--svg-grid-verbatim", "r", "r--svg-grid-verbatim"],
+            hrefs(s))),
+    ]:
+        text, diff = pixel_case(name, svg, BIN)
+        ok = text is not None and diff == (0, 0)
+        if text is not None:
+            passed, why = assertion(text)
+            ok = ok and passed
+            if not passed:
+                print("      %s: %s" % (name, why))
+        check(ok, "E/%s pixel-matches the source at s=2" % name, "xor=%s" % (diff,))
+        ROWS.append((name, "xor=%s" % (before,), "xor=%s" % (diff,), "source@s=2", diff))
+
+    # the two controls that were already right must not move: one link is only
+    # reached from a verbatim body, the other chain resolves to user space.
+    for name, svg in [("e2_only_verbatim", CASE_E2)]:
+        text, diff = pixel_case(name, svg, BIN)
+        check(text is not None and diff == (0, 0), "E/%s control still pixel-clean" % name,
+              "xor=%s" % (diff,))
+        if PREV.is_file():
+            old, _ = pixel_case("ctrl-old-" + name, svg, PREV)
+            check(old is not None and old == text,
+                  "E/%s control keeps the first cut's bytes" % name)
+        else:
+            skip("E/%s control keeps the first cut's bytes" % name, "no cc66d4b binary")
+
     # ── B: ellipse ──────────────────────────────────────────────────────────
     print("\n── B: <ellipse> scales centre and both radii ──")
     for name, svg, wanted in [
@@ -532,6 +613,17 @@ def main():
         text, diff = pixel_case("tooth-" + name, svg, BEFORE, 800, 640, 8)
         got = ellipse_attrs(text or "")
         check(text is None or got != want, "D/B %s is red before the fix" % name, str(got))
+    # Group E is red on both earlier cuts: the first R62 cut (cc66d4b, `PREV`) and
+    # the round's own base (`BEFORE`, the pre-R62 binary).
+    for label, binary in [("the first R62 cut", PREV), ("the pre-R62 binary", BEFORE)]:
+        if not binary.is_file():
+            skip("D/E binary of %s exists" % label, str(binary))
+            continue
+        for name, svg in [("e1_pattern_href", CASE_E1), ("e3b_gradient_href", CASE_E3B),
+                          ("e4_three_layers", CASE_E4)]:
+            text, diff = pixel_case("tooth-" + label.replace(" ", "-") + "-" + name, svg, binary)
+            check(text is None or diff != (0, 0),
+                  "D/E %s is red on %s" % (name, label), "xor=%s" % (diff,))
     src = tmp("tooth-b5.svg")
     src.write_text(B5)
     out = tmp("tooth-b5.cell.svg")

@@ -23,10 +23,21 @@
 //! Whether a body is mapped is a property of the definition *itself*, not of its
 //! referrers: a `<pattern>` with a `viewBox` stays a viewBox body under every
 //! policy. That is why this module answers the question from the element (and the
-//! inherited units along `href`, see [`super::patterns`]) and never from the walk's
-//! current policy.
+//! inherited units along `href`, see [`super::patterns`] and
+//! [`super::links::resolved_units`]) and never from the walk's current policy.
+//!
+//! The same question decides which copy a definition's **`href`** points at: the
+//! link is an out-edge of the referrer's body, so a mapped body looks its target up
+//! in the verbatim domain even when the referrer itself was instantiated in panel
+//! user space (a `<pattern>` with a `viewBox` is scaled as a tile for a user-space
+//! rect, yet the content it inherits through `href` lives in its viewBox units).
+//! Gradients take part in this: a gradient whose resolved `gradientUnits` is
+//! `objectBoundingBox` is read in bounding-box units, so everything it inherits
+//! through `href` must stay verbatim too (round-data/R62, group E).
 
+use super::links::{resolved_units, IdIndex};
 use super::patterns::{self, PatternIndex};
+use super::units::Units;
 use super::ScalePolicy;
 use crate::dom::Element;
 
@@ -97,17 +108,28 @@ fn policy_rank(policy: ScalePolicy) -> u8 {
 /// Whether `element`'s body is drawn in a domain the renderer already maps, so a
 /// definition referenced from it must stay verbatim.
 ///
-/// Only the two constructs with a measured defect are listed: a `<pattern>` whose
+/// Only the constructs with a measured defect are listed: a `<pattern>` whose
 /// resolved content units are `objectBoundingBox` or whose resolved `viewBox`
-/// parses, and a `<marker>` with its own valid `viewBox`. An unmapped body
-/// (`patternContentUnits="userSpaceOnUse"` without a `viewBox`, an objectBoundingBox
-/// mask/clipPath body) keeps the R46 propagation: its numbers *are* panel units
-/// (round-data/R62 registers the obb clipPath/mask residue as untouched).
-pub(super) fn body_is_verbatim(element: &Element, patterns: &PatternIndex) -> bool {
-    if element.name == "pattern" {
-        return patterns::pattern_body_is_verbatim(element, patterns);
+/// parses, a `<marker>` with its own valid `viewBox`, and a gradient whose resolved
+/// `gradientUnits` is `objectBoundingBox` (the renderer's default). An unmapped
+/// body (`patternContentUnits="userSpaceOnUse"` without a `viewBox`, an
+/// objectBoundingBox mask/clipPath body) keeps the R46 propagation: its numbers
+/// *are* panel units (round-data/R62 registers the obb clipPath/mask residue as
+/// untouched).
+pub(super) fn body_is_verbatim(
+    element: &Element,
+    patterns: &PatternIndex,
+    links: &IdIndex,
+) -> bool {
+    match element.name.as_str() {
+        "pattern" => patterns::pattern_body_is_verbatim(element, patterns),
+        "marker" => marker_body_is_verbatim(element),
+        "linearGradient" | "radialGradient" => {
+            resolved_units(element, links, "gradientUnits", Units::ObjectBoundingBox)
+                == Units::ObjectBoundingBox
+        }
+        _ => false,
     }
-    element.name == "marker" && marker_body_is_verbatim(element)
 }
 
 /// Whether a `<marker>`'s body is already expanded to its viewport by the
@@ -135,11 +157,12 @@ mod tests {
         </svg>"#,
         );
         let index = PatternIndex::collect(&root);
+        let links = IdIndex::collect(&root);
         let pattern = root.children.iter().find_map(|node| match node {
             crate::dom::Node::Element(element) if element.name == "pattern" => Some(element),
             _ => None,
         });
-        assert!(body_is_verbatim(pattern.unwrap(), &index));
+        assert!(body_is_verbatim(pattern.unwrap(), &index, &links));
     }
 
     #[test]
@@ -150,11 +173,12 @@ mod tests {
         </svg>"#,
         );
         let index = PatternIndex::collect(&root);
+        let links = IdIndex::collect(&root);
         let pattern = root.children.iter().find_map(|node| match node {
             crate::dom::Node::Element(element) if element.name == "pattern" => Some(element),
             _ => None,
         });
-        assert!(!body_is_verbatim(pattern.unwrap(), &index));
+        assert!(!body_is_verbatim(pattern.unwrap(), &index, &links));
     }
 
     #[test]
@@ -165,6 +189,7 @@ mod tests {
         </svg>"#,
         );
         let index = PatternIndex::collect(&root);
+        let links = IdIndex::collect(&root);
         let markers: Vec<&Element> = root
             .children
             .iter()
@@ -173,8 +198,8 @@ mod tests {
                 _ => None,
             })
             .collect();
-        assert!(body_is_verbatim(markers[0], &index));
-        assert!(!body_is_verbatim(markers[1], &index));
+        assert!(body_is_verbatim(markers[0], &index, &links));
+        assert!(!body_is_verbatim(markers[1], &index, &links));
     }
 
     #[test]

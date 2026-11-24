@@ -237,7 +237,9 @@ mod tests {
                 </svg>"##,
         )
         .unwrap();
-        let refs = referrers(&root);
+        let patterns = crate::transform::patterns::PatternIndex::collect(&root);
+        let links = crate::transform::links::IdIndex::collect(&root);
+        let refs = referrers(&root, &patterns, &links);
         hoist_outside(&mut root, &refs);
         let text = serialize(&root).unwrap();
         let start = text.find(r#"<pattern id="p""#).unwrap();
