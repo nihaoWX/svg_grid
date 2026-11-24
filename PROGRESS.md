@@ -5,7 +5,7 @@
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
   R43–R53 依次收掉单位属性语义、组合图字母重号、doctor 告警码漂移、定义元素缩放单位、文本字符引用、
-  字母查重的漏判与误伤（两轮）、嵌套定义克隆的重复 id、非 XML 1.0 字符、诊断文案的合成偏移与告警码遮蔽。余下 pre-existing 见 `# Known Issues`。
+  字母查重的漏判与误伤（两轮）、嵌套定义克隆的重复 id、非 XML 1.0 字符、诊断文案的合成偏移与告警码遮蔽。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
@@ -19,7 +19,7 @@
 - **`src/convert/`（R42 起并入主库，子命令 `svg_grid convert`）**：R `svglite`/matplotlib/`pdftocairo -svg`
   三种来源可入流水线；`<path>` 出形态决策表、`clipPath` 矩形化、非等比 `<image>` 烘框、描边显式化、
   `style` 百分比解析、`<defs>` mask/marker/filter 与 pattern 单位语义（R37–R41）。
-  **D1 已修**：≥3 子路径的填充 path 不再合并成 `<polygon>`，改为展平多轮廓 `<path>`（M/L/Z），字形孔不再填死。
+  **D1 已修**：≥3 子路径的填充 path 改为展平多轮廓 `<path>`（M/L/Z），字形孔不再填死。
 - **成品交付前检查**：`scripts/check_deliverable.py`（薄壳 + `deliverable_checks/` 包）两条检查
   （死白带 / 外框 2 px 墨迹 = 0），`--selftest` 可自证；判据的**唯一来源**（见 `ARCHITECTURE/check-deliverable.md`）。
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
@@ -126,10 +126,11 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
-1. **滤镜图元长度不随面板缩放**（`feMorphology radius`、`feGaussianBlur stdDeviation` 等；s=2 `xor 1136`）：
-   `filter` 只重写 box，图元在 `primitiveUnits="userSpaceOnUse"` 下的长度量未处理；各向异性缩放无精确表达。
-2. **pattern 的其余边界**：嵌套 `<pattern>`（`xor 11808`）、`patternTransform` 里的长度量（`1561/927`）、
-   pattern 外的 `clip-path` 被 pattern body 引用（`20736/6264`）、pattern 内 `<text>`（resvg 不画）。
+1. **滤镜图元长度不随面板缩放**：由 `primitiveUnits` 门控（默认 `userSpaceOnUse` ⇒ 要缩），缺省
+   `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。
+2. **paint server 与定义体长度量**：`patternTransform`（`9280`）、userSpace `gradientTransform`（`3360`）、
+   定义体 `<text>` 的 `font-size`（`1512`）、viewBox/obb 父 pattern 下内层定义多缩一次
+   （`12160/25280/27200`）。嵌套 `<pattern>` 与 pattern 外 `clip-path` 实测 `xor 0`。
 3. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
    `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
    需要视觉序模型，登记待排期。
