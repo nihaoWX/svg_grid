@@ -4,13 +4,13 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R60 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
+  R43–R61 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
   诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha、滤镜图元长度与定义体字号、光源位置因子、溢出写入、门禁与证据卫生。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 643 项**（351 lib + 59 main + 233 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 674 项**（382 lib + 59 main + 233 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -25,8 +25,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R60 已入账**；
-  `link` 组 L1–L69；`round-data/R3…R60` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R61 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R61` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -37,6 +37,9 @@
 
 （细节在账本与 `ARCHITECTURE.md`，不在此重复。）
 
+- 2026-11-24 **R61 溢出写回**：乘积（及因子）非有限时**逐字节保原文 + W7**，不再写 `inf`/`NaN`
+  （`scaled_finite` 统一 `lengths`/`primitives`/`filters`/`lights`/`patterns`/`transforms`/`normalize`/`paths`；
+  按原子组保 rect 四边、`cx cy`、`points`、`d`、filter 1–2 数）；并修三处文书与证据空转。测试 658→674，`9dc3c05`。
 - 2026-11-24 **R60 光源进 user space**：`z`/`pointsAtZ` 改用 resvg 的 **RMS** `sqrt((sx²+sy²)/2)`（几何平均错，
   4×5 spot 37011/206→0）、光源 `x/y`/`pointsAtX/Y` 改为平移+缩放（两 cell 5277/238→0）、`primitiveUnits=
   objectBoundingBox` 不再跳过 lighting（100170/242→0，真 obb 分数仍门控）、图元子区域按 units 改写、
@@ -93,23 +96,19 @@
 - 2026-11-22 **账本 reanchor**：`pitfalls-manager` 新增 `reanchor` 子命令（commit `bcb19c0`，已装）；
   锚点从 monorepo 改为 `[工具仓, monorepo]`，`check` 46 条悬空 → 0；备份在
   `/home/nihao/pitfalls-manager-backups/svg_grid-reanchor-20261122-221338/`。
-- 2026-11-22 **用户验收审计（未改代码）**：对照 `INSTRUCTIONS.md` 的四条新要求逐条实测，全部未满足；
-  三条根因已定位到 file:line（见 `# Known Issues` 前四条）。同时核实：`doctor` 57 pass / 0 fail / 1 skip、
-  `cargo test` 207 项全绿、`~/.local/bin/svg_grid` 与 `target/release` 同 sha256（装的是最新构建）。
 - 2026-10-06 **R26–R13**：参数面收敛 + `--plan`、告警瘦身 ≤198 字符、I/O 报错点名文件、Windows 安装面、
   `install.sh`（含装 skill + `--check`）、原生出图查证、指南 `# CORE WORKFLOW`、`tests/selftest/`、
   `convert`/`doctor` 并为子命令、paint server 丢弃 + W9、rc 分档、字体库 `fontlib/` + W8。
-- 2026-10-06 **R12–R11**：补 `round-data/R10/` 证据（R12）；`DECISIONS.md` 并入 `ARCHITECTURE.md`（R11）。
-- 2026-09-28 **R10–R5**：指南规范源（R10）；HARNESS 归位（R9）；6 个 >20 KB 源文件拆分（R8）；
-  `src/ink.rs`/`src/path.rs` 拆目录（R7）；`<path d>` 宽松化 + W6 微尘（R6）；主库纳入 `<path>`（R5）。
-- 2026-09-27 及更早 **R4–R3**：W6 越界 + 死白带判据；按 7 篇反馈更新指南；更早按 10 篇反馈修阻塞点
-  （7 修 / 3 判外部或用错）、组图路线反转 `svg_grid` 优先、布局 cowplot 化五项、`convert/` 建 crate。
+- 2026-10-06 及更早 **R12–R3**：`round-data/R10/` 证据、`DECISIONS.md` 并入 `ARCHITECTURE.md`（R11–R12）、
+  指南规范源（R10）、HARNESS 归位（R9）、>20 KB 源文件拆分（R8）、`src/ink`/`src/path` 拆目录（R7）、
+  `<path d>` 宽松化 + W6 微尘（R6）、主库纳入 `<path>`（R5）、W6 越界 + 死白带判据（R4）、组图路线反转
+  `svg_grid` 优先与 `convert/` 建 crate（R3 及更早，按 10 篇反馈：7 修 / 3 判外部或用错）。
 # In Progress
 
-- **R61（进行中）**：收 R60 评审的 P2 —— **乘积溢出仍被写进产物**（`x="1e38"` 在 s=8 下变 `x="inf"`、
-  `width="NaN"`，`stroke-width="3e38"`⇒`inf`，pin 与 base 一致 ⇒ pre-existing；`rewrite_scaled_length` 与
-  `primitives` 只判输入不判乘积，`format_number(inf)` 直接给 `inf`）；以及三处文书/证据修正（"45.277 翻 11
-  像素"实为 5、`R60/test.py` 的 F5-xy 空转、R58 A9 的 fixture 不可分辨）。
+- **R62（进行中）**：内容域第二条轴（verbatim body 的出边不再把面板 policy 传给内层定义；同一定义被 user space
+  与 verbatim 域共用时按域克隆）。实测 v1 `12160`、v2 `32000`、v3 `31200`、m1/m3/n3/n4，手改后全 xor 0。外加
+  **`<ellipse>` 从未被缩放**（R61 评审发现：`dispatch.rs` 无该分支 ⇒ 椭圆静默错位，P2 pre-existing）与 R61 评审
+  最小集（补 4–5 条 `modify` 事件、M2 红 15 条、语料 214/208 口径、meta 环境变量名、F1 跨度）。
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
@@ -118,12 +117,12 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
-1. **滤镜图元长度的残余**（R58 按 `primitiveUnits` 门控、R59 修光源与单轴）：光源因子与平移是 R60 正在修的；
-   各向异性 `feImage`（640/127）、`feDisplacementMap`（127，采样噪声）、定义体 `font-size`（5880/255，单值无法
-   精确）与图元子区域 `x/y/width/height`（16984/255）**登记不修**；`feConvolveMatrix`/`feDistantLight` 不动。
-2. **乘积溢出仍写进产物**（R61 正在修）：输入有限但乘轴因子后溢出（`x="1e38"` 配 s=8、`stroke-width="3e38"`）
-  会写出 `inf`/`NaN` 且无 W7；写回点要统一按 `style.rs::scale_token` 的"判乘积"口径改成保原文 + W7。
-3. **内容域第二条轴**（R46 的 policy 轴之外）：verbatim body（pattern 有 viewBox 或 `patternContentUnits=
+1. **W7 默认不可见**：`warnings.emit(verbose)` 让 W1–W9 只在 `--verbose` 下打印 ⇒ 值被保原文（含 R61 溢出）
+   时默认 stderr 0 字节、rc=0，用户拿到静默错图。**待做（R63）**。
+2. **滤镜图元长度的残余**（R58 按 `primitiveUnits` 门控、R59 修光源与单轴、R60 光源进 user space）：只剩
+   各向异性 `feImage`（640/127）、`feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值
+   无法精确）登记不修；`feConvolveMatrix`/`feDistantLight` 不动。
+3. **内容域第二条轴**（R62 正在修；R46 的 policy 轴之外）：verbatim body（pattern 有 viewBox 或 `patternContentUnits=
    objectBoundingBox`、marker 有 viewBox、obb 的 mask/clipPath/filter）的**出边仍把面板 policy 传给内层定义**
    ⇒ viewBox 父 pattern 的内层 pattern 多缩一次（`12160`）、内层 gradient `x2=16→32`（`25280`）、obb 父内
    userSpace gradient `x2=0.5→1`（`27200`）；同一 gradient 被普通 rect 与 viewBox body 共用时需按内容域克隆
@@ -134,25 +133,25 @@
    需要视觉序模型，登记待排期。
 5. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
-   **精确相等**（658 = 366+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
+   **精确相等**（674 = 382+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
    测试名做锚，未做。
 
 ## 其他未决项
 
 - **`--rel-widths` 部分为 0 会静默产出 0 宽格子**（低优先）：`0,1` 时首列 cell 宽 0、面板不可见，
   与 `rel_*` 其余 fail-closed 不一致。
-- **嵌套组图累积偏差**（非变形，每步 `Δ=0.00%`）：A4 目标 1000×1414 拼出 1532.48（+8.4%，GH 行 1.445 倍行高）；
-  中间步 margin 改列宽比（默认 24 ⇒ A:BC=1.951）⇒ 嵌套中间步一律 `--plot-margin 0`。
+- **嵌套组图累积偏差**（非变形，每步 `Δ=0.00%`）：A4 目标 1000×1414 拼出 1532.48（+8.4%）；中间步 margin
+  改列宽比（默认 24 ⇒ A:BC=1.951）⇒ 嵌套中间步一律 `--plot-margin 0`。
 - **无跨格（span/merge）能力**：`src/cli/parse.rs` 的 FLAGS 只有 `nrow/ncol/rel-*/gap`；"A 占 2×2" 只能嵌套近似。
-- **W6 在嵌套输出上是假阳性**：越界数字来自残留的 `visibility="hidden"` 内层 panel-box rect（ink walker
-  只跳 `display:none`，`src/ink/walk.rs:82,128`）；另 `left` 是 `0.75em/字符` 上界估算（高估约 6.4×）。
+- **W6 在嵌套输出上是假阳性**：越界数字来自残留的 `visibility="hidden"` 内层 panel-box rect（ink walker 只跳
+  `display:none`，`src/ink/walk.rs:82,128`）；`left` 是 `0.75em/字符` 上界估算（高估约 6.4×）。
 - **合成时面板内容不再被面板画布裁剪**：超出面板画布的元素会渲染到成品外边距（密集版式下可能压到相邻
   面板）。要严格复刻需在 cell 上补 clip——**尚未做**（见 `ARCHITECTURE/layout.md` §2）。
 - **固定 `--plot-margin` 时"溢出字母带但没出画布"的字母仍被静默裁**（W5 只覆盖"越出画布"）：按需要自行留足。
 - **W6 的容差 1 px 保留、不加豁免**（已知会为真实的小越界出声，如 S39-C 修好后仍报
   `right by 1.537 px`，成品 24 px margin 掩盖得住）——**待用户裁决**是否放宽或按侧豁免。
-- **`convert/` 对 RDKit `MolDraw2DSVG` 方言的结论需重测**：记录取自 2026-09-20 前（"37 个不支持节点"），
-  而 `<path>` 出形态与主库 path 支持均已改 ⇒ 重测后再采信；2D 结构式目前走位图。
+- **`convert/` 对 RDKit `MolDraw2DSVG` 方言的结论需重测**（记录取自 2026-09-20 前"37 个不支持节点"，
+  `<path>` 出形态与主库 path 支持均已改）；2D 结构式目前走位图。
 - **`<path>` 出形态决策表的已知边界**：判断"是否描边"只看图元自身声明；描边只来自祖先 `<g stroke=…>`
   时，多子轮廓填充路径仍会描出连接边（两个受支持方言实测 0 例，**明确不做**，见 `ARCHITECTURE/convert.md`）。
 - **镜像（负）等比 + 旋转弧**会静默失真（手性翻转需翻 `sweep`/取反 `rotation`，而守卫只判
