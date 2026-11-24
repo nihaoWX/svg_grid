@@ -35,7 +35,8 @@
 | R54 字母判据的误伤面（`url(#missing)`、`fill-opacity=0`、祖先 opacity/stroke-width 继承、style 级联、`<symbol>` 经 `<use>`、嵌套文本切口） | ✅ 已修（新增 `label_paint.rs` 继承五字段 + url 可解析性判墨；`style_prop` 剥注释/后声明胜/`!important` 优先） | `3bb8516`；R54 |
 | R55 `patternTransform` / `gradientTransform` 里的长度量不跟随面板缩放 | ✅ 已修（`transforms.rs` 按 `T' = S·T·S⁻¹` 共轭；各向异性非正交格点残余已登记） | `2bff6ce`；R55 |
 | R56 字母判据的 `!important` 级联、零 alpha 颜色、`<symbol>` 实例化 | ✅ 已修（同属性多条 `!important` 取文档序第一个；`#rrggbbaa`/`rgba()` alpha=0 不出墨；`label_clip.rs` 按 `viewBox` 裁实例） | `04042cb`；R56 |
-| R57 R56 入账 + R19 门禁补回真牙 + `temp_path()` 并发唯一性 | ⏳ 进行中 | R57 |
+| R57 R56 入账 + R19 门禁补回真牙 + `temp_path()` 并发唯一性 | ✅ 已修（R19 用例数改回精确相等 598；`gate_demo.py` 证明只有精确快照绿；`process_tag()` 加纳秒） | `a724c08`；R57 |
+| R58 滤镜图元长度（门控 `primitiveUnits`）+ 定义体 `font-size` + filter 区域被补 0 | ⏳ 进行中 | R58 |
 
 ## 1. 先读什么（按顺序）
 
@@ -185,8 +186,8 @@
    R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用；
    R48 收掉字母查重的漏判与误伤；R49 收掉嵌套定义克隆的重复 id；R50 收掉非 XML 1.0 字符被解码进产物；
    R51 收掉字母查重的剩余缺口；R52 收掉诊断文案的合成偏移与账本行号；R53 收掉告警码遮蔽；
-   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha。
-   **进行中 = R57**（R56 入账、R19 门禁补回真牙、`temp_path()` 并发唯一性）。
+   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha；R57 把用例数门禁改回精确相等并修掉 `temp_path()` 的并发假红。
+   **进行中 = R58**（滤镜图元长度、定义体 `font-size`、filter 区域不许补 0）。
 4. 交付前全量复核：`cargo test`（单 crate **598**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 

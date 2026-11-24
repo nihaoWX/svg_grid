@@ -1,16 +1,11 @@
-# In Progress
-
-- **R57（进行中）**：R56 的账本入账与报告删除（R56 的 Generator 收尾前 failed）、R19 门禁补回真牙
-  （R55 评审 P1-1：`BASELINE`/`COUNTS` 改回精确相等并更新到 598 = 306+59+233）、`temp_path()` 并发唯一性
-  （P2-1）、`R55/meta.toml` 的 220→214 与两条已知残余登记（P3）。
 # Current State
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R56 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
-  诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha。余下 pre-existing 见 Known Issues。
+  R43–R57 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
+  诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha、门禁与证据卫生。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
@@ -30,8 +25,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R56 已入账**；
-  `link` 组 L1–L69；`round-data/R3…R56` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R57 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R57` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -43,21 +38,17 @@
 
 （细节在账本与 `ARCHITECTURE.md`，不在此重复。）
 
-- 2026-11-24 **R56 字母判据的 `!important` 级联与零 alpha**：`style_prop` 同属性多条 `!important` 取
-  **文档序第一个**（resvg 0.47；cairosvg 取最后，按 R51 先例跟 resvg）、`split_important` 把 `!` 之后一切丢弃；
-  `label_paint.rs` 新增 `colour_paints`/`colour_alpha`（`#rrggbbaa`/`rgba()` alpha=0 不出墨）、`gradient_paints`
-  沿整条 href 链 + 环守卫；`<symbol>` 的 `display` 不作用于自身、新增 `label_clip.rs` 按 `viewBox` 裁实例。
-  测试 579→598，提交 `04042cb`。
+- 2026-11-24 **R56 字母判据的 `!important` 级联与零 alpha**：同属性多条 `!important` 取**文档序第一个**
+  （resvg 0.47；cairosvg 取最后，按 R51 先例跟 resvg）；`#rrggbbaa`/`rgba()` 零 alpha 不出墨、gradient 沿整条
+  href 链 + 环守卫；`<symbol>` 的 `display` 不作用于自身、按 `viewBox` 裁实例。测试 579→598，提交 `04042cb`。
 - 2026-11-24 **R55 paint server 的 transform 不跟随面板缩放**：新增 `src/transform/transforms.rs`，按
-  `T' = S·T·S⁻¹` 共轭 `patternTransform`/userSpace `gradientTransform`（等向保关键字、各向异性纯平移写
-  `translate`、带旋转写 `matrix`，非正交格点残余已登记）；`walk.rs` 两句"必须累积"的反语义注释改正。
-  A1–A11/B1–B6 除 A7/B4 残余外全 xor 0。测试 560→579，提交 `2bff6ce`。
+  `T' = S·T·S⁻¹` 共轭（等向保关键字、各向异性纯平移写 `translate`、带旋转写 `matrix`；非正交格点残余已登记）；
+  `walk.rs` 两句"必须累积"的反语义注释改正。测试 560→579，提交 `2bff6ce`。
 
 - 2026-11-24 **R54 字母查重的误伤与漏判**：新增 `src/label_paint.rs`（`Paint` 五字段随树继承、
-  `url(#id)` 可解析时按 gradient stop / pattern 子元素判墨，否则看回退色）；`ink/walk.rs::style_prop`
-  剥 `/* */`、后声明胜、`!important` 压普通；外层 marker 收整棵子树文本（无自有字符才丢弃）、
-  `<symbol>` 经 `<use>` 算字母、文本上下文只认 `text/tspan/textPath/a`。
-  A1–A8 误伤 2→0、B2/B5b/B6、C1、D1 漏判 0→2、E 组一条未退化。测试 528→560，提交 `3bb8516`。
+  `url(#id)` 可解析时按 gradient stop / pattern 子元素判墨，否则看回退色）；`style_prop` 剥 `/* */`、
+  后声明胜、`!important` 压普通；外层 marker 收整棵子树文本。A1–A8 误伤 2→0、B2/B5b/B6/C1/D1 漏判 0→2。
+  测试 528→560，提交 `3bb8516`。
 
 - 2026-11-24 **R52–R53 评审收尾**：R52 剥掉 `quick_xml` 合成偏移（`strip_synthetic_range`）、append-only 更正 R47 行号、
   `R50/meta.toml` 220→214、`normalize_label` 搬进 `label_letters.rs`；R53 `classify` 改成**收集全部命中码**
@@ -120,12 +111,16 @@
 - 2026-09-27 及更早 **R4–R3**：W6 内容越界 + 死白带判据（R4）；按 7 篇反馈更新指南（R3）；
   更早按 10 篇反馈修阻塞点（7 修 / 3 判外部或用错）、组图路线反转为 `svg_grid` 优先、
   布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
+- 2026-11-24 **R57 门禁与证据卫生**：R19 用例数从下限改回**精确相等**（598 = 306+59+233；R55 评审 P1-1
+  实测下限可容忍删掉 388 条），`gate_demo.py` 用 11 张合成表证明只有精确快照绿；`temp_path()` 加纳秒
+  `process_tag()` 修 pid 复用导致的并发假红；R55 语料 220→214、体积口径限定到门禁集合、登记两条残余。
+  提交 `140ed0a`（R56 入账）+`a724c08`。
 # In Progress
 
-- **R55（进行中）**：`patternTransform` 与 `gradientTransform` 里的长度量不跟随面板缩放。正确模型是**共轭
-  `S·P·S⁻¹`**（tile 与 body 都已按 S 缩放）；等向可保关键字写法，各向异性带旋转时必须输出 `matrix(...)`。
-  实测：pattern `translate(3 4)` 9280、`rotate(30 3 4)` 8681、obb pattern 50、嵌套 14880；gradient userSpace
-  `translate(3 4)` 3360、`rotate(30)` 580；obb gradient 不缩（xor 0）。`walk.rs:120-122` 那句"必须累积"是错的。
+- **R58（进行中）**：滤镜图元长度不随面板缩放（门控是 `primitiveUnits`，默认 userSpace ⇒ 要缩；
+  `stdDeviation`/`radius`/`baseFrequency` 各向异性必须写**双值**，几何平均实测更差）；定义体 `text`/`tspan`
+  的 `font-size`（属性与 `style` 都缩，`Position`/`None` 不缩）；以及 R46 引入的 `<filter href>` 区域被写成
+  0 尺寸导致内容消失（`rewrite_rect` 对缺失属性补 0）。
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
@@ -135,7 +130,8 @@
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
 1. **滤镜图元长度不随面板缩放**：门控是 `primitiveUnits`（默认 `userSpaceOnUse` ⇒ 要缩），缺省
-   `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。
+   `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。同族：filter 自身没写区域时
+   `rewrite_rect` 补 0 ⇒ 只有 `href` 的 filter（继承区域）与无区域 filter 内容整块消失（R46 起）。
 2. **定义体长度量**：定义体 `<text>` 的 `font-size`（`1512`）、viewBox/obb 父 pattern 下内层定义多缩一次
    （`12160/25280/27200`）。`patternTransform`/`gradientTransform` 已由 R55 收口；嵌套 `<pattern>` 与
    pattern 外 `clip-path` 实测 `xor 0`。
