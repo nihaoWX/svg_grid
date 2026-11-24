@@ -1,16 +1,21 @@
+# In Progress
+
+- **R57（进行中）**：R56 的账本入账与报告删除（R56 的 Generator 收尾前 failed）、R19 门禁补回真牙
+  （R55 评审 P1-1：`BASELINE`/`COUNTS` 改回精确相等并更新到 598 = 306+59+233）、`temp_path()` 并发唯一性
+  （P2-1）、`R55/meta.toml` 的 220→214 与两条已知残余登记（P3）。
 # Current State
 
 - **2026-11-22 用户新增 `INSTRUCTIONS.md` + `tests/user_tests/2026-11-20/`**（commit `6e582be`）：
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R53 依次收掉单位属性语义、组合图字母重号、doctor 告警码漂移、定义元素缩放单位、文本字符引用、
-  字母查重的漏判与误伤（两轮）、嵌套定义克隆的重复 id、非 XML 1.0 字符、诊断文案的合成偏移与告警码遮蔽。余下 pre-existing 见 Known Issues。
+  R43–R56 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
+  诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 560 项**（294 lib + 59 main + 207 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 598 项**（306 lib + 59 main + 233 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -25,8 +30,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R53 已入账**；
-  `link` 组 L1–L64；`round-data/R3…R53` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R56 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R56` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -36,53 +41,55 @@
   panel）复刻成功——4961×7016 @600 dpi、14 格 `sx=sy=1.00000`、四次 `plot-grid` stderr 全 0。
 # Completed
 
-（每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
+（细节在账本与 `ARCHITECTURE.md`，不在此重复。）
+
+- 2026-11-24 **R56 字母判据的 `!important` 级联与零 alpha**：`style_prop` 同属性多条 `!important` 取
+  **文档序第一个**（resvg 0.47；cairosvg 取最后，按 R51 先例跟 resvg）、`split_important` 把 `!` 之后一切丢弃；
+  `label_paint.rs` 新增 `colour_paints`/`colour_alpha`（`#rrggbbaa`/`rgba()` alpha=0 不出墨）、`gradient_paints`
+  沿整条 href 链 + 环守卫；`<symbol>` 的 `display` 不作用于自身、新增 `label_clip.rs` 按 `viewBox` 裁实例。
+  测试 579→598，提交 `04042cb`。
+- 2026-11-24 **R55 paint server 的 transform 不跟随面板缩放**：新增 `src/transform/transforms.rs`，按
+  `T' = S·T·S⁻¹` 共轭 `patternTransform`/userSpace `gradientTransform`（等向保关键字、各向异性纯平移写
+  `translate`、带旋转写 `matrix`，非正交格点残余已登记）；`walk.rs` 两句"必须累积"的反语义注释改正。
+  A1–A11/B1–B6 除 A7/B4 残余外全 xor 0。测试 560→579，提交 `2bff6ce`。
 
 - 2026-11-24 **R54 字母查重的误伤与漏判**：新增 `src/label_paint.rs`（`Paint` 五字段随树继承、
-  `url(#id)` 能解析时按 gradient stop / pattern 子元素判是否出墨，解析不到看回退色）；`ink/walk.rs::style_prop`
-  改剥 `/* */`、同 style 后声明胜、`!important` 压普通声明；`label_letters.rs` 外层 marker 收整棵子树被画出的
-  文本（无自有字符才丢弃）、`<symbol>` 经 `<use>` 仍算字母、文本上下文只认 `text/tspan/textPath/a`。
+  `url(#id)` 可解析时按 gradient stop / pattern 子元素判墨，否则看回退色）；`ink/walk.rs::style_prop`
+  剥 `/* */`、后声明胜、`!important` 压普通；外层 marker 收整棵子树文本（无自有字符才丢弃）、
+  `<symbol>` 经 `<use>` 算字母、文本上下文只认 `text/tspan/textPath/a`。
   A1–A8 误伤 2→0、B2/B5b/B6、C1、D1 漏判 0→2、E 组一条未退化。测试 528→560，提交 `3bb8516`。
 
-- 2026-11-24 **R52–R53 评审收尾**：R52 剥掉 `quick_xml` 的合成偏移（`strip_synthetic_range` 唯一实现，
-  四类文案全覆盖）、append-only 更正 R47 在 `8aca0d1` 上的真实行号、`R50/meta.toml` 语料 220→214、
-  `normalize_label` 搬进 `label_letters.rs`（`lib.rs`→18491 B）；R53 把 `classify` 改成**收集全部命中码**
-  （W9/W7 不再被用户内容掩蔽）、`is_warning_line` 只排除 footer 正文、短语副本改从 `WARNING_CODES` 派生、
-  删 `R17/test.py` 死变量。测试 517→528。提交 `6d32738`、`a0025cf`。
+- 2026-11-24 **R52–R53 评审收尾**：R52 剥掉 `quick_xml` 合成偏移（`strip_synthetic_range`）、append-only 更正 R47 行号、
+  `R50/meta.toml` 220→214、`normalize_label` 搬进 `label_letters.rs`；R53 `classify` 改成**收集全部命中码**
+  （W9/W7 不再被用户内容掩蔽）、短语副本从 `WARNING_CODES` 派生。
+  测试 517→528。提交 `6d32738`、`a0025cf`。
 
 - 2026-11-24 **R51 字母查重剩余缺口**：收集器抽成 `src/label_letters.rs`——`collect_text` 不递归进带 marker 的
   子元素、`expand_use` 按 `<use>` 实例化计并防环、`paint_prop` 跳过无 fill/stroke 的 text；`normalize_label`
-  只折叠四个 ASCII 空白并删零宽字符；`style_prop` 先剥 `!important`（关键字大小写仍敏感——两台渲染器都不合规，
-  `display="NONE"` 照样画）。测试 496→517。提交 `bae128d`。
-- 2026-11-24 **R50 非 XML 1.0 字符被解码进产物**：`src/dom.rs` 新增 `is_xml_char`（严格 XML 1.0 `Char`
-  产生式）+ `decode_reference`，`src/convert/dom.rs` 复用同一份判据；文本/属性/CDATA/字面控制字符一律
-  fail-closed（rc=1、不写产物、点名引用与码位）+ 不变量测试 `every_accepted_output_is_well_formed`。
-  修前 `&#1;` rc=0 但产物不良构（`d1render` rc=3）→ 修后 rc=1。测试 482→496，提交 `1fbc3c3`。
-- 2026-11-24 **R49 嵌套定义克隆的重复 id**：新增 `src/transform/hoist.rs`（被外壳外以不同 policy 引用的嵌套
-  定义先提升到顶层只拆一次）；`split_children` 加 `narrow` 把内层 wanted 收窄为 `{该拷贝的 policy}`；`normalize.rs`
-  新增 `content_is_user_space`，定义自身 `stroke-width`/`font-size` 只在内容域是 user space 时缩放（obb pattern
-  0.1→0.050 的 xor 11520 → 0）。probe19 dups `{G:2,G--y:3}`→`{}`。测试 474→482。提交 `4e9f8c6`。
-- 2026-11-24 **R48 字母查重的漏判与误伤**：递归收集 marker 子树文本并按文档序拼接、与 `--labels` 同口径、
-  跳过不可见子树（`visibility` 可被后代恢复）；`collisions` 改 O(n)、`LetterSite.cell` 变真、≥5 撞号给 `+N more`。
-  40000 字母 1.31 s→0.06 s。测试 446→474。提交 `9117335`。
-- 2026-11-24 **R47 文本节点的字符引用**：两处 `Event::GeneralRef` 改调 `quick_xml::escape::unescape`，`Err` 走
-  各自 Xml 变体（rc=1），两份 `resolve_reference` 删除。`37&#176;C` 修前 ink 1701/diff 1734 → 502/diff 0。
-  测试 435→446。提交 `8aca0d1`。
-- 2026-11-24 **R46 定义元素按引用者的 data-scale 走**：`src/transform/` 拆成 `defs/links/walk/dispatch`
-  （`mod.rs` 只留声明）；`defs::split` 按引用图建不动点、多 policy **传递地复制**定义（id 后缀 `--svg-grid-<tag>`，
-  单 policy 不复制、无引用者按书写位置）；marker 有 viewBox ⇒ body verbatim；units 沿 href 继承（mask 不继承）。
-  提交 `54fa2b6`。
-- 2026-11-24 **R45 doctor 告警码漂移**：短语表搬到 `src/warnings/codes.rs`（`WARNING_CODES` 26-42、`classify`
-  50-68），一码多短语；W4a 去反引号、W5 收两种形态、W7 改 `could not be rewritten, kept verbatim`、W3/W8
-  移出表。`codes_tests.rs` 用真实 `describe_*` 回灌；W7 门禁复活。测试 415→419。提交 `196da47`。
-- 2026-11-24 **R43–R44 单位属性与字母重号**：`src/transform/units.rs` 精确 token 语义（不 trim、非法值回退
-  默认值），mask/filter/gradient/marker/pattern 全切换、tile 的 x/y/width/height 逐属性沿 href 解析（R43，
-  394→406，`8846fa8`）；字母唯一性提升为整张图的性质——输入自带 ∪ 本次分配，同字母 ≥2 次且至少一处来自
-  输入 ⇒ rc=2、不写产物、`--plan` 同 rc（R44，406→415，`4873156`）。
-- 2026-11-24 **R42 转换器并入主库**：`convert/` crate → `src/convert/` 模块（28 个 `.rs` `git mv`、
-  106 处 `crate::`→`crate::convert::`、删独立 `[[bin]]`/`Cargo.toml`/`main.rs`），
-  `convert/tests/cli.rs` → `tests/selftest/convert_cli/mod.rs`；诊断前缀统一 `svg_grid convert:`。
-  220 fixture / 58 组合 / `--plan` / `--report` 与 base 逐字节相同。测试 394（单 crate）。提交 `de1bfae`→`8f38435`。
+  只折叠四个 ASCII 空白并删零宽字符；`style_prop` 先剥 `!important`（关键字大小写仍敏感，`display="NONE"` 照样画）。测试 496→517。提交 `bae128d`。
+- 2026-11-24 **R49–R50 嵌套克隆重复 id + 非 XML 1.0 字符**：R49 新增 `src/transform/hoist.rs`（被外壳外以
+  不同 policy 引用的嵌套定义先提升到顶层只拆一次）、`split_children` 加 `narrow` 收窄内层 wanted、
+  `normalize.rs::content_is_user_space` 门控定义自身表现属性（obb pattern xor 11520→0）；R50 新增
+  `src/dom.rs::is_xml_char`（严格 XML 1.0 `Char`）+ `decode_reference`，两条路径共用一份判据、文本/属性/CDATA
+  一律 fail-closed（`&#1;` 修前 rc=0 但产物不良构 → 修后 rc=1）+ 良构不变量测试。测试 474→496。
+  提交 `4e9f8c6`、`1fbc3c3`。
+- 2026-11-24 **R47–R48 字符引用 + 字母查重**：R47 两处 `Event::GeneralRef` 改调
+  `quick_xml::escape::unescape`（`Err` 走各自 Xml 变体 rc=1，两份 `resolve_reference` 删除；`37&#176;C`
+  修前 ink 1701/diff 1734 → 502/diff 0）；R48 递归收集 marker 子树文本并按文档序拼接、跳过不可见子树、
+  `collisions` 改 O(n)、`LetterSite.cell` 变真、≥5 撞号给 `+N more`（40000 字母 1.31 s→0.06 s）。
+  测试 435→474。提交 `8aca0d1`、`9117335`。
+- 2026-11-24 **R45–R46 告警码漂移 + 定义元素缩放**：R45 短语表搬到 `src/warnings/codes.rs`
+  （一码多短语；W4a 去反引号、W5 收两形态、W7 改 `could not be rewritten, kept verbatim`、W3/W8 移出表），
+  `codes_tests.rs` 用真实 `describe_*` 回灌、W7 门禁复活（415→419）；R46 `src/transform/` 拆成
+  `defs/links/walk/dispatch`，`defs::split` 按引用图建不动点、多 policy **传递地复制**定义（id 后缀
+  `--svg-grid-<tag>`）、marker 有 viewBox ⇒ body verbatim、units 沿 href 继承（mask 不继承）。提交
+  `196da47`、`54fa2b6`。
+- 2026-11-24 **R42–R44 转换器并入主库 + 单位属性 + 字母重号**：R42 `convert/` crate → `src/convert/` 模块
+  （28 个 `.rs` `git mv`、106 处 `crate::`→`crate::convert::`、删独立 `[[bin]]`/`Cargo.toml`/`main.rs`，
+  诊断前缀统一 `svg_grid convert:`，语料与 base 逐字节相同，测试 394 单 crate）；R43 `src/transform/units.rs`
+  精确 token 语义（不 trim、非法值回退默认值）+ tile 的 x/y/width/height 逐属性沿 href 解析（394→406）；
+  R44 字母唯一性提升为整张图的性质（输入自带 ∪ 本次分配，同字母 ≥2 次且至少一处来自输入 ⇒ rc=2、
+  不写产物、`--plan` 同 rc，406→415）。提交 `de1bfae`→`8f38435`、`8846fa8`、`4873156`。
 - 2026-11-24 **R37–R41 defs 与 pattern 单位语义**：`prune_defs` 按引用保留 + 悬空引用 fail-closed（R37）、
   pattern 相位（tile 全映射 + body 只缩放不平移，R38）、obb 内容逐字保留（R39）、
   viewBox/严格 token（R40）、href 断链回退 user space + 重复 id 后者胜 + `patternUnits` 继承（R41）。
@@ -127,11 +134,11 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，`INSTRUCTIONS.md` 的六条要求均已满足。剩下列 pre-existing，均已开报告：
 
-1. **滤镜图元长度不随面板缩放**：由 `primitiveUnits` 门控（默认 `userSpaceOnUse` ⇒ 要缩），缺省
+1. **滤镜图元长度不随面板缩放**：门控是 `primitiveUnits`（默认 `userSpaceOnUse` ⇒ 要缩），缺省
    `filterUnits` 下 s=2 `xor 5568`；`feConvolveMatrix`/`feSpotLight` 不动。
-2. **paint server 与定义体长度量**：`patternTransform`（`9280`）、userSpace `gradientTransform`（`3360`）、
-   定义体 `<text>` 的 `font-size`（`1512`）、viewBox/obb 父 pattern 下内层定义多缩一次
-   （`12160/25280/27200`）。嵌套 `<pattern>` 与 pattern 外 `clip-path` 实测 `xor 0`。
+2. **定义体长度量**：定义体 `<text>` 的 `font-size`（`1512`）、viewBox/obb 父 pattern 下内层定义多缩一次
+   （`12160/25280/27200`）。`patternTransform`/`gradientTransform` 已由 R55 收口；嵌套 `<pattern>` 与
+   pattern 外 `clip-path` 实测 `xor 0`。
 3. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
    `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
    需要视觉序模型，登记待排期。
