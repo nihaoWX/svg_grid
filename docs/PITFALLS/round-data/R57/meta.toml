@@ -32,7 +32,8 @@ note = """
   注释写明「这是上一轮的精确计数；任何一轮增删测试都必须在同一轮更新这里，否则本条立刻红」，并点名 R55 的下限
   事故与 R55 评审 P1-1。副作用是每轮都要改一次快照——这是有意的：改快照的动作就是「我知道用例数变了」的签名。
 - `docs/PITFALLS/round-data/R57/gate_demo.py`：import R19 证据、把 `cargo_test_targets` 换成合成计数表、调
-  `family_two()`，不改仓库。实测 11 张表只有一张 GREEN：精确快照 598（0 条红断言）；总数 597/599（各 2 条红）、
+  `family_two()`，不改仓库。实测 11 行只有一行 GREEN（其中 `total -1`/`lib -1`（以及 `total +1`/`lib +1`）喂的是
+  同一张 dict ⇒ 实际是 **10 张不同表、9 张转红**）：精确快照 598（0 条红断言）；总数 597/599（各 2 条红）、
   lib 305/307（各 2）、main 58/60（各 2）、selftest 232/234（各 3）、R55 的下限形状 60/57/73=190（5 条红）、
   全部删除（0，5 条红）。红断言名：`用例总数 == 598（精确相等）`、`` `unittests src/lib.rs` == 306 条（精确相等）``、
   `` `unittests src/main.rs` == 59 条（精确相等）``、`` `tests/selftest/main.rs` == 233 条（精确相等）``、
@@ -40,7 +41,7 @@ note = """
 - `tests/selftest/common/mod.rs::temp_path`：新增 `process_tag()`（`OnceLock<String>`，`pid_nanos`），临时文件名
   变成 `svg_grid_test_<pid>_<nanos>_<name>`。没有新依赖（只用 std 的 `OnceLock`/`SystemTime`）。实测：用
   `LD_PRELOAD` 的 C 垫片把 `getpid()` 钉成 4242，8 个进程同时跑 `display_none_cannot_be_restored_by_a_descendant`、
-  共享一个 TMPDIR —— 修前二进制 7/8 红（rcs 101,101,0,101,101,101,101,101），panic 在
+  共享一个 TMPDIR —— 修前二进制 7/8 红（rcs 是 7 个 101 + 1 个 0；**绿的索引随调度变化**，不是固定位置），panic 在
   `tests/selftest/labels/visibility.rs:40`：`read /tmp/.../svg_grid_test_4242_r48_vis_display_base.png: No such file
   or directory (os error 2)`；修后 8/8 全绿。修前二进制由 `git archive 04042cb` 在 /tmp 里单独构建（仓库未动）。
 - `docs/PITFALLS/round-data/R55/meta.toml`：语料 220 → 214（`git ls-files 'tests/**/*.svg'` 是 214；`find` 数到
@@ -57,10 +58,20 @@ note = """
 怎么修才不弄坏前面：全量 `cargo test --offline` 连跑 3 次都是 598（306+59+233）、0 failed；fmt/clippy 干净；
 `./install.sh` 后 `target/release/svg_grid` 与 `~/.local/bin/svg_grid` sha256 两侧一致；doctor 57 pass / 0 fail /
 1 skip；语料 214 convert + 58 plot-grid 对 /tmp/r50base（e0c6033）逐字节 0 差异（plot-grid both-failed=1）；
-旧证据 R3..R57 共 53 轮顶层全绿（`R49/shim/ran.txt` 追加 `R57 OK`）。
+旧证据 R3..R57 在**真实仓库路径 + `fontlib/` 字体就位**下共 53 轮顶层全绿（`R49/shim/ran.txt` 追加 `R57 OK`）；
+在 /tmp 的 worktree 副本里只有 39/53 —— 14 条红是路径/账本迁移伪影（账本 store id 由 `sha1(realpath)` 决定、
+`REPO=HERE.parents[5]` 在 /tmp 下解析错），不是回归，报告与 `run_old_evidence.sh` 都应注明这两个前提。
+`pitfalls-manager verify`（38 checks）是 pitfalls-manager 自己的全局验收套件，不算本仓证据。
 
 登记（未修）：R19 证据仍带 7 个历史测试目录与旧二进制前缀的口径（本轮只把计数改精确，没重写目录检查）；
 R55 的两条残余按派单只登记不修——它们需要改渲染/共轭逻辑，属于下一轮的工作。
+
+**已知残余（R57 评审 P1-1 实测，必须记住）**：精确计数只挡「增删测试」，**挡不住「同名抽空/替换」**——把
+`tests/selftest/labels/visibility.rs` 的 `display_none_cannot_be_restored_by_a_descendant` 函数体换成 `{}` 后
+`cargo test` 仍是 598 / 0 failed，R19 的 `family_two()` 给 `FAILS=[]`；额外加一个 0 测试的 target（如
+`unittests src/bin/x.rs`）也照样绿。原因：判据只比较 per-target 计数与 `test result: ok.`。真要挡这类腐化，
+需要独立锚（例如按测试名快照、或每个 target 断言"给定名字集合 ⊆ 实际通过集合"），本轮不做。
+`R57/test.py` 里写死的 598 / 233 / 11 行标签也必须在改 R19 快照的同一轮一起更新，否则会红。
 """
 how_to_run = """
 cd <repo> && cargo build --release --offline
@@ -71,4 +82,5 @@ R57_PRE_FIX_SELFTEST=/tmp/r57old/target/debug/deps/selftest-f1a3992dfd88e812 pyt
 SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R57/test.py
 # 只做门禁牙齿演示
 python3 docs/PITFALLS/round-data/R57/gate_demo.py
+# 旧证据 53/53 需要：真实仓库路径（不要在 /tmp 的 worktree 里跑）+ fontlib/ 字体就位
 """
