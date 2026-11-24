@@ -41,7 +41,8 @@
 | R60 R59 评审 P1：光源 `z`/`pointsAtZ` 该用 RMS 而非几何平均、光源 `x/y` 只乘不平移、obb 下光源改写被跳过 | ✅ 已修（spot 4×5 37011/206→0、point 95008/2→0、obb 100170/242→0、两 cell 5277/238→0） | `72a05e7`；R60 |
 | R61 R60 评审 P2：输入有限但乘积溢出仍写 `inf`/`NaN`（`x="1e38"` 配 s=8 ⇒ `x="inf" width="NaN"`） | ✅ 已修（`scaled_finite` 判乘积；溢出一律逐字节保原文 + W7；原子组保 rect 四边/cx cy/points/d/filter 数） | `9dc3c05`；R61 |
 | R62 R61 评审：内容域第二条轴（verbatim body 出边不传 policy、多域按域克隆）+ `<ellipse>` 从未被缩放 + 账本补 modify | ✅ 已修（`Slot::{UserSpace,Verbatim}`、按域克隆 `--svg-grid-verbatim`、href 按自身 body 域选靶；`rewrite_ellipse`；评审 7876c46/cc66d4b FAIL → 终版 PASS 有条件） | `b6f6741`；R62 |
-| R63 R62 评审：W7 默认不可见（值被保原文时 stderr 0 字节、rc=0 ⇒ 静默错图）+ 测试硬化（椭圆 `ry` 变异存活、三层 gradient-href 断言被削） | ⏳ 进行中 | R63 |
+| R63 R62 评审：W7 默认不可见（值被保原文时 stderr 0 字节、rc=0 ⇒ 静默错图）+ 测试硬化（椭圆 `ry` 变异存活、三层 gradient-href 断言被削） | ✅ 已修（`emit` 按 `classify` 逐行取码，只放行含 W7 的行；其余码与 `note:` 仍静音、footer 文案不变；214+58 成功运行仍 0 字节） | `fea3fc4`；R63 |
+| R64 `<use>` 引用的 `<defs>` 普通元素不被缩放（`<defs><rect width="10">` 经 `<use>` 仍 10 ⇒ xor 300/255）+ `<foreignObject>`/`<switch>` 被 `convert` 静默放行 | ⏳ 进行中 | R64 |
 
 ## 1. 先读什么（按顺序）
 
@@ -139,7 +140,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 699**：407 lib + 59 bin + 233 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 701**：409 lib + 59 bin + 233 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -191,9 +192,9 @@
    R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用；
    R48 收掉字母查重的漏判与误伤；R49 收掉嵌套定义克隆的重复 id；R50 收掉非 XML 1.0 字符被解码进产物；
    R51 收掉字母查重的剩余缺口；R52 收掉诊断文案的合成偏移与账本行号；R53 收掉告警码遮蔽；
-   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha；R57 把用例数门禁改回精确相等并修掉 `temp_path()` 的并发假红；R58 收掉滤镜图元长度、定义体 `font-size` 与 filter 区域补 0；R59 收掉光源长度、单轴双值与畸形长度口径；R60 把光源整体进 user space（RMS z、位置平移、obb 不再跳过）；R61 收掉乘积溢出的 `inf`/`NaN` 写回（保原文 + W7）；R62 收掉内容域第二条轴（含 href 选靶）与 `<ellipse>` 未缩放。
-   **进行中 = R63**（W7 默认可见 + R62 评审的测试硬化）。
-4. 交付前全量复核：`cargo test`（单 crate **699**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha；R57 把用例数门禁改回精确相等并修掉 `temp_path()` 的并发假红；R58 收掉滤镜图元长度、定义体 `font-size` 与 filter 区域补 0；R59 收掉光源长度、单轴双值与畸形长度口径；R60 把光源整体进 user space（RMS z、位置平移、obb 不再跳过）；R61 收掉乘积溢出的 `inf`/`NaN` 写回（保原文 + W7）；R62 收掉内容域第二条轴（含 href 选靶）与 `<ellipse>` 未缩放；R63 让 W7（值被保原文）默认出声。
+   **进行中 = R64**（`<use>` 引用的 defs 不缩放 + `foreignObject`/`<switch>`）。
+4. 交付前全量复核：`cargo test`（单 crate **701**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
