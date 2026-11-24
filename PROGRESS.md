@@ -4,8 +4,8 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R59 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
-  诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha、滤镜图元长度与定义体字号、光源位置因子、门禁与证据卫生。余下 pre-existing 见 Known Issues。
+  R43–R60 收掉单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、
+  诊断文案偏移、paint server transform 共轭、`!important` 级联与零 alpha、滤镜图元长度与定义体字号、光源位置因子、溢出写入、门禁与证据卫生。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
@@ -25,55 +25,56 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R59 已入账**；
-  `link` 组 L1–L69；`round-data/R3…R59` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R60 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R60` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
-- **黑盒验证**：四轮（`tests/s22_repro/out/skilltest{,2,3,4}/`）。**R3 起 `--height`/`--rel-*` 完全不再出现**；
-  **R4 零告警通过**（六格 `sx=sy=1.0000`）。
-- **真实产物**：`research/白藜芦醇胰腺癌` 的 12 张成品图已用本管线重做；**Figure 2**（矢量带 + 13 个位图
-  panel）复刻成功——4961×7016 @600 dpi、14 格 `sx=sy=1.00000`、四次 `plot-grid` stderr 全 0。
+- **黑盒验证**：四轮（`tests/s22_repro/out/skilltest{,2,3,4}/`）；R3 起 `--height`/`--rel-*` 不再出现、R4 零告警。
+- **真实产物**：`research/白藜芦醇胰腺癌` 的 12 张成品图已重做；**Figure 2**（矢量带 + 13 个位图 panel）
+  复刻成功——4961×7016 @600 dpi、14 格 `sx=sy=1.00000`、四次 `plot-grid` stderr 全 0。
 # Completed
 
 （细节在账本与 `ARCHITECTURE.md`，不在此重复。）
 
+- 2026-11-24 **R60 光源进 user space**：`z`/`pointsAtZ` 改用 resvg 的 **RMS** `sqrt((sx²+sy²)/2)`（几何平均错，
+  4×5 spot 37011/206→0）、光源 `x/y`/`pointsAtX/Y` 改为平移+缩放（两 cell 5277/238→0）、`primitiveUnits=
+  objectBoundingBox` 不再跳过 lighting（100170/242→0，真 obb 分数仍门控）、图元子区域按 units 改写、
+  非有限值一律保原文不写 `inf`。拆出 `src/transform/lights.rs`，测试 643→658，提交 `72a05e7`。
 - 2026-11-24 **R59 滤镜光源与单轴双值**：`feSpotLight` 的 `x/y/pointsAtX/pointsAtY` 其实是长度（等向
   18003/205→0），及各向异性写**双值**；`--svg-grid` 单轴策略缺因子按 1.0 并给标量写双值（`2`→`"8 2"`）；
   五种畸形长度回 rc=0 + 原样 + W7；obb `clipPath` body 字号不再缩。提交 `081293e`，测试 633→643。
-- 2026-11-24 **R57–R58 证据卫生 + 滤镜图元与定义体字号**：R57 把 R19 用例数从下限改回**精确相等**
-  （`gate_demo.py` 用合成表证明只有精确快照绿）、`temp_path()` 加纳秒 `process_tag()` 修 pid 复用假红、
-  R55 语料 220→214 与体积口径收窄（提交 `140ed0a`+`a724c08`）；R58 新增 `src/transform/filters.rs`，
-  滤镜图元长度改按 `primitiveUnits` 门控（`stdDeviation`/`radius`/`baseFrequency` 各向异性写**双值**：
-  `8 10`⇒xor 0、几何平均 `8.944`⇒69016，弃用）、定义体 `text`/`tspan` 的 `font-size` 随面板缩、
-  filter/mask 不再凭空补 0 区域（R46 的 `<filter href>` 内容消失回归修好），测试 598→633，提交 `c4c522f`。
+- 2026-11-24 **R57–R58 证据卫生 + 滤镜图元与定义体字号**：R57 把 R19 用例数从下限改回**精确相等**、`temp_path()`
+  加纳秒 `process_tag()` 修 pid 复用假红、R55 语料 220→214（`140ed0a`+`a724c08`）；R58 新增 `filters.rs`，
+  滤镜图元长度按 `primitiveUnits` 门控（各向异性写**双值** `8 10`⇒0，几何平均 `8.944`⇒69016 弃用）、定义体
+  `text`/`tspan` 的 `font-size` 随面板缩、filter/mask 不再凭空补 0 区域。测试 598→633，提交 `c4c522f`。
 - 2026-11-24 **R55–R56 paint server 共轭 + 字母判据收口**：R55 新增 `src/transform/transforms.rs`，按
   `T' = S·T·S⁻¹` 共轭 `patternTransform`/userSpace `gradientTransform`（等向保关键字、各向异性纯平移写
-  `translate`、带旋转写 `matrix`；非正交格点残余已登记）；R56 同属性多条 `!important` 取**文档序第一个**
-  （resvg 0.47；cairosvg 反之）、`#rrggbbaa`/`rgba()` 零 alpha 不出墨、gradient 沿整条 href 链 + 环守卫、
-  `<symbol>` 的 `display` 不作用于自身并按 `viewBox` 裁实例。测试 560→598，提交 `2bff6ce`、`04042cb`。
+  `translate`、带旋转写 `matrix`）；R56 同属性多条 `!important` 取**文档序第一个**（跟 resvg 0.47）、
+  `#rrggbbaa`/`rgba()` 零 alpha 不出墨、gradient 沿整条 href 链 + 环守卫、`<symbol>` 的 `display` 不作用于自身
+  并按 `viewBox` 裁实例。测试 560→598，提交 `2bff6ce`、`04042cb`。
 
 - 2026-11-24 **R51–R54 字母查重四轮**：`src/label_letters.rs`（`collect_text` 不递归进带 marker 的子元素、
   `expand_use` 按 `<use>` 实例化计并防环、`normalize_label` 只折四个 ASCII 空白并删零宽）；`label_paint.rs`
   （`Paint` 五字段随树继承、`url(#id)` 可解析时按 gradient stop / pattern 子元素判墨）；`style_prop` 剥
   `/* */`、后声明胜、`!important` 压普通（关键字大小写仍敏感）。测试 496→560，提交 `bae128d`、`3bb8516`。
-- 2026-11-24 **R49–R52 克隆去重 + 非 XML 1.0 字符 + 诊断偏移**：R49 新增 `src/transform/hoist.rs`（被外壳外以
-  不同 policy 引用的嵌套定义先提升）、`split_children` 加 `narrow` 收窄内层、`content_is_user_space` 门控定义
-  自身表现属性；R50 新增 `src/dom.rs::is_xml_char` + `decode_reference`，文本/属性/CDATA 共用一份判据且
-  fail-closed（`&#1;` 修前 rc=0 但产物不良构 → 修后 rc=1）；R52 用 `strip_synthetic_range` 剥掉 quick-xml
-  合成偏移、append-only 更正 R47 行号；R53 `classify` 收集**全部**命中码（W9/W7 不再被掩蔽）。测试 474→528。
+- 2026-11-24 **R49–R53 克隆去重 + 非 XML 1.0 字符 + 诊断偏移**：R49 新增 `src/transform/hoist.rs`（被外壳外以
+  不同 policy 引用的嵌套定义先提升）、`split_children` 加 `narrow`；R50 新增 `src/dom.rs::is_xml_char` +
+  `decode_reference`，文本/属性/CDATA 共用一份判据且 fail-closed（`&#1;` 修前 rc=0 但产物不良构 → 修后 rc=1）；
+  R52 用 `strip_synthetic_range` 剥 quick-xml 合成偏移；R53 `classify` 收集**全部**命中码（W9/W7 不再被掩蔽）。
+  测试 474→528。
 - 2026-11-24 **R47–R48 字符引用 + 字母查重**：R47 两处 `Event::GeneralRef` 改调 `quick_xml::escape::unescape`
   （`Err` 走各自 Xml 变体 rc=1，两份 `resolve_reference` 删除；`37&#176;C` 修前 ink 1701 → 502/diff 0）；
   R48 递归收 marker 子树文本、跳过不可见子树、`collisions` 改 O(n)、`LetterSite.cell` 变真、≥5 撞号给
   `+N more`（40000 字母 1.31 s→0.06 s）。测试 435→474。提交 `8aca0d1`、`9117335`。
-- 2026-11-24 **R45–R46 告警码漂移 + 定义元素缩放**：R45 短语表搬到 `src/warnings/codes.rs`
-  （一码多短语；W4a 去反引号、W5 收两形态、W7 改 `could not be rewritten, kept verbatim`、W3/W8 移出表），
-  `codes_tests.rs` 用真实 `describe_*` 回灌、W7 门禁复活（415→419）；R46 `src/transform/` 拆成
+- 2026-11-24 **R45–R46 告警码漂移 + 定义元素缩放**：R45 短语表搬到 `src/warnings/codes.rs`（一码多短语；
+  W4a 去反引号、W5 收两形态、W3/W8 移出表），`codes_tests.rs` 用真实 `describe_*` 回灌、W7 门禁复活（415→419）；
+  R46 `src/transform/` 拆成
   `defs/links/walk/dispatch`，`defs::split` 建不动点、多 policy **传递地复制**定义（id 后缀 `--svg-grid-<tag>`）、
   marker 有 viewBox ⇒ body verbatim、units 沿 href 继承（mask 不继承）。提交 `196da47`、`54fa2b6`。
 - 2026-11-24 **R42–R44 转换器并入主库 + 单位属性 + 字母重号**：R42 `convert/` crate → `src/convert/` 模块
-  （28 个 `.rs` `git mv`、106 处 `crate::`→`crate::convert::`、删独立 `[[bin]]`/`Cargo.toml`/`main.rs`，
-  诊断前缀统一 `svg_grid convert:`，语料与 base 逐字节相同，测试 394 单 crate）；R43 `src/transform/units.rs`
+  （28 个 `.rs` `git mv`、删独立 `[[bin]]`，诊断前缀统一 `svg_grid convert:`，语料与 base 逐字节相同，394 单
+  crate）；R43 `src/transform/units.rs`
   精确 token 语义（不 trim、非法值回退默认值）+ tile 的 x/y/width/height 逐属性沿 href 解析（394→406）；
   R44 字母唯一性提升为整张图的性质（输入自带 ∪ 本次分配，同字母 ≥2 次且至少一处来自输入 ⇒ rc=2、
   不写产物、`--plan` 同 rc，406→415）。提交 `de1bfae`→`8f38435`、`8846fa8`、`4873156`。
@@ -82,9 +83,8 @@
   viewBox/严格 token（R40）、href 断链回退 user space + 重复 id 后者胜 + `patternUnits` 继承（R41）。
 - 2026-11-23 **D5b–D5d W8 收尾（R34–R36）**：`describe_missing_font_error` 改为**链里任一名字可用（在库或
   通用族）即放行**，整链不可用才 rc=3 并点名整链 + 可用族 + 修法；错误行 200 字符硬上限
-  （`MAX_ERROR_BODY`/`assemble_within`），W3 205→188、W8 239→194/195、W5 217→191；D5c 手算预算错 1
-  （`"(available: "` 12 vs 真实 13）⇒ `available:` 整段丢失，D5d 改为**按 `format!` 真实长度反推预算**
-  （`AVAILABLE_OPEN`/`truncate_body`，链回显优先于库列表）。提交 `e362c01`→`b55669e`（R34）、
+  （`MAX_ERROR_BODY`/`assemble_within`），W3 205→188、W8 239→194/195、W5 217→191；D5d 改为**按 `format!`
+  真实长度反推预算**（`AVAILABLE_OPEN`/`truncate_body`）。提交 `e362c01`→`b55669e`（R34）、
   `e4660e8`→`5482421`（R35）、`98a173e`→`d32ab03`（R36）。
 - 2026-11-22 **D1–D6 六缺陷（R27–R33）**：字形孔（≥3 子路径的填充 path 改展平多轮廓 `<path>`，R27/R28）、
   末行格子尺寸（行高 = `available_w / Σ全网格列权重`，R29）、默认近方形网格（R30）、网格下界校验 +
@@ -106,10 +106,10 @@
   （7 修 / 3 判外部或用错）、组图路线反转 `svg_grid` 优先、布局 cowplot 化五项、`convert/` 建 crate。
 # In Progress
 
-- **R60（进行中）**：收 R59 评审的 P1 —— 光源 `z`/`pointsAtZ` 该用 **RMS** `sqrt((sx²+sy²)/2)`（R59 用了
-  几何平均，人写 `45.2769` 即从 37011/206 到 (2,2)）；光源 `x/y`/`pointsAtX/Y` 只乘因子**没平移**（两列时
-  cell 1 差 5277/238）；`primitiveUnits="objectBoundingBox"` 把光源改写整个跳过（usvg 当裸 f32 读，仍要缩）；
-  以及非有限值被写成 `inf`（含既有 `stroke-width` 路径）等 P2。
+- **R61（进行中）**：收 R60 评审的 P2 —— **乘积溢出仍被写进产物**（`x="1e38"` 在 s=8 下变 `x="inf"`、
+  `width="NaN"`，`stroke-width="3e38"`⇒`inf`，pin 与 base 一致 ⇒ pre-existing；`rewrite_scaled_length` 与
+  `primitives` 只判输入不判乘积，`format_number(inf)` 直接给 `inf`）；以及三处文书/证据修正（"45.277 翻 11
+  像素"实为 5、`R60/test.py` 的 F5-xy 空转、R58 A9 的 fixture 不可分辨）。
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
@@ -121,18 +121,20 @@
 1. **滤镜图元长度的残余**（R58 按 `primitiveUnits` 门控、R59 修光源与单轴）：光源因子与平移是 R60 正在修的；
    各向异性 `feImage`（640/127）、`feDisplacementMap`（127，采样噪声）、定义体 `font-size`（5880/255，单值无法
    精确）与图元子区域 `x/y/width/height`（16984/255）**登记不修**；`feConvolveMatrix`/`feDistantLight` 不动。
-2. **内容域第二条轴**（R46 的 policy 轴之外）：verbatim body（pattern 有 viewBox 或 `patternContentUnits=
+2. **乘积溢出仍写进产物**（R61 正在修）：输入有限但乘轴因子后溢出（`x="1e38"` 配 s=8、`stroke-width="3e38"`）
+  会写出 `inf`/`NaN` 且无 W7；写回点要统一按 `style.rs::scale_token` 的"判乘积"口径改成保原文 + W7。
+3. **内容域第二条轴**（R46 的 policy 轴之外）：verbatim body（pattern 有 viewBox 或 `patternContentUnits=
    objectBoundingBox`、marker 有 viewBox、obb 的 mask/clipPath/filter）的**出边仍把面板 policy 传给内层定义**
    ⇒ viewBox 父 pattern 的内层 pattern 多缩一次（`12160`）、内层 gradient `x2=16→32`（`25280`）、obb 父内
    userSpace gradient `x2=0.5→1`（`27200`）；同一 gradient 被普通 rect 与 viewBox body 共用时需按内容域克隆
    （`15520`）。`patternTransform`/`gradientTransform` 已由 R55 收口；嵌套 `<pattern>` 与 pattern 外
    `clip-path` 实测 `xor 0`。
-3. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
+4. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
    `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
    需要视觉序模型，登记待排期。
-4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+5. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
-   **精确相等**（643 = 351+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
+   **精确相等**（658 = 366+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
    测试名做锚，未做。
 
 ## 其他未决项

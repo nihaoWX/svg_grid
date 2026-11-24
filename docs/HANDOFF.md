@@ -38,7 +38,8 @@
 | R57 R56 入账 + R19 门禁补回真牙 + `temp_path()` 并发唯一性 | ✅ 已修（R19 用例数改回精确相等，`gate_demo.py` 证明只有精确快照绿；`process_tag()` 加纳秒修 pid 复用） | `a724c08`；R57 |
 | R58 滤镜图元长度（门控 `primitiveUnits`）+ 定义体 `font-size` + filter 区域被补 0 | ✅ 已修（新增 `filters.rs`；各向异性写双值 `8 10`，几何平均实测更差；`rewrite_region` 不再凭空写 0） | `c4c522f`；R58 |
 | R59 R58 评审残余：`feSpotLight` 长度被当角度跳过、单轴策略下双值标量没缩、非法长度变 rc=2、obb clipPath 字号 | ✅ 已修（等向 18003/205→0；单轴写双值 `8 2`/`2 10`；畸形值保原文 + W7） | `081293e`；R59 |
-| R60 R59 评审 P1：光源 `z`/`pointsAtZ` 该用 RMS 而非几何平均、光源 `x/y` 只乘不平移、obb 下光源改写被跳过 | ⏳ 进行中 | R60 |
+| R60 R59 评审 P1：光源 `z`/`pointsAtZ` 该用 RMS 而非几何平均、光源 `x/y` 只乘不平移、obb 下光源改写被跳过 | ✅ 已修（spot 4×5 37011/206→0、point 95008/2→0、obb 100170/242→0、两 cell 5277/238→0） | `72a05e7`；R60 |
+| R61 R60 评审 P2：输入有限但乘积溢出仍写 `inf`/`NaN`（`x="1e38"` 配 s=8 ⇒ `x="inf" width="NaN"`），写回点只判输入不判乘积 | ⏳ 进行中 | R61 |
 
 ## 1. 先读什么（按顺序）
 
@@ -136,7 +137,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 643**：351 lib + 59 bin + 233 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 658**：366 lib + 59 bin + 233 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -188,9 +189,9 @@
    R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用；
    R48 收掉字母查重的漏判与误伤；R49 收掉嵌套定义克隆的重复 id；R50 收掉非 XML 1.0 字符被解码进产物；
    R51 收掉字母查重的剩余缺口；R52 收掉诊断文案的合成偏移与账本行号；R53 收掉告警码遮蔽；
-   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha；R57 把用例数门禁改回精确相等并修掉 `temp_path()` 的并发假红；R58 收掉滤镜图元长度、定义体 `font-size` 与 filter 区域补 0；R59 收掉光源长度、单轴双值与畸形长度口径。
-   **进行中 = R60**（R59 评审 P1：光源 z 用 RMS、光源 x/y 要平移、obb 下光源仍要缩）。
-4. 交付前全量复核：`cargo test`（单 crate **643**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   R54 收掉字母判据的误伤面；R55 收掉 paint server 的 transform 长度量；R56 收掉 `!important` 级联与零 alpha；R57 把用例数门禁改回精确相等并修掉 `temp_path()` 的并发假红；R58 收掉滤镜图元长度、定义体 `font-size` 与 filter 区域补 0；R59 收掉光源长度、单轴双值与畸形长度口径；R60 把光源整体进 user space（RMS z、位置平移、obb 不再跳过）。
+   **进行中 = R61**（R60 评审 P2：乘积溢出仍被写成 `inf`/`NaN`，写回点要按 `style.rs::scale_token` 判乘积 ⇒ 保原文 + W7）。
+4. 交付前全量复核：`cargo test`（单 crate **658**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点
