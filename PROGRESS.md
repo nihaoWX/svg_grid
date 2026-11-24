@@ -117,12 +117,13 @@
   `svg_grid` 优先与 `convert/` 建 crate（R3 及更早，按 10 篇反馈：7 修 / 3 判外部或用错）。
 # In Progress
 
-- **R66（进行中）**：**`tspan` 视觉序**（文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan x="10">B</tspan>`
-  视觉 BA 而查重按 AB 拼接 ⇒ 既误判也漏判；需要视觉序模型）+ **`--rel-widths` 部分为 0 静默产出 0 宽格子**
-  （与其余 `rel_*` fail-closed 不一致）+ 单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>`（`<circle>` 同病）。
+- **R66（进行中）**：**W6/W5 对"画不出墨"的内容误报** —— `fill="none"`、`stroke-width="0"`、
+  `visibility="hidden"`、`<g opacity="0">` 包住的越界元素仍被算进 ink 盒（`ink_bbox` 只跟 stroke，不看
+  fill/fill-opacity/stroke-opacity/visibility/opacity；d1render 实测 ink 全 0）+ **`--rel-widths 0` 静默产出
+  0 宽格子**（`-1`/`abc` 已 rc=2，0 却 rc=0）。
 # Known Issues
 
-（只留**未决**项；机制见括号里的文件。已解决条目不再保留——历史看账本与 git。）
+（只留**未决**项；机制见括号里的文件。已解决的不再保留——历史看账本与 git。）
 
 ## 对照 `INSTRUCTIONS.md` 的缺口
 
@@ -133,7 +134,7 @@
 2. **内容域与图元的残余**（R62 收口主面）：obb `clipPath` body 引用 pattern 仍 `16000/255`（不修；评审给出
    可 0/0 的手工候选 ⇒ 缺的是"正确语义"判定）；单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>` 仍错
    （`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制。
-3. **`tspan x`/`dy` 重排**（R48 评审 P2，R66 在做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan
+3. **`tspan x`/`dy` 重排**（R48 评审 P2，R67 待做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan
    x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
 4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
