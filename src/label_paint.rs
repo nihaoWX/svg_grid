@@ -43,8 +43,26 @@ impl Paint {
     /// True when the run leaves ink: a painted fill with a non-zero opacity, or a
     /// painted stroke with a non-zero opacity and a positive width.
     pub(crate) fn any(self) -> bool {
-        (self.fill && self.fill_opacity > 0.0)
-            || (self.stroke && self.stroke_opacity > 0.0 && self.stroke_width > 0.0)
+        self.fill_paints() || self.stroke_paints()
+    }
+
+    /// True when the fill alone leaves ink (a painted fill at a non-zero
+    /// opacity). Closed shapes and text are filled; a `<line>` never is.
+    pub(crate) fn fill_paints(self) -> bool {
+        self.fill && self.fill_opacity > 0.0
+    }
+
+    /// True when the stroke alone leaves ink: a painted stroke at a non-zero
+    /// opacity and a **positive** width. A negative width is invalid and paints
+    /// nothing (measured: d1render and cairosvg both leave the canvas blank).
+    pub(crate) fn stroke_paints(self) -> bool {
+        self.stroke && self.stroke_opacity > 0.0 && self.stroke_width > 0.0
+    }
+
+    /// Effective `stroke-width` (negative means no stroke, see
+    /// [`Paint::stroke_paints`]).
+    pub(crate) fn stroke_width(self) -> f64 {
+        self.stroke_width
     }
 
     /// Fold the element's own paint properties onto the inherited state. A

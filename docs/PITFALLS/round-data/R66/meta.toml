@@ -1,0 +1,82 @@
+id = "R66"
+date = "2026-11-25"
+verdict = "修复"
+
+family = [
+  "P1：`ink_bbox` 的 `Ctx` 只有 `stroke_painted`/`stroke_width`，`own_box` 对每个图元无条件加框，所以 `fill=\"none\"`、`fill=\"transparent\"`、`fill-opacity=\"0\"`、`stroke-opacity=\"0\"`、`stroke-width=\"0\"` 的内容照样算墨 ⇒ W6 假阳性。修法：`Ctx` 加 `paint: label_paint::Paint`（复用 text 判据，不写第二份）与 `paints()`；closed 图元要求 `paints()`，`line` 要求 `visible && stroke_paints()`，`image` 要求 `visible`。",
+  "P1：`visibility=\"hidden\"/\"collapse\"`（属性或 style）完全没进判据 ⇒ 隐藏内容算墨。实测 d1render：`collapse` 按 hidden 处理（cairosvg 2.9.1 当可见，跟 d1/resvg）；后代 `visibility=\"visible\"` 可以恢复。修法：`Ctx.visible` 折叠，`hidden|collapse` ⇒ false、`visible` ⇒ true，其余继承；关键字大小写敏感（`VIS_HIDDEN` 在 d1 里仍然可见）。",
+  "P1：`opacity=\"0\"`（元素自身或任意祖先）没进判据 ⇒ 整棵被透明化的子树算墨。`opacity` 与 `visibility` 不同，**不可由后代恢复**：实测 `g opacity=\"0\"` 里的 `rect opacity=\"1\"`、`g opacity=\"0\"` 里的 `visibility=\"visible\"` 后代，d1/cairosvg 都是 0 墨。修法：`Ctx.opaque = ctx.opaque && opacity > 0`，`visit` 在 `inherit_ctx` 之后立刻 `if !ctx.opaque { return; }`（负值按 0 处理，实测 `opacity=\"-1\"` 0 墨）。",
+  "P1：`fill=\"url(#id)\"` 的判据必须与 text 同一份：不可解析的 url 不上色（实测 0 墨），`url(#missing) red` 的回退色上色（实测有墨），渐变要至少一个上色的 stop、pattern 要至少一个会上色的子元素。修法：`Paint` 增加 `fill_paints()`/`stroke_paints()`/`stroke_width()`，`any()` = 两者之或；ink 直接用 `Paint::inherit`。",
+  'P1：`<use>` 指向「纯不上色」的目标时，`add_resolved_use` 展开得到空框 ⇒ 退回 `add_use_placement` 的占位框，仍报 W6 假阳性。修法：`shapes::carries_supported(target)`（递归看有没有受支持图元），空框且目标不含受支持图元 ⇒ `UseInk::Measured`（不上色）；含 unsupported 内容时仍保留占位框（R5-F4 的 fail-open 口径不变）。',
+  'P1：`--rel-widths`/`--rel-heights` 只拒 `< 0.0`，`0` 合法 ⇒ rc=0 且 `--plan` 出现 `cell 0x60.800` 的 0 尺寸格子。修法：`parse_rel_list` 对任何 `<= 0.0` 的原始 token 报 `"{flag} must be positive, got {bad:?}"`（`got "0"`/`got "0.0"`/`got "-1"`），rc=2 且不写产物。',
+  'P1：`-1,1` 这种负号开头的整串被 `take_value` 当成旗标，报 `missing value for --rel-widths`（误导）。修法：新增 `take_rel_value`，只在下一 token 不是已知旗标（`canonical` 为 None）时取值；`--rel-widths --width 200` 仍是 `missing value`。',
+  "P1：R19 的计数基线 724 与本轮 747 不同步；R57 的 docstring/family_a 也写死 724。修法：R19 `BASELINE=747`、COUNTS 改 `lib 452 / main 62 / selftest 233` 并加一行 R66 说明；R57 第 6/200 行改 747 = 452 + 62 + 233。",
+  "P1：新增 `docs/PITFALLS/round-data/R66/test.py`（157 checks，A/B/C/D/T 五族）：A 族四列（修前 W6 / 修后 W6 / d1render 墨 / cairosvg 墨）+ 产物逐字节；B 族 12 行权表；C 族 214 convert + 58 plot-grid 对 base `e0c6033` 逐字节；D 族 6 个语料 W6 变化的假阳性证明；T 族有牙。缺二进制/缺 cairosvg ⇒ rc=2，不静默 skip。",
+  "登记不改（C）：`skilltest3/Figure.svg` 修后仍有 `right by 24.000 px`，但扩展视口下 d1render 0 墨 ⇒ 真实墨被 clip-path 抑制；判据没有 clip-path 感知（R64 前就存在，原文案 79.272 px 同样不精确），本轮不引入 clip-path 语义，只登记。",
+]
+
+closures = [
+  { finding = "R66-F1", tier = "代码" },
+  { finding = "R66-F2", tier = "代码" },
+  { finding = "R66-F3", tier = "代码" },
+  { finding = "R66-F4", tier = "代码" },
+  { finding = "R66-F5", tier = "代码" },
+  { finding = "R66-F6", tier = "代码" },
+  { finding = "R66-F7", tier = "代码" },
+  { finding = "R66-F8", tier = "代码" },
+  { finding = "R66-F9", tier = "检查" },
+  { finding = "R66-F10", tier = "检查" },
+  { finding = "R66-F11", tier = "检查" },
+  { finding = "R66-F12", tier = "登记" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61", "R62", "R62b", "R63", "R64", "R64b", "R65",
+]
+touched = [
+  { round = "R19", why = "测试总数 724→747（BASELINE 与 COUNTS：lib 432→452、main 59→62；R66 的 tests_r66.rs 20 条 + cli/tests.rs 3 条），并加一行 R66 说明" },
+  { round = "R57", why = "第 6/200 行写死的总数 724→747（747 = 452 + 62 + 233）" },
+]
+
+note = """
+为什么认定同类：R66 的两处都是「彩排判据与实际是否上色不符」——W6 的墨迹判据只看 stroke，
+不看 fill/opacity/visibility（PROGRESS.md 的 Known Issues 早已写「W6 在嵌套输出上是假阳性」）；
+`--rel-widths` 把 0 当合法乘数，布局就产出 0 尺寸格子（Known Issues 的「部分为 0 静默产出 0 宽格子」）。
+根因已证：`ink_bbox` 与 `label_paint::Paint` 是两份判据，text 用后者、ink 用手写的前者；
+`parse_rel_list` 的 `< 0.0` 与 `take_value` 的「负号即旗标」各自漏一种形态。
+怎么修才不弄坏前面：ink 与 text 共用 `Paint`（`fill_paints`/`stroke_paints`/`stroke_width`），
+`half_stroke()` 的外扩口径、`use` 的 fail-open 占位框、`display:none` 的既有特例全部保留；
+`stroke-width=1e-9` 仍然算墨（判据只看非零，不看栅格化结果）。
+口径（都按 d1render 实测，cairosvg 2.9.1 在 `visibility`/`collapse`/`opacity` 上与它分叉时以 d1 为准，
+与 R58/R59/R61/R62 同一 oracle）：
+  fill：`none`/`transparent`/`#rrggbbaa` 零 alpha ⇒ 不上色；`url(#id)` 不可解析 ⇒ 不上色，
+        有回退色 ⇒ 按回退色；渐变至少一个上色 stop；pattern 至少一个会上色子元素。
+  fill-opacity / stroke-opacity：`<= 0` ⇒ 该 paint 不上色（负值同 0）。
+  stroke：`none`/`transparent` ⇒ 不上色；`stroke-width <= 0` ⇒ 不上色；`1e-9` ⇒ 上色（非零）。
+  visibility：`hidden`/`collapse` ⇒ 子树不可见，后代 `visible` 可恢复；`display:none` 不可恢复；
+        关键字大小写敏感（`VIS_HIDDEN` 在 d1 里可见）。
+  opacity：`<= 0` ⇒ 整棵子树不上色，**后代不可恢复**；`0.5`/`0.25` 仍上色。
+  `<image>`：没有 fill/stroke，只看 `visible` 与自身 `opacity`。
+  `<line>`：fill 无效；`<polyline>`/`<polygon>`/开放 `path`：fill 有效（实测有墨）。
+语料差异：214 convert + 58 plot-grid 产物/rc/stderr 全 0 差；W6 文案 6 个语料文件变化，
+每个都被证明是 `visibility="hidden"` 贡献被去掉（注入 display="none" 让修前二进制复现修后文案）。
+"""
+
+how_to_run = """
+cd <repo> && python3 docs/PITFALLS/round-data/R66/test.py                          # rc=0 全过（157 checks；A/B/C/D/T 五族）
+SVG_GRID_PIN_BIN=/tmp/r66_before_bin python3 docs/PITFALLS/round-data/R66/test.py  # 有牙：A 11 条 + B 7 条必须红（rc=1）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R66/test.py                    # 缺二进制必须 rc=2（不静默 skip）
+HOME=/tmp/nohome python3 docs/PITFALLS/round-data/R66/test.py                      # 找不到 cairosvg 必须 rc=2（不记成 FAIL）
+
+修前二进制（本轮 code_before 2449f1e 的构建，sha256 22441fa19f51ade41d2c7ee2c9e9eb43e09fc66df91a3fa9d37697d4acdff637）：
+git worktree add --detach /tmp/r66base 2449f1e
+cd /tmp/r66base && cargo build --release --offline && cp target/release/svg_grid /tmp/r66_before_bin
+
+注：`VIS` = 环境里设了 `SVG_GRID_PIN_BIN` 就用它，否则用 `SVG_GRID_BIN`——所以把 PIN 指向修前
+二进制时，A 族「修后不报」与 B 族「修后 rc=2」会红，这正是有牙的证明。
+"""

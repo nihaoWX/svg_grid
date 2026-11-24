@@ -85,7 +85,7 @@ fn every_value_flag_is_taken_and_stored() {
         "--rel-widths",
         "1,2,3",
         "--rel-heights",
-        "1,0",
+        "1,2",
         "--gap",
         "7",
         "--plot-margin",
@@ -137,7 +137,7 @@ fn every_value_flag_is_taken_and_stored() {
     assert_eq!(args.height, Some(600.0));
     assert_eq!((args.nrow, args.ncol), (Some(2), Some(3)));
     assert_eq!(args.rel_widths, vec![1.0, 2.0, 3.0]);
-    assert_eq!(args.rel_heights, vec![1.0, 0.0]);
+    assert_eq!(args.rel_heights, vec![1.0, 2.0]);
     assert_eq!(args.gap, 7.0);
     assert_eq!(
         (
@@ -527,4 +527,69 @@ fn help_text_covers_every_convert_flag() {
     ] {
         assert!(help::HELP.contains(needle), "--help lacks {needle:?}");
     }
+}
+
+#[test]
+fn rel_widths_and_heights_must_be_positive_and_name_the_value() {
+    // R66: a zero weight used to pass silently and produce a zero-width cell.
+    // Every non-positive weight is now a usage error naming the flag and the
+    // offending token (not the parsed float).
+    for (flag, value, bad) in [
+        ("--rel-widths", "0,1", "0"),
+        ("--rel-widths", "1,0", "0"),
+        ("--rel-widths", "-1,1", "-1"),
+        ("--rel-widths", "0.0,1", "0.0"),
+        ("--rel-heights", "0", "0"),
+        ("--rel-heights", "1,-2", "-2"),
+    ] {
+        let error = usage_error(&["plot-grid", "--input", "a.svg", flag, value]);
+        assert!(
+            error
+                .message()
+                .contains(&format!("{flag} must be positive, got {bad:?}")),
+            "the message must name the flag and the value, got: {}",
+            error.message()
+        );
+    }
+}
+
+#[test]
+fn rel_widths_and_heights_still_accept_positive_values() {
+    let args = plot_grid(&[
+        "--input",
+        "a.svg",
+        "--rel-widths",
+        "1,2.5,1e-9",
+        "--rel-heights",
+        "0.5,3",
+    ]);
+    assert_eq!(args.rel_widths, vec![1.0, 2.5, 1e-9]);
+    assert_eq!(args.rel_heights, vec![0.5, 3.0]);
+}
+
+#[test]
+fn rel_widths_still_reports_a_missing_value_and_a_non_number() {
+    // A negative list is a value (so the message names it), but a *known* flag
+    // still ends the list: `--rel-widths --width 200` is a missing value.
+    let error = usage_error(&[
+        "plot-grid",
+        "--input",
+        "a.svg",
+        "--rel-widths",
+        "--width",
+        "200",
+    ]);
+    assert!(
+        error.message().contains("missing value for --rel-widths"),
+        "{}",
+        error.message()
+    );
+    let error = usage_error(&["plot-grid", "--input", "a.svg", "--rel-widths", "abc,1"]);
+    assert!(
+        error
+            .message()
+            .contains("--rel-widths must be a number, got \"abc\""),
+        "{}",
+        error.message()
+    );
 }

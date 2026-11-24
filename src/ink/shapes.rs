@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 
-use crate::dom::Element;
+use crate::dom::{Element, Node};
 use crate::path;
 
 use super::bbox::Bbox;
@@ -25,27 +25,47 @@ pub(super) fn own_box(
 ) {
     match element.name.as_str() {
         "circle" => {
+            if !ctx.paints() {
+                return;
+            }
             let cx = number_attr(element, "cx").unwrap_or(0.0);
             let cy = number_attr(element, "cy").unwrap_or(0.0);
             let r = number_attr(element, "r").unwrap_or(0.0).abs();
             let s = ctx.half_stroke();
             local.add_rect(cx - r - s, cy - r - s, cx + r + s, cy + r + s);
         }
-        // An `<image>` covers exactly its placement box; a `<rect>`'s rounded
-        // corners stay inside it, so ignoring `rx`/`ry` only ever over-estimates.
-        "rect" | "image" => {
+        // A `<rect>`'s rounded corners stay inside its box, so ignoring
+        // `rx`/`ry` only ever over-estimates.
+        "rect" => {
+            if !ctx.paints() {
+                return;
+            }
             let x = number_attr(element, "x").unwrap_or(0.0);
             let y = number_attr(element, "y").unwrap_or(0.0);
             let width = number_attr(element, "width").unwrap_or(0.0);
             let height = number_attr(element, "height").unwrap_or(0.0);
-            let s = if element.name == "rect" {
-                ctx.half_stroke()
-            } else {
-                0.0
-            };
+            let s = ctx.half_stroke();
             local.add_rect(x - s, y - s, x + width + s, y + height + s);
         }
+        // An `<image>` covers exactly its placement box. It has no fill or
+        // stroke: it inks whenever it is visible and its `opacity` is above zero
+        // (the walk already dropped a zero-opacity subtree).
+        "image" => {
+            if !ctx.visible {
+                return;
+            }
+            let x = number_attr(element, "x").unwrap_or(0.0);
+            let y = number_attr(element, "y").unwrap_or(0.0);
+            let width = number_attr(element, "width").unwrap_or(0.0);
+            let height = number_attr(element, "height").unwrap_or(0.0);
+            local.add_rect(x, y, x + width, y + height);
+        }
+        // A `<line>` is never filled: only a painted stroke inks it (measured:
+        // `fill="#000000"` on a line leaves the canvas blank).
         "line" => {
+            if !ctx.visible || !ctx.paint.stroke_paints() {
+                return;
+            }
             let x1 = number_attr(element, "x1").unwrap_or(0.0);
             let y1 = number_attr(element, "y1").unwrap_or(0.0);
             let x2 = number_attr(element, "x2").unwrap_or(0.0);
@@ -59,6 +79,9 @@ pub(super) fn own_box(
             );
         }
         "polyline" | "polygon" => {
+            if !ctx.paints() {
+                return;
+            }
             let points = parse_points(element.attr("points").unwrap_or(""));
             if let (Some(min_x), Some(min_y)) = (
                 points.iter().map(|p| p.0).reduce(f64::min),
@@ -73,6 +96,9 @@ pub(super) fn own_box(
         // A `<path>` is measured from its *flattened* geometry (exactly what the
         // composer rewrites), not from its control points.
         "path" => {
+            if !ctx.paints() {
+                return;
+            }
             if let Some((min_x, min_y, max_x, max_y)) = path::bbox(element.attr("d").unwrap_or(""))
             {
                 let s = ctx.half_stroke();
@@ -99,16 +125,55 @@ pub(super) fn own_box(
                 // here would raise a false "overflow" (W6).
                 UseInk::Dangling => {}
                 // The id exists but names content the composer does not carry:
-                // keep the under-estimated placement box.
-                UseInk::Unsupported => add_use_placement(element, ctx, x, y, local),
+                // keep the under-estimated placement box. A hidden `<use>` draws
+                // nothing, so it must not contribute that box either.
+                UseInk::Unsupported => {
+                    if ctx.visible {
+                        add_use_placement(element, ctx, x, y, local);
+                    }
+                }
             }
         }
         // A `<text>`'s own `<tspan>`s are folded into its descendant character
         // run, so only the outermost text node is measured (a top-level `<tspan>`
         // outside any `<text>` is still handled).
-        "text" | "tspan" if !ctx.in_text => add_text_box(element, ctx, local),
+        "text" | "tspan" if !ctx.in_text => {
+            if !ctx.paints() {
+                return;
+            }
+            add_text_box(element, ctx, local);
+        }
         _ => {}
     }
+}
+
+/// True when `element`'s subtree contains at least one primitive the composer
+/// measures. [`super::uses::add_resolved_use`] uses this to tell "measured, but
+/// paints nothing" (`fill="none"`, hidden, …) apart from "content the composer
+/// does not carry" (which falls back to the placement-box under-estimate).
+pub(super) fn carries_supported(element: &Element) -> bool {
+    is_supported(&element.name)
+        || element.children.iter().any(|child| match child {
+            Node::Element(child) => carries_supported(child),
+            _ => false,
+        })
+}
+
+/// The element set [`own_box`] measures (the W6 judge's "warning face").
+fn is_supported(name: &str) -> bool {
+    matches!(
+        name,
+        "circle"
+            | "rect"
+            | "image"
+            | "line"
+            | "polyline"
+            | "polygon"
+            | "path"
+            | "use"
+            | "text"
+            | "tspan"
+    )
 }
 
 /// Pair up the numbers in an SVG `points` list, tolerating either `"x,y"` or

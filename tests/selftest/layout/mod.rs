@@ -8,7 +8,7 @@ use svg_grid::{plot_grid, AlignMode, Margins, PlotGridSpec, SvgInput};
 use crate::common::*;
 
 #[test]
-fn cli_supports_spacers_and_zero_rel() {
+fn cli_supports_spacers_and_rejects_zero_rel() {
     let a = temp_path("spacer_a.svg");
     let b = temp_path("spacer_b.svg");
     let svg = r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
@@ -61,9 +61,45 @@ fn cli_supports_spacers_and_zero_rel() {
     assert!(svg.contains(r#"cx="62.500""#), "{svg}");
     assert!(svg.contains(r#"cx="237.500""#), "{svg}");
 
-    // A zero multiplier is accepted (here it collapses the spacer column).
-    let (ok_zero, _) = run("1,0,1", "spacer_zero.svg");
-    assert!(ok_zero, "rel-widths may contain 0");
+    // A zero multiplier is rejected: it used to collapse the column silently
+    // (R66). The message names the flag and the offending value, and no output
+    // file is written.
+    let zero_out = temp_path("spacer_zero.svg");
+    let zero_args: Vec<String> = [
+        "--input",
+        a.to_str().unwrap(),
+        "--input",
+        "none",
+        "--input",
+        b.to_str().unwrap(),
+        "--output",
+        zero_out.to_str().unwrap(),
+        "--width",
+        "300",
+        "--height",
+        "100",
+        "--ncol",
+        "3",
+        "--plot-margin",
+        "0",
+        "--rel-widths",
+        "1,0,1",
+    ]
+    .iter()
+    .map(|value| value.to_string())
+    .collect();
+    let zero = run_plot_grid(&zero_args);
+    assert_eq!(
+        zero.status.code(),
+        Some(2),
+        "a zero rel-width must be a usage error"
+    );
+    let stderr = String::from_utf8_lossy(&zero.stderr);
+    assert!(
+        stderr.contains(r#"--rel-widths must be positive, got "0""#),
+        "{stderr}"
+    );
+    assert!(!zero_out.exists(), "no output may be written");
 
     let _ = fs::remove_file(&a);
     let _ = fs::remove_file(&b);

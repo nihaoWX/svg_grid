@@ -243,7 +243,14 @@ fn parse_plot_grid(rest: &[String]) -> Result<PlotGridArgs, CliError> {
             continue;
         }
 
-        let value = take_value(rest, index, flag)?;
+        // `--rel-*` takes a list that may start with `-` (a negative weight).
+        // That is a user error the message must name, so it is read as a value
+        // here and rejected by `parse_rel_list`; only a *known* flag ends it.
+        let value = if matches!(flag, "--rel-widths" | "--rel-heights") {
+            take_rel_value(rest, index, flag)?
+        } else {
+            take_value(rest, index, flag)?
+        };
         match flag {
             "--input" => args.inputs.push(if is_spacer_value(value) {
                 SvgInput::Spacer
@@ -444,16 +451,33 @@ fn parse_f32_list(flag: &str, value: &str) -> Result<Vec<f32>, CliError> {
     Ok(values)
 }
 
-/// `--rel-*`: the multipliers may be `0` (e.g. to collapse a column), so only
-/// negative values are rejected here; "all zero" is caught by the layout.
+/// `--rel-*`: every multiplier must be strictly positive. A zero weight used to
+/// pass silently and produce a zero-width cell (R66), so it is rejected here
+/// with the offending token named. The layout keeps its own guard for callers
+/// that build a [`crate::layout::LayoutSpec`] directly.
 fn parse_rel_list(flag: &str, value: &str) -> Result<Vec<f32>, CliError> {
     let values = parse_f32_list(flag, value)?;
-    if values.iter().any(|value| *value < 0.0) {
+    if let Some(bad) = value
+        .split(',')
+        .map(str::trim)
+        .filter(|part| !part.is_empty())
+        .find(|part| part.parse::<f32>().is_ok_and(|value| value <= 0.0))
+    {
         return Err(CliError::usage(format!(
-            "{flag} must be a comma-separated list of non-negative numbers"
+            "{flag} must be positive, got {bad:?}"
         )));
     }
     Ok(values)
+}
+
+/// Take the value of a `--rel-*` flag: a token that starts with `-` is still a
+/// value unless it is a known flag, so `--rel-widths -1,1` reports the negative
+/// weight instead of a misleading "missing value".
+fn take_rel_value<'a>(rest: &'a [String], index: usize, flag: &str) -> Result<&'a str, CliError> {
+    match rest.get(index + 1) {
+        Some(next) if canonical(next).is_none() => Ok(next.as_str()),
+        _ => Err(CliError::usage(format!("missing value for {flag}"))),
+    }
 }
 
 fn parse_margins(flag: &str, value: &str) -> Result<Margins, CliError> {

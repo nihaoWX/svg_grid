@@ -15,10 +15,14 @@ fn rect_box_is_exact_and_uses_its_own_coordinates() {
 
 #[test]
 fn circle_and_line_boxes_are_the_union_of_their_geometry() {
-    let box_ =
-        bbox(r##"<svg><line x1="0" y1="0" x2="10" y2="5"/><circle cx="50" cy="50" r="4"/></svg>"##)
-            .unwrap();
-    assert_eq!(box_, (0.0, 0.0, 54.0, 54.0));
+    // A `<line>` is never filled, so it needs a painted stroke to leave ink
+    // (R66); the default stroke-width 1 adds half a unit around it, and the
+    // circle is filled by default.
+    let box_ = bbox(
+        r##"<svg><line x1="0" y1="0" x2="10" y2="5" stroke="#000"/><circle cx="50" cy="50" r="4"/></svg>"##,
+    )
+    .unwrap();
+    assert_eq!(box_, (-0.5, -0.5, 54.0, 54.0));
 }
 
 #[test]
@@ -31,8 +35,9 @@ fn a_painted_stroke_expands_the_box_by_half_its_width() {
 
 #[test]
 fn an_unpainted_stroke_does_not_expand() {
+    // The fill still paints the rect; the wide `stroke="none"` must not expand it.
     let box_ = bbox(
-        r##"<svg><line x1="0" y1="0" x2="10" y2="0" stroke="none" stroke-width="40"/></svg>"##,
+        r##"<svg><rect x="0" y="0" width="10" height="0" fill="#000" stroke="none" stroke-width="40"/></svg>"##,
     )
     .unwrap();
     assert_eq!(box_, (0.0, 0.0, 10.0, 0.0));
@@ -219,7 +224,7 @@ fn a_transform_list_is_composed_left_to_right() {
     // SVG order: `scale(2)` acts on the local point first, then
     // `translate(10, 0)` moves it: (1, 0) -> (2, 0) -> (12, 0).
     let box_ = bbox(
-        r##"<svg><line x1="1" y1="0" x2="1" y2="0" transform="translate(10 0) scale(2)"/></svg>"##,
+        r##"<svg><rect x="1" y="0" width="0" height="0" transform="translate(10 0) scale(2)"/></svg>"##,
     )
     .unwrap();
     assert_eq!(box_, (12.0, 0.0, 12.0, 0.0));

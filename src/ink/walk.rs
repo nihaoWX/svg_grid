@@ -5,6 +5,7 @@ use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::dom::{Element, Node};
+use crate::label_paint::Paint;
 
 use super::bbox::{element_transform, Bbox};
 use super::shapes::own_box;
@@ -25,10 +26,18 @@ pub(crate) const NON_RENDERED: [&str; 12] = [
 /// Inherited presentation state that the primitives below need.
 #[derive(Clone, Copy)]
 pub(super) struct Ctx {
-    /// Whether a stroke is painted at all (SVG default: no).
-    pub(super) stroke_painted: bool,
-    /// Effective `stroke-width` (SVG default: 1).
-    pub(super) stroke_width: f64,
+    /// Effective fill/stroke paint state (SVG defaults: black fill, no stroke).
+    /// Reuses [`crate::label_paint::Paint`] so the ink judge and the panel-letter
+    /// judge can never disagree about what paints (R66).
+    pub(super) paint: Paint,
+    /// Effective `visibility` (SVG default: visible). Unlike `opacity`, a
+    /// descendant may restore it with `visibility="visible"` (measured: a
+    /// `visibility="visible"` rect inside a hidden `<g>` still inks).
+    pub(super) visible: bool,
+    /// True while the accumulated `opacity` of this element and its ancestors is
+    /// still above zero. `opacity` is *not* inherited and cannot be restored by a
+    /// descendant: a group at `opacity="0"` hides its whole subtree (measured).
+    pub(super) opaque: bool,
     /// Effective `font-size` (SVG default: `medium` = 16 px).
     pub(super) font_size: f64,
     /// True once we are inside a `<text>`: its descendant `<tspan>`s are then
@@ -39,8 +48,9 @@ pub(super) struct Ctx {
 impl Default for Ctx {
     fn default() -> Self {
         Self {
-            stroke_painted: false,
-            stroke_width: 1.0,
+            paint: Paint::DEFAULT,
+            visible: true,
+            opaque: true,
             font_size: DEFAULT_FONT_SIZE,
             in_text: false,
         }
@@ -51,11 +61,19 @@ impl Ctx {
     /// Half the stroke width when a stroke is painted, else `0` (the outward ink
     /// a centred stroke adds beyond the geometric outline).
     pub(super) fn half_stroke(&self) -> f64 {
-        if self.stroke_painted {
-            (self.stroke_width / 2.0).abs()
+        if self.paint.stroke_paints() {
+            (self.paint.stroke_width() / 2.0).abs()
         } else {
             0.0
         }
+    }
+
+    /// True when this element's own geometry can leave ink at all: it is visible
+    /// and at least one of its fill/stroke paints. A closed shape or a text run
+    /// is filled, so `fill="none"` alone silences it; a `<line>` is never filled
+    /// and needs a painted stroke (see [`super::shapes::own_box`]).
+    pub(super) fn paints(&self) -> bool {
+        self.visible && self.paint.any()
     }
 }
 
@@ -83,7 +101,13 @@ pub(super) fn visit(
     if NON_RENDERED.contains(&element.name.as_str()) || is_display_none(element) {
         return;
     }
-    let ctx = inherit_ctx(element, ctx);
+    let ctx = inherit_ctx(element, ctx, ids);
+    // A zero (or negative) `opacity` on this element hides its whole subtree and
+    // no descendant can restore it, so the walk can stop here — unlike
+    // `visibility`, which a descendant may set back to `visible`.
+    if !ctx.opaque {
+        return;
+    }
 
     // The element's own geometry is measured in its *local* coordinate system
     // (before its own `transform`), then mapped through that transform and folded
@@ -112,13 +136,26 @@ pub(super) fn visit(
 }
 
 /// Fold the element's own presentation properties onto the inherited context.
-fn inherit_ctx(element: &Element, ctx: &Ctx) -> Ctx {
+fn inherit_ctx(element: &Element, ctx: &Ctx, ids: &HashMap<&str, &Element>) -> Ctx {
     let mut next = *ctx;
-    if let Some(stroke) = style_prop(element, "stroke") {
-        next.stroke_painted = !matches!(stroke.as_ref(), "none" | "transparent");
+    next.paint = ctx.paint.inherit(element, ids);
+    // `visibility` is inherited and a descendant may restore it (measured:
+    // `<g visibility="hidden"><rect visibility="visible">` inks). Keywords are
+    // case-sensitive, matching resvg (R51): `visibility="HIDDEN"` still inks.
+    match style_prop(element, "visibility").as_deref().map(str::trim) {
+        Some("hidden") | Some("collapse") => next.visible = false,
+        Some("visible") => next.visible = true,
+        _ => {}
     }
-    if let Some(width) = style_prop(element, "stroke-width").and_then(|v| parse_number(&v)) {
-        next.stroke_width = width;
+    // `opacity` is not inherited but composites the whole subtree: a zero (or
+    // negative) value anywhere on the path hides everything below it, and a
+    // descendant cannot restore it (measured: `opacity="0"` on a `<g>` hides a
+    // child that sets `opacity="1"`).
+    if let Some(opacity) = style_prop(element, "opacity")
+        .as_deref()
+        .and_then(parse_number)
+    {
+        next.opaque = ctx.opaque && opacity > 0.0;
     }
     if let Some(size) = style_prop(element, "font-size").and_then(|v| parse_number(&v)) {
         next.font_size = size;

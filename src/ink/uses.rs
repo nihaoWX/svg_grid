@@ -6,6 +6,7 @@ use std::collections::HashMap;
 use crate::dom::{Element, Node};
 
 use super::bbox::Bbox;
+use super::shapes::carries_supported;
 use super::walk::{number_attr, visit, Ctx};
 
 /// How deep a chain of `<use>` references is followed before we stop, so a
@@ -52,7 +53,15 @@ pub(super) fn add_resolved_use(
     let mut referenced = Bbox::empty();
     visit(target, ctx, ids, depth + 1, &mut referenced);
     if referenced.is_empty() {
-        return UseInk::Unsupported;
+        // The target was measured but paints nothing (`fill="none"`, hidden, a
+        // zero opacity, …): that is real "no ink", not an unsupported construct.
+        // Only content the composer does not carry falls back to the placement
+        // box, which would otherwise raise a false W6 for a silent `<use>`.
+        return if carries_supported(target) {
+            UseInk::Measured
+        } else {
+            UseInk::Unsupported
+        };
     }
     referenced.translate_into(x, y, local);
     UseInk::Measured

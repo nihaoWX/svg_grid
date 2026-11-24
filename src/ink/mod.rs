@@ -81,3 +81,5 @@ pub(crate) use walk::{parse_number, style_prop, NON_RENDERED};
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_r66;
