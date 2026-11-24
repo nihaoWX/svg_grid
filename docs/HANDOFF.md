@@ -30,8 +30,9 @@
 | R49 嵌套定义被克隆时产生重复 id + normalize 盲缩定义元素自身表现属性 | ✅ 已修（`hoist.rs` 提升 + `narrow` 收窄 + `content_is_user_space` 门控） | `4e9f8c6`；R49 |
 | R50 产物不良构：非 XML 1.0 字符被解码成裸控制字符（`&#1;`/`&#xFFFE;`，两条路径） | ✅ 已修（`is_xml_char` 一份判据两条路径 fail-closed + 产物良构不变量测试） | `1fbc3c3`；R50 |
 | R51 字母查重剩余缺口（嵌套 marker 重复计数、`<defs>`+`<use>`、NBSP、关键字大小写、`fill="none"`） | ✅ 已修（收集器抽成 `label_letters.rs`；关键字大小写按渲染器保持敏感，只剥 `!important`） | `bae128d`；R51 |
-| R52 R50 评审的账本/文案收尾（R47 行号被误改、R50 meta 语料数、假 range `at 1..5`、`lib.rs` 体积） | ⏳ 进行中 | R52 |
-| `classify` 取表序第一个命中码（W9/W7 门禁可被用户内容打成 PASS） | ⏳ 已开报告，未修 | `docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md` |
+| R52 R50 评审的账本/文案收尾（R47 行号被误改、R50 meta 语料数、假 range `at 1..5`、`lib.rs` 体积） | ✅ 已修（`strip_synthetic_range` 唯一实现；append-only 更正 R47 真实行号；`normalize_label` 搬进 `label_letters.rs`） | `6d32738`；R52 |
+| R53 `classify` 取表序第一个命中码（W9/W7 门禁可被用户内容打成 PASS）+ 短语副本 + `R17` 死变量 | ✅ 已修（`classify` 收集全部命中码；短语单一来源；补记 R45 行号漂移） | `a0025cf`；R53 |
+| R54 字母判据的误伤面（`url(#missing)`、`fill-opacity=0`、祖先 opacity/stroke-width 继承、style 级联） | ⏳ 进行中 | R54 |
 
 ## 1. 先读什么（按顺序）
 
@@ -129,7 +130,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 517**：280 lib + 59 bin + 178 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 528**：284 lib + 59 bin + 185 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
@@ -180,9 +181,9 @@
    pattern 相位与 pattern 单位语义；R42 把转换器并入 `src/convert/`；R43 收掉单位属性语义；
    R44 收掉组合图字母重号；R45 收掉 doctor 告警码漂移；R46 收掉定义元素的缩放单位；R47 收掉文本字符引用；
    R48 收掉字母查重的漏判与误伤；R49 收掉嵌套定义克隆的重复 id；R50 收掉非 XML 1.0 字符被解码进产物；
-   R51 收掉字母查重的剩余缺口。**进行中 = R52**（R50 评审的账本行号、meta 元数据、未解析实体文案）。
-   之后消费剩余报告：`classify` 表序遮蔽。
-4. 交付前全量复核：`cargo test`（单 crate **517**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
+   R51 收掉字母查重的剩余缺口；R52 收掉诊断文案的合成偏移与账本行号；R53 收掉告警码遮蔽。
+   **进行中 = R54**（字母判据的误伤面：不可解析 `url()`、opacity/stroke-width 继承、style 级联）。
+4. 交付前全量复核：`cargo test`（单 crate **528**）、`doctor` 57/0/1、`pitfalls-manager verify`（rc=0）、
    `round-data` 顶层全绿、两副本指南 `diff -r`、`pitfalls-manager check`。
 
 ## 8. 未决 / 需要用户点头的点

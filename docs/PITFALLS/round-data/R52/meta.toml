@@ -107,7 +107,8 @@ tests/selftest/textref/mod.rs 16853 B、tests/selftest/textref/undefined.rs 4032
 docs/PITFALLS/round-data/R52/test.py 11744 B，均 ≤20000 B。
 
 不做（登记在报告里，未实现）：docs/PITFALLS/blocker-svg_grid-classify-first-match-masking.md 那条
-（classify 取表序第一个命中码）是既有已知问题；R50 评审的 P3-3..P3-8 不在本轮派单范围。
+（classify 取表序第一个命中码）是既有已知问题——**已在 R53（commit a0025cf）修掉**，报告已 git rm；
+R50 评审的 P3-3..P3-8 不在本轮派单范围。
 """
 
 how_to_run = """
