@@ -43,10 +43,17 @@ pub const WARNING_CODES: &[(&str, &[&str])] = &[
 
 /// Split stderr into (warning codes, warning count).
 ///
+/// A line may contain **several** phrases: W9 prints the dangling id verbatim and
+/// W7 prints the kept attribute value verbatim, so user content can carry another
+/// code's phrase. Every match is therefore reported, in table order, instead of
+/// stopping at the first one — a `find` would let that user content mask W9/W7 and
+/// turn the gate fail-open (R53).
+///
 /// Only `svg_grid: warning:` / `svg_grid convert: warning:` lines are considered
 /// (hard errors carry their own prefix and are judged by exit code). The uniform
 /// tally line (`N non-fatal warning(s) — …`) is a footer, not a warning, so it is
-/// neither counted nor classified.
+/// neither counted nor classified: only a line whose *message* starts with that
+/// string is the footer, so a warning body that merely mentions it is kept.
 pub fn classify(stderr: &str) -> (Vec<&'static str>, usize) {
     let mut codes: Vec<&'static str> = Vec::new();
     let mut warnings = 0;
@@ -55,11 +62,8 @@ pub fn classify(stderr: &str) -> (Vec<&'static str>, usize) {
             continue;
         }
         warnings += 1;
-        if let Some((code, _)) = WARNING_CODES
-            .iter()
-            .find(|(_, phrases)| phrases.iter().any(|phrase| line.contains(phrase)))
-        {
-            if !codes.contains(code) {
+        for (code, phrases) in WARNING_CODES {
+            if phrases.iter().any(|phrase| line.contains(phrase)) && !codes.contains(code) {
                 codes.push(code);
             }
         }
@@ -68,6 +72,8 @@ pub fn classify(stderr: &str) -> (Vec<&'static str>, usize) {
 }
 
 fn is_warning_line(line: &str) -> bool {
-    (line.starts_with("svg_grid: warning:") || line.starts_with("svg_grid convert: warning:"))
-        && !line.contains("non-fatal warning(s)")
+    let body = line
+        .strip_prefix("svg_grid: warning:")
+        .or_else(|| line.strip_prefix("svg_grid convert: warning:"));
+    body.is_some_and(|body| !body.trim_start().starts_with("non-fatal warning(s)"))
 }

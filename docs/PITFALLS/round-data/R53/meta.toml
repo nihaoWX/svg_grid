@@ -1,0 +1,53 @@
+id = "R53"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "classify 只取表序第一个命中码，用户内容里的更靠前短语会遮蔽 W9/W7，doctor 门禁 fail-open",
+  "告警短语多副本：rules_tests 手写列表、R17 死变量，均与 WARNING_CODES 失配",
+  "R45 移动 codes.rs 造成的行号漂移未入账",
+]
+
+closures = [
+  { finding = "R53-F1", tier = "代码" },
+  { finding = "R53-F2", tier = "代码" },
+  { finding = "R53-F3", tier = "检查" },
+  { finding = "R53-F4", tier = "检查" },
+  { finding = "R53-F5", tier = "检查" },
+  { finding = "R53-F6", tier = "检查" },
+  { finding = "R53-F7", tier = "规则" },
+  { finding = "R53-F8", tier = "规则" },
+  { finding = "R53-F9", tier = "规则" },
+]
+
+run_before = ["R45", "R34", "R31", "R52"]
+touched = []
+
+note = """
+为什么认定同类：R45-F1/F2 已经把 `WARNING_CODES` 与 `classify` 落过账；本轮是同一位置同一原因
+（`find` 取第一个）在 R45 扩大短语表后造成的复发，且 `rules_tests.rs:236-266` / `R17:44-46` 是同一份短语的副本。
+根因与修法（已证）：`classify` 收集**全部**命中码（`src/warnings/codes.rs:57-72`），doctor 的
+`codes.contains(&"W7"/&"W9")` 无需改动；`is_warning_line` 只排除 footer 自己的正文（74-79）；
+短语唯一来源由 `WARNING_CODES` 派生（`src/warnings/rules_tests.rs:237-242`），并逐短语核对真实文案
+（`src/warnings/codes_tests.rs:40-170`），表里加死短语立即变红。
+三列（参考 `196da47^` / base `e0c6033`=修前 `31eab2d` / 修后）：w9 FAIL W9 / PASS W4a / FAIL W4a+W9；
+w9w5 FAIL W9 / PASS W5 / FAIL W5+W9；w7 PASS W6（W7 判据当时是死的）/ FAIL W6+W7 / FAIL W6+W7；
+w7mask PASS W6 / PASS W6+W4a / FAIL W6+W4a+W7。
+怎么修才不弄坏前面：三轮复现是 one-fixture corpus（doctor rc 有牙）；W9 守卫手工构造与生产同形的行
+（长短语会被 200 字符预算截断），W7 守卫走真实 `describe_passthrough`；干净语料 doctor `--json`
+逐 fixture 与 base 逐字节相同（只归一 `"ms"`，base 自身每次运行也在变）。
+回归：528 测试（284 lib + 59 main + 185 selftest）；fmt/clippy 干净；install 两处 sha 相同
+e111f6ed…；doctor 57/0/1；语料 428 次 convert/--report + 116 次 plot-grid/--plan 对 base 0 差异；
+旧证据 R3..R52 顶层 47/47 绿（R19 已 retire）。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R53/test.py
+# 有牙：指向修前二进制（31eab2d），A 族 12 条必须红
+SVG_GRID_BIN=/tmp/r53old/svg_grid python3 docs/PITFALLS/round-data/R53/test.py
+# D 族需要修前二进制参与对比（不给则 skip）
+SVG_GRID_OLD_BIN=/tmp/r53old/svg_grid python3 docs/PITFALLS/round-data/R53/test.py
+# 旧证据逐轮顶层跑（严格 shim）
+bash docs/PITFALLS/round-data/R49/run_old_evidence.sh
+"""

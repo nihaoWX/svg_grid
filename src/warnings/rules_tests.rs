@@ -229,6 +229,18 @@ fn every_cause_note_fits_the_cap() {
     }
 }
 
+/// Every `(code, phrase)` pair of the table, in table order.
+///
+/// The single source is [`WARNING_CODES`]; the equality below fails the moment a
+/// hand-written copy is put back here (the pre-R53 state had three drifting
+/// copies, one of them still listing W3/W8 phrases that are not warnings).
+fn warning_phrases() -> Vec<(&'static str, &'static str)> {
+    WARNING_CODES
+        .iter()
+        .flat_map(|(code, phrases)| phrases.iter().map(move |phrase| (*code, *phrase)))
+        .collect()
+}
+
 /// A note explains the *why*, so it must never repeat a warning's code phrase:
 /// the doctor classifier and the round-data evidence match those phrases on the
 /// `svg_grid: warning:` lines.
@@ -241,21 +253,20 @@ fn no_cause_note_repeats_a_warning_phrase() {
         NOTE_LABEL_CLIP,
         NOTE_DANGLING,
     ];
+    let phrases = warning_phrases();
+    let table: Vec<(&str, &str)> = WARNING_CODES
+        .iter()
+        .flat_map(|(code, phrases)| phrases.iter().map(move |phrase| (*code, *phrase)))
+        .collect();
+    assert_eq!(
+        phrases, table,
+        "the note guard must cover exactly the table's phrases, with no hand-written copy"
+    );
     for note in notes {
-        for phrase in [
-            "scaled by the layout",
-            "draws ink outside its own canvas box",
-            "point at an id that nothing in the output defines",
-            "could not be rewritten",
-            "already carry letters",
-            "repeats some letters",
-            "may be clipped by the canvas",
-            "not in the font library",
-            "<style> CSS block",
-        ] {
+        for (code, phrase) in &phrases {
             assert!(
                 !note.contains(phrase),
-                "the note repeats the warning phrase {phrase:?}: {note}"
+                "the note repeats the {code} warning phrase {phrase:?}: {note}"
             );
         }
     }

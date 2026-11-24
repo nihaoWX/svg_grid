@@ -14,3 +14,4 @@
 
 mod convert_cmd;
 mod corpus;
+mod masking;

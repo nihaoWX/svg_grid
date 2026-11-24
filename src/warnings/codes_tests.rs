@@ -9,9 +9,10 @@ use crate::convert::{convert, Conversion};
 use crate::geom::Rect;
 
 use super::{
-    classify, describe_content_outside_canvas, describe_dangling_reference, describe_label_count,
-    describe_label_duplicates, describe_moved_label, describe_passthrough, describe_scale,
-    describe_stretch, CellStretch, DanglingReference, InputScale, Passthrough, WARNING_CODES,
+    classify, describe_clipped_label, describe_content_outside_canvas, describe_dangling_reference,
+    describe_label_count, describe_label_duplicates, describe_moved_label, describe_passthrough,
+    describe_scale, describe_stretch, CellStretch, DanglingReference, InputScale, Passthrough,
+    WARNING_CODES,
 };
 
 /// Wrap a message the way the CLI prints it, then classify it.
@@ -41,41 +42,62 @@ fn every_warning_code_still_matches_its_message() {
     // `ARCHITECTURE/warnings.md` §3) printed with `svg_grid: invalid input:` /
     // `svg_grid: font library error:`, so `doctor` judges them by exit code and
     // `classify` never sees them. A table entry for them could never match.
-    let messages: Vec<(&str, String)> = vec![
+    //
+    // A code may be printed in more than one shape (W5 is moved *or* clipped), so
+    // each code carries every real message it can produce; the phrases of the
+    // table are then checked against those messages below.
+    let messages: Vec<(&str, Vec<String>)> = vec![
         (
             "W1",
-            describe_scale(&[InputScale {
+            vec![describe_scale(&[InputScale {
                 index: 0,
                 sx: 2.0,
                 sy: 2.0,
             }])
-            .expect("a 2x rescale warns"),
+            .expect("a 2x rescale warns")],
         ),
         (
             "W2",
-            describe_stretch(&[CellStretch {
+            vec![describe_stretch(&[CellStretch {
                 index: 0,
                 cell_aspect: 2.0,
                 panel_aspect: 1.0,
             }])
-            .expect("a 2:1 stretch warns"),
+            .expect("a 2:1 stretch warns")],
         ),
         (
             "W4a",
-            describe_label_count(3, 2).expect("3 entries for 2 inputs warns"),
+            vec![describe_label_count(3, 2).expect("3 entries for 2 inputs warns")],
         ),
         (
             "W4b",
-            describe_label_duplicates(&["A".to_string(), "A".to_string()])
-                .expect("a repeated letter warns"),
+            vec![
+                describe_label_duplicates(&["A".to_string(), "A".to_string()])
+                    .expect("a repeated letter warns"),
+            ],
         ),
         (
             "W5",
-            describe_moved_label("A", 0, 10.0, 20.0).expect("a moved letter warns"),
+            vec![
+                describe_moved_label("A", 0, 10.0, 20.0).expect("a moved letter warns"),
+                describe_clipped_label(
+                    "A",
+                    0,
+                    Rect {
+                        x: -10.0,
+                        y: 0.0,
+                        width: 20.0,
+                        height: 10.0,
+                    },
+                    100.0,
+                    80.0,
+                )
+                .expect("ink left of the canvas clips the letter"),
+            ],
         ),
         (
             "W6",
-            describe_content_outside_canvas(
+            vec![describe_content_outside_canvas(
                 0,
                 (-5.0, 0.0, 100.0, 80.0),
                 Rect {
@@ -85,37 +107,56 @@ fn every_warning_code_still_matches_its_message() {
                     height: 80.0,
                 },
             )
-            .expect("ink left of the canvas warns"),
+            .expect("ink left of the canvas warns")],
         ),
         (
             "W7",
-            describe_passthrough(&[Passthrough {
+            vec![describe_passthrough(&[Passthrough {
                 index: 0,
                 element: "rect".to_string(),
                 attr: "x".to_string(),
                 detail: "non-finite number \"inf\"".to_string(),
             }])
-            .expect("a kept-verbatim attribute warns"),
+            .expect("a kept-verbatim attribute warns")],
         ),
         (
             "W9",
-            describe_dangling_reference(&[DanglingReference {
+            vec![describe_dangling_reference(&[DanglingReference {
                 index: 0,
                 element: "rect".to_string(),
                 attr: "fill".to_string(),
                 id: "nope".to_string(),
             }])
-            .expect("a dangling url(#…) warns"),
+            .expect("a dangling url(#…) warns")],
         ),
-        ("V1", converter_style_warning()),
+        ("V1", vec![converter_style_warning()]),
     ];
 
-    for (code, message) in &messages {
-        let codes = codes_of(message);
-        assert!(
-            codes.contains(code),
-            "{code} is not recognised from its own message: {message:?} -> {codes:?}"
-        );
+    for (code, group) in &messages {
+        for message in group {
+            let codes = codes_of(message);
+            assert!(
+                codes.contains(code),
+                "{code} is not recognised from its own message: {message:?} -> {codes:?}"
+            );
+        }
+    }
+
+    // Every *phrase* of the table must occur in some real message of its code:
+    // a phrase added for a shape no builder emits would otherwise read as
+    // "covered" while covering nothing (R45 review P3-a).
+    for (code, phrases) in WARNING_CODES {
+        let group = messages
+            .iter()
+            .find(|(candidate, _)| candidate == code)
+            .map(|(_, group)| group)
+            .unwrap_or_else(|| panic!("{code} has no real message in the guard"));
+        for phrase in *phrases {
+            assert!(
+                group.iter().any(|message| message.contains(phrase)),
+                "the phrase {phrase:?} of {code} never occurs in a real message: {group:?}"
+            );
+        }
     }
 
     // The table has no entry that no message can produce: every id in it is
@@ -166,4 +207,113 @@ fn hard_error_lines_are_not_classified_as_warnings() {
     let (codes, warnings) = classify(stderr);
     assert_eq!(warnings, 0, "hard errors are not warnings: {codes:?}");
     assert!(codes.is_empty(), "{codes:?}");
+}
+
+/// The W9 phrase, taken from the table itself so the guard below cannot drift.
+fn w9_phrase() -> &'static str {
+    WARNING_CODES
+        .iter()
+        .find(|(code, _)| *code == "W9")
+        .expect("W9 is in WARNING_CODES")
+        .1[0]
+}
+
+/// A W9-shaped line whose dangling id is `id` (the id is printed verbatim).
+fn w9_guard_line(id: &str) -> String {
+    format!(
+        "svg_grid: warning: 1 reference(s) {}: input #0 <rect fill> -> url(#{id})\n",
+        w9_phrase()
+    )
+}
+
+/// The core invariant of R53: W9 prints the dangling id **verbatim**, so user
+/// content can carry any other code's phrase. Every phrase of every code is put
+/// into that id; W9 must still be classified, or `doctor` fails open.
+#[test]
+fn a_phrase_inside_a_dangling_id_cannot_mask_w9() {
+    // The guard line must keep the production head, or it would prove nothing.
+    let production = describe_dangling_reference(&[DanglingReference {
+        index: 0,
+        element: "rect".to_string(),
+        attr: "fill".to_string(),
+        id: "nope".to_string(),
+    }])
+    .expect("a dangling url(#…) warns");
+    let head = w9_guard_line("nope");
+    let head = head
+        .strip_prefix("svg_grid: warning: ")
+        .expect("the guard line keeps the CLI prefix")
+        .trim_end();
+    assert!(
+        production.starts_with(head),
+        "the guard's W9 shape drifted from the production message: {production:?} vs {head:?}"
+    );
+
+    for (code, phrases) in WARNING_CODES {
+        for phrase in *phrases {
+            let line = w9_guard_line(phrase);
+            assert!(
+                line.contains(phrase),
+                "the guard did not embed {phrase:?} in the dangling id"
+            );
+            let (codes, warnings) = classify(&line);
+            assert_eq!(warnings, 1, "{line:?}");
+            assert!(
+                codes.contains(&"W9"),
+                "a {code} phrase ({phrase:?}) inside the dangling id masked W9: {codes:?}"
+            );
+        }
+    }
+}
+
+/// The same invariant on W7: the kept attribute value is printed verbatim, so a
+/// phrase of any other code inside it must not steal the W7 verdict.
+#[test]
+fn a_phrase_inside_a_kept_verbatim_value_cannot_mask_w7() {
+    for (code, phrases) in WARNING_CODES {
+        for phrase in *phrases {
+            let message = describe_passthrough(&[Passthrough {
+                index: 0,
+                element: "path".to_string(),
+                attr: "d".to_string(),
+                detail: format!(
+                    "unparseable path data \"{phrase}\" (missing argument for path command 'L')"
+                ),
+            }])
+            .expect("a kept-verbatim attribute warns");
+            assert!(
+                message.contains(phrase),
+                "the production W7 message dropped {phrase:?}: {message:?}"
+            );
+            let codes = codes_of(&message);
+            assert!(
+                codes.contains(&"W7"),
+                "a {code} phrase ({phrase:?}) inside the kept value masked W7: {codes:?}"
+            );
+        }
+    }
+}
+
+/// The footer is excluded by its **message**, not by a substring anywhere in the
+/// line: a real warning whose body mentions `non-fatal warning(s)` is a warning.
+#[test]
+fn only_the_footer_is_excluded_not_a_body_mentioning_it() {
+    let footer = "svg_grid: warning: non-fatal warning(s) — the exit code and the output \
+                  file are unchanged\n";
+    assert_eq!(
+        classify(footer),
+        (Vec::new(), 0),
+        "the footer is not a warning"
+    );
+
+    let body = w9_guard_line("non-fatal warning(s)");
+    let (codes, warnings) = classify(&body);
+    assert_eq!(
+        warnings, 1,
+        "a warning body mentioning the footer is still a warning"
+    );
+    assert!(
+        codes.contains(&"W9"),
+        "the W9 body must stay classified: {codes:?}"
+    );
 }

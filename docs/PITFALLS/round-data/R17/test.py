@@ -41,9 +41,6 @@ FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
 LINE_RE = re.compile(r"^(PASS|FAIL|SKIP)  (\S+)  (\S+)  (\d+)  warnings=(\d+)$")
 SUMMARY_RE = re.compile(r"^summary: (\d+) pass, (\d+) fail, (\d+) skip$")
 WARNING_CODES = {"W1", "W2", "W3", "W4a", "W4b", "W5", "W6", "W7", "W8", "W9", "V1"}
-KNOWN_CODE_WORDS = {"W1": "scaled by the layout",
-                    "W7": "could not be rewritten and were left exactly as written",
-                    "W9": "point at an id that nothing in the output defines"}
 
 FAILS = []
 
