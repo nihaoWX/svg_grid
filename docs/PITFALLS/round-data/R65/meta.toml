@@ -55,6 +55,7 @@ how_to_run = """
 cd <repo> && python3 docs/PITFALLS/round-data/R65/test.py        # rc=0 全过（58 checks；A/B/C/D/E/T 六族）
 SVG_GRID_PIN_BIN=/tmp/r65_before_bin python3 docs/PITFALLS/round-data/R65/test.py   # 有牙：A 族 18 条必须红（rc=1）
 SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R65/test.py   # 缺二进制必须 rc=2（不静默 skip）
+HOME=/tmp/nohome python3 docs/PITFALLS/round-data/R65/test.py       # 找不到 cairosvg 必须 rc=2（不记成 FAIL）
 
 修前二进制（本轮 code_before bfe5e12 的构建，sha256 0ff7d7750e3d5c4af6ab0ae6ec9ddcf6e460fc4c8421606d276778eb392f7f03）：
 git worktree add --detach /tmp/r65base bfe5e12

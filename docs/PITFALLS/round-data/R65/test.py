@@ -2,33 +2,33 @@
 """R65 evidence — `convert --check` must refuse a non-finite number, and the
 test-count gate must notice a gutted `#[test]` body.
 
-Families
-  A  the fix, four columns per case: pre-fix rc + message, post-fix rc + message,
-     whether `d1render` renders the pre-fix product anyway, and the legal-value
-     control. Nine non-finite spellings (`1e999`, `NaN`, `-inf`) across
-     stroke-width / x / path d / font-size / textLength / stop offset / points,
-     plus two controls that must not move: `stroke-width="abc"` stays rc=1 and
-     `stroke-width="5px"` stays rc=0 with byte-identical output.
-  B  atomicity: `--force` keeps the old bytes, `--output-png` / `--output-svgz`
-     write nothing, `--check` writes nothing.
-  C  the gate: `gate_assertions.py` green on the tree, red on three mutants built
-     at run time in TMP (empty body, assertions deleted but the call kept,
-     `#[ignore]` added) — each names file and test.
-  D  parity: 214 tracked `tests/**/*.svg` through `convert` and 58
-     `tests/fixtures/**/*.svg` through `plot-grid --width 600 --ncol 1` — rc and
-     bytes equal the base build (/tmp/r50base @e0c6033).
-  E  the obb `clipPath`-body-references-a-pattern residue: one decisive
-     experiment. The pattern inside the clip body changes nothing in either
-     renderer, and the two renderers already disagree on a plain clip body, so
-     no fixture can discriminate — the residue has no oracle (see meta.toml).
-  T  teeth: the pre-fix build at /tmp/r65_before_bin says "compatible" and writes
-     the file for every case in A.
+A  the fix, four columns per case: pre-fix rc + message, post-fix rc + message,
+   whether `d1render` renders the pre-fix product anyway, and the legal-value
+   control. Nine non-finite spellings (`1e999`, `NaN`, `-inf`) across
+   stroke-width / x / path d / font-size / textLength / stop offset / points;
+   controls: `stroke-width="abc"` stays rc=1, `"5px"` stays rc=0 byte-identical.
+B  atomicity: `--force` keeps the old bytes, `--output-png` / `--output-svgz`
+   write nothing, `--check` writes nothing.
+C  the gate: `gate_assertions.py` green on the tree, red on three mutants built
+   at run time in TMP (empty body, assertions deleted but the call kept,
+   `#[ignore]` added) — each names file and test.
+D  parity: 214 tracked `tests/**/*.svg` through `convert` and 58
+   `tests/fixtures/**/*.svg` through `plot-grid --width 600 --ncol 1` — rc and
+   bytes equal the base build (/tmp/r50base @e0c6033).
+E  the obb `clipPath`-body-references-a-pattern residue: one decisive experiment.
+   The pattern inside the clip body changes nothing in either renderer, and the
+   two renderers already disagree on a plain clip body, so no fixture can
+   discriminate — the residue has no oracle (see meta.toml).
+T  teeth: the pre-fix build at /tmp/r65_before_bin says "compatible" and writes
+   the file for every case in A.
 
 Run:  python3 docs/PITFALLS/round-data/R65/test.py
       SVG_GRID_PIN_BIN=/tmp/r65_before_bin python3 .../R65/test.py   # A must be red
-Exit: 0 all green, 1 at least one check red, 2 missing binary (fail closed).
+Exit: 0 all green, 1 at least one check red, 2 missing binary or no cairosvg.
 Env:  SVG_GRID_BIN, SVG_GRID_PIN_BIN (default /tmp/r65_before_bin),
-      SVG_GRID_PRE_BIN (default /tmp/r50base/target/release/svg_grid).
+      SVG_GRID_PRE_BIN (default /tmp/r50base/target/release/svg_grid),
+      SVG_GRID_CAIRO_PYTHON (interpreter that can `import cairosvg`; unset ⇒ try
+      ~/.venv/bin/python then sys.executable, exit 2 if neither has it).
 """
 
 import os
@@ -51,9 +51,38 @@ PRE = Path(os.environ.get("SVG_GRID_PRE_BIN", "/tmp/r50base/target/release/svg_g
 RENDER = Path("/tmp/d1_eval/render/target/release/d1render")
 FONTDIR = ROOT / "fontlib"
 GUARD = Path(__file__).resolve().parent / "gate_assertions.py"
+CAIRO_PY = None                                    # resolved in main()
 TMP = Path(tempfile.mkdtemp(prefix="r65-evidence-"))
 ENV = dict(os.environ, D1_FONT_DIR=str(FONTDIR))
 PASSED, FAILED = [], []
+
+
+def cairo_python():
+    """The interpreter that can `import cairosvg`, or None.
+
+    `sys.executable` is not enough: the system python3 usually has no cairosvg
+    (only ~/.venv does), and a silently failed render would look like a product
+    defect. A missing renderer is an environment problem, so the caller exits 2.
+    """
+    candidates = []
+    forced = os.environ.get("SVG_GRID_CAIRO_PYTHON")
+    if forced:
+        candidates.append(Path(forced))
+    candidates.append(Path.home() / ".venv/bin/python")
+    candidates.append(Path(sys.executable))
+    seen = set()
+    for one in candidates:
+        key = str(one)
+        if key in seen:
+            continue
+        seen.add(key)
+        if not one.exists():
+            continue
+        probe = subprocess.run([str(one), "-c", "import cairosvg"],
+                               capture_output=True, text=True)
+        if probe.returncode == 0:
+            return one
+    return None
 
 HEAD = ('<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80" '
         'viewBox="0 0 100 80">\n')
@@ -63,34 +92,26 @@ def doc(body):
     return HEAD + body + "\n</svg>\n"
 
 
-# name -> (body, attribute the finding must name, value text it must quote)
+# name -> (body, attribute named, value quoted)
+BOX = '<rect x="10" y="10" width="20" height="20" fill="#000"'
 CASES = {
-    "stroke-width=1e999": ('<rect x="10" y="10" width="20" height="20" fill="#000" '
-                           'stroke="#000" stroke-width="1e999"/>', "stroke-width", "1e999"),
+    "stroke-width=1e999": (BOX + ' stroke-width="1e999"/>', "stroke-width", "1e999"),
     "x=1e999": ('<rect x="1e999" y="10" width="20" height="20" fill="#000"/>', "x", "1e999"),
-    "d=M 1e999 0 L 10 10": ('<path d="M 1e999 0 L 10 10" fill="none" stroke="#000"/>',
-                            "d", "1e999"),
-    "font-size=1e999": ('<text x="10" y="20" font-size="1e999">hi</text>',
-                        "font-size", "1e999"),
-    "textLength=1e999": ('<text x="10" y="20" textLength="1e999">hi</text>',
-                         "textLength", "1e999"),
-    "offset=1e999": ('<defs><linearGradient id="g"><stop offset="1e999" '
-                     'stop-color="#000"/></linearGradient></defs>'
-                     '<rect width="100" height="80" fill="url(#g)"/>', "offset", "1e999"),
-    "points=1e999,10 20,20": ('<polygon points="1e999,10 20,20" fill="#000"/>',
-                              "points", "1e999"),
-    "stroke-width=NaN": ('<rect x="10" y="10" width="20" height="20" fill="#000" '
-                         'stroke-width="NaN"/>', "stroke-width", "NaN"),
-    "stroke-width=-inf": ('<rect x="10" y="10" width="20" height="20" fill="#000" '
-                          'stroke-width="-inf"/>', "stroke-width", "-inf"),
+    "d=M 1e999 0 L 10 10": ('<path d="M 1e999 0 L 10 10" fill="none" stroke="#000"/>', "d", "1e999"),
+    "font-size=1e999": ('<text x="10" y="20" font-size="1e999">hi</text>', "font-size", "1e999"),
+    "textLength=1e999": ('<text x="10" y="20" textLength="1e999">hi</text>', "textLength", "1e999"),
+    "offset=1e999": ('<defs><linearGradient id="g"><stop offset="1e999" stop-color="#000"/>'
+                     '</linearGradient></defs><rect width="100" height="80" fill="url(#g)"/>',
+                     "offset", "1e999"),
+    "points=1e999,10 20,20": ('<polygon points="1e999,10 20,20" fill="#000"/>', "points", "1e999"),
+    "stroke-width=NaN": (BOX + ' stroke-width="NaN"/>', "stroke-width", "NaN"),
+    "stroke-width=-inf": (BOX + ' stroke-width="-inf"/>', "stroke-width", "-inf"),
 }
 CONTROLS = {
-    "stroke-width=abc": ('<rect x="10" y="10" width="20" height="20" fill="#000" '
-                         'stroke-width="abc"/>', 1),
-    "stroke-width=5px": ('<rect x="10" y="10" width="20" height="20" fill="#000" '
-                         'stroke-width="5px"/>', 0),
+    "stroke-width=abc": (BOX + ' stroke-width="abc"/>', 1),
+    "stroke-width=5px": (BOX + ' stroke-width="5px"/>', 0),
 }
-ILLEGAL = ("1e999", "inf", "NaN", "nan")
+
 
 
 def check(ok, label, detail=""):
@@ -111,8 +132,7 @@ def out_path(name):
 
 def convert(binary, src, name, extra=()):
     out = out_path(name)
-    if out.exists():
-        out.unlink()
+    out.unlink(missing_ok=True)
     proc = subprocess.run([str(binary), "convert", "--input", str(src),
                            "--output", str(out)] + list(extra), capture_output=True, text=True)
     return proc, (out.read_bytes() if out.exists() else b"")
@@ -147,19 +167,20 @@ def read_png(path):
         line = bytearray(raw[base + 1:base + 1 + stride])
         for x in range(stride):
             left = line[x - ch] if x >= ch else 0
-            up = prev[x]
-            ul = prev[x - ch] if x >= ch else 0
+            up, ul = prev[x], (prev[x - ch] if x >= ch else 0)
             if f == 1:
-                line[x] = (line[x] + left) & 0xFF
+                add = left
             elif f == 2:
-                line[x] = (line[x] + up) & 0xFF
+                add = up
             elif f == 3:
-                line[x] = (line[x] + (left + up) // 2) & 0xFF
+                add = (left + up) // 2
             elif f == 4:
-                p = left + up - ul
-                pa, pb, pc = abs(p - left), abs(p - up), abs(p - ul)
-                pred = left if pa <= pb and pa <= pc else (up if pb <= pc else ul)
-                line[x] = (line[x] + pred) & 0xFF
+                q = left + up - ul
+                pa, pb, pc = abs(q - left), abs(q - up), abs(q - ul)
+                add = left if pa <= pb and pa <= pc else (up if pb <= pc else ul)
+            else:
+                add = 0
+            line[x] = (line[x] + add) & 0xFF
         rows.append(line)
         prev = line
     return w, h, ch, rows
@@ -179,13 +200,6 @@ def diff(a, b):
                 count += 1
                 worst = max(worst, d)
     return count, worst
-
-
-def ink(path):
-    w, h, ch, rows = read_png(path)
-    return sum(1 for y in range(h) for x in range(w)
-               if any(v != 255 for v in (rows[y][x * ch:x * ch + ch][:3]
-                                         if ch >= 3 else rows[y][x * ch] * 3)))
 
 
 def render(src, out):
@@ -212,7 +226,7 @@ def family_a():
         # d1render 列：修前产物带着非法数值，渲染器照样 rc=0 —— 只有 convert 能拦。
         product = out_path(name + ".before")
         rendered, png = render(product, TMP / (re.sub(r"[^A-Za-z0-9]+", "-", name) + ".png"))
-        illegal = [token for token in ILLEGAL if token in product.read_text()]
+        illegal = [t for t in ("1e999", "inf", "NaN", "nan") if t in product.read_text()]
         check(rendered == 0 and png and illegal,
               "A/%s d1render 对修前产物仍 rc=0（渲染器不是门，%s 留在产物里）"
               % (name, illegal), "rc=%d png=%s" % (rendered, png))
@@ -241,8 +255,7 @@ def family_b():
     for flag, suffix in (("--output-png", ".png"), ("--output-svgz", ".svgz")):
         svg, extra = TMP / ("atomic" + suffix + ".svg"), TMP / ("atomic" + suffix)
         for path in (svg, extra):
-            if path.exists():
-                path.unlink()
+            path.unlink(missing_ok=True)
         proc = subprocess.run([str(BIN), "plot-grid", "--input", str(src), "--output", str(svg),
                                flag, str(extra), "--width", "200", "--ncol", "1"],
                               capture_output=True, text=True)
@@ -262,18 +275,16 @@ def family_c():
     check(proc.returncode == 0 and "PASS" in proc.stdout,
           "C/树上 724 条 `#[test]` 都有断言、0 条 `#[ignore]`",
           (proc.stdout + proc.stderr).strip()[-400:])
+    LAYOUT = "src/layout.rs", "short_last_row_keeps_the_full_grid_cell_size"
     mutants = {
-        "empty-body": ("src/layout.rs", "short_last_row_keeps_the_full_grid_cell_size",
-                       "the body is empty"),
-        "call-kept": ("src/layout.rs", "short_last_row_keeps_the_full_grid_cell_size",
-                      "no assertion in the body"),
+        "empty-body": LAYOUT + ("the body is empty",),
+        "call-kept": LAYOUT + ("no assertion in the body",),
         "ignore": ("tests/selftest/doctor/masking.rs",
                    "a_w4a_phrase_inside_a_kept_value_cannot_mask_w7", "#[ignore]"),
     }
     for label, (rel, test, phrase) in mutants.items():
         tree = TMP / ("mut-" + label)
-        if tree.exists():
-            shutil.rmtree(tree)
+        shutil.rmtree(tree, ignore_errors=True)
         for top in ("src", "tests"):
             for path in (ROOT / top).rglob("*.rs"):
                 target = tree / path.relative_to(ROOT)
@@ -307,8 +318,7 @@ def family_d():
     check(len(fixtures) == 58, "D/58 tracked tests/fixtures/**/*.svg", len(fixtures))
 
     def run(binary, args, out):
-        if out.exists():
-            out.unlink()
+        out.unlink(missing_ok=True)
         proc = subprocess.run([str(binary)] + args, capture_output=True)
         return proc.returncode, (out.read_bytes() if out.exists() else b""), proc.stdout, proc.stderr
 
@@ -335,14 +345,13 @@ def family_d():
 
 def family_e():
     print("\n== E obb clipPath body 引用 pattern：一次判定实验 ==")
-    plain = doc('<defs><clipPath id="c" clipPathUnits="objectBoundingBox">'
-                '<rect width="1" height="0.5" fill="white"/></clipPath></defs>'
-                '<rect width="100" height="80" fill="red" clip-path="url(#c)"/>')
+    clip = ('<clipPath id="c" clipPathUnits="objectBoundingBox">'
+            '<rect width="1" height="0.5" fill="%s"/></clipPath>')
+    body = '<rect width="100" height="80" fill="red" clip-path="url(#c)"/>'
+    plain = doc('<defs>' + clip % "white" + '</defs>' + body)
     patterned = doc('<defs><pattern id="p" patternUnits="userSpaceOnUse" width="8" height="8">'
                     '<rect width="4" height="4" fill="white"/></pattern>'
-                    '<clipPath id="c" clipPathUnits="objectBoundingBox">'
-                    '<rect width="1" height="0.5" fill="url(#p)"/></clipPath></defs>'
-                    '<rect width="100" height="80" fill="red" clip-path="url(#c)"/>')
+                    + clip % "url(#p)" + '</defs>' + body)
     shots = {}
     for label, text in (("plain", plain), ("pattern", patterned)):
         src = TMP / ("e-%s.svg" % label)
@@ -350,10 +359,13 @@ def family_e():
         d1 = TMP / ("e-%s-d1.png" % label)
         rc, made = render(src, d1)
         cairo = TMP / ("e-%s-cairo.png" % label)
-        subprocess.run([sys.executable, "-c",
-                        "import cairosvg,sys;cairosvg.svg2png(url=sys.argv[1],"
-                        "write_to=sys.argv[2],scale=1)", str(src), str(cairo)],
-                       capture_output=True)
+        drawn = subprocess.run([str(CAIRO_PY), "-c",
+                                "import cairosvg,sys;cairosvg.svg2png(url=sys.argv[1],"
+                                "write_to=sys.argv[2],scale=1)", str(src), str(cairo)],
+                               capture_output=True, text=True)
+        if drawn.returncode != 0:
+            print("  cairosvg failed (%s): %s" % (CAIRO_PY, (drawn.stderr or "").strip()[-300:]),
+                  file=sys.stderr)
         shots[label] = (rc, made, d1, cairo.exists(), cairo)
     rc, made, d1_plain, cairo_ok, cairo_plain = shots["plain"]
     check(rc == 0 and made and cairo_ok, "E/两台渲染器都出图（plain 对照）", shots["plain"])
@@ -366,7 +378,7 @@ def family_e():
     plain_diff = diff(d1_plain, cairo_plain)
     check(plain_diff != (0, 0),
           "E/两台渲染器在**不含 pattern** 的 plain 对照上就不一致 ⇒ 无共同 oracle",
-          "diff=%s ink d1=%d cairo=%d" % (plain_diff, ink(d1_plain), ink(cairo_plain)))
+          "diff=%s" % (plain_diff,))
     check(diff(d1_pattern, cairo_pattern) == plain_diff,
           "E/pattern 版的跨渲染器差异与 plain 相同 ⇒ 该残留无判别力",
           "pattern=%s plain=%s" % (diff(d1_pattern, cairo_pattern), plain_diff))
@@ -395,7 +407,15 @@ def main():
         if not binary.exists():
             print("missing %s: %s" % (label, binary), file=sys.stderr)
             return 2
-    print("BIN=%s\nVIS=%s\nPIN=%s\nPRE=%s\n" % (BIN, VIS, PIN, PRE))
+    global CAIRO_PY
+    CAIRO_PY = cairo_python()
+    if CAIRO_PY is None:
+        print("cairosvg unavailable: set SVG_GRID_CAIRO_PYTHON to an interpreter "
+              "that can `import cairosvg` (family E needs two renderers)",
+              file=sys.stderr)
+        return 2
+    print("BIN=%s\nVIS=%s\nPIN=%s\nPRE=%s\nCAIRO_PY=%s\n"
+          % (BIN, VIS, PIN, PRE, CAIRO_PY))
     family_a()
     family_b()
     family_c()
