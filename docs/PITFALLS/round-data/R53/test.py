@@ -78,7 +78,7 @@ W7_BODY = (
 def make_fixture(tmp, name, body):
     """One-fixture corpus: <dir>/<pkg>/<name>.svg + MANIFEST.toml."""
     directory = tmp / name
-    (directory / "ggplot2").mkdir(parents=True)
+    (directory / "ggplot2").mkdir(parents=True, exist_ok=True)
     (directory / "MANIFEST.toml").write_text(
         f'[[fixture]]\nid = "ggplot2/{name}"\npackage = "ggplot2"\nexpect = "pass"\n',
         encoding="utf-8",
