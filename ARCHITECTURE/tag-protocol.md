@@ -81,3 +81,10 @@
   **警告（W7）+ 原样透传/写入**，`rc` 与产物字节都不变（理由：浏览器对轻微畸形的宽容有道理，
   R5 的严格解析曾把"以前跑得通的输入"变成整图 exit 1 ⇒ 通配面收窄）；
   而**属性串根本不成形**（如 `rect x="abc"`）**仍 fail-closed**——那是另一种错误，不可能来自 convert。
+- **非有限数值的入口把关尚未落地**（R65 待做）：`convert --check` 现在对 `1e999`/`nan`/`inf` 这类
+  "能解析成非有限值"的数值仍报 compatible（判据是 `parse::<f32>().is_err()`，`1e999` 解析成功得 `inf`），
+  而 `rect x="abc"` 这类"根本不成形"的**已经** fail-closed。计划让两者一致（解析失败 **或** `!is_finite()` 都拒），
+  在那之前别把 `--check` 的 compatible 当成"合成后几何一致"的保证。
+- **信任边界**（R64 评审 P2-2 登记）：`plot-grid` 对**已带 panel box** 的输入按"已转换"处理、1:1 贴图，
+  **不跑 `convert/scan.rs` 的结构检查** ⇒ 其中的 `<switch>`/`<foreignObject>` 会静默透传进产物
+  （`rc=0`、产物写出）。要拦它们，请对**原始**输入先跑 `convert --check`（R64 起这两类标签 fail-closed）。

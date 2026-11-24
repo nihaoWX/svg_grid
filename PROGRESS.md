@@ -4,14 +4,14 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R63 收单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、文案偏移、
+  R43–R64 收单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、文案偏移、
   paint transform 共轭、`!important` 级联与零 alpha、滤镜图元与定义体字号、光源、溢出写回、门禁/证据卫生、
-  内容域与 `<ellipse>`、W7 默认可见。余下 pre-existing 见 Known Issues。
+  内容域与 `<ellipse>`、W7 默认可见、`<use>` 引用的定义。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/ellipse/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 701 项**（409 lib + 59 main + 233 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 711 项**（419 lib + 59 main + 233 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W6/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变），
@@ -28,8 +28,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R63 已入账**；
-  `link` 组 L1–L69；`round-data/R3…R63` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R64 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R64b` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -40,15 +40,19 @@
 
 （细节在账本与 `ARCHITECTURE.md`，不在此重复。）
 
-- 2026-11-24 **R63 W7 默认可见 + 测试硬化**：`warnings.emit` 改用 `classify` 逐行取码，只放行含 W7 的行
-  （其余码与 `note:` 仍静音、footer 文案不变）；W7 触发默认 stderr 263 B、rc/产物字节不变，214+58 成功仍 0 字节。补 R62 评审两处承重测试（椭圆 `ry` 各向异性、gradient 三层 `href`）。测试 699→701，
-  提交 `fea3fc4`+`8d0d15b`（fixture 运行时内联，不进全仓 svg 计数）。
-- 2026-11-24 **R62 内容域第二条轴 + `<ellipse>`**：body 已被渲染器映射的定义（pattern/marker 有 viewBox、
-  `patternContentUnits`/mask/filter 为 obb）其出边引用的定义**完全不缩**；user space 与 verbatim 共用时按域克隆
-  （`--svg-grid-verbatim` 后缀、撞名加序号），单域不克隆、克隆沿引用图传递。八组 12160/32000/31200/800/
-  1376/16000/18720 全 xor 0；`href` 继承的定义按**自己 body 的域**选靶（3 层传递）。补 `<ellipse>`
-  （`cx/cy` 成对、`rx` 按 x、`ry` 按 y、单半径补写成对、`--check` 拒非数值）。测试 674→699，提交
-  `7876c46`+`cc66d4b`+`45dc842`+`b6f6741`；评审 PASS 有条件（见 Known Issues 2–3）。
+- 2026-11-25 **R64 `<use>` 引用的定义跟随引用者域**：`slot_of` 放行"写在 `<defs>`／定义 body 里带 id 的普通元素"
+  （含 `use` 子树），`collect` 把定义子树里的 `use` 边登记成引用 ⇒ `<defs><rect id>` 的 body 随引用者 policy 缩
+  （u2/u3/u5/u17 xor 0、ink 相等；u4 双 policy 各一份、href 重指）。对照 `<symbol viewBox>` 与 viewBox pattern
+  body 里的 `use` 仍逐字节不变；`<foreignObject>`/`<switch>` 改 fail-closed（rc=1、不写文件）。测试 701→711，
+  提交 `32803b9`+`01847da`+`5ac0555`+`571efec`（R64b：控制项改整段 golden 序列化、C 组登记数字更正、
+  m4 变异默认进证据）；评审 PASS 有条件，P1-1 已由 R64b 收口。
+- 2026-11-24 **R62–R63 内容域第二条轴 + `<ellipse>` + W7 默认可见**：body 已被渲染器映射的定义（pattern/marker
+  有 viewBox、`patternContentUnits`/mask/filter 为 obb）其出边引用的定义**完全不缩**；user space 与 verbatim
+  共用时按域克隆（`--svg-grid-verbatim`、撞名加序号），单域不克隆、克隆沿引用图传递；`href` 继承按**自己 body
+  的域**选靶。八组 12160/32000/31200/800/1376/16000/18720 全 xor 0；补 `<ellipse>`（`cx/cy` 成对、`rx` 按 x、
+  `ry` 按 y、单半径补写、`--check` 拒非数值）。R63 让 `emit` 用 `classify` 逐行取码，只放行含 W7 的行
+  （其余仍静音、footer 不变）：W7 默认 stderr 263 B、rc/产物字节不变，214+58 成功仍 0 字节；补两处承重测试。
+  测试 674→701，提交 `7876c46`+`cc66d4b`+`45dc842`+`b6f6741`+`fea3fc4`+`8d0d15b`。
 - 2026-11-24 **R60–R61 光源进 user space + 溢出写回**：`z`/`pointsAtZ` 用 **RMS** `sqrt((sx²+sy²)/2)`
   （几何平均错：4×5 spot 37011/206→0）、光源位置平移+缩放（两 cell 5277/238→0）、obb 不再跳过 lighting
   （100170/242→0）、图元子区域按 units 改写（16984→0）；R61 把乘积非有限也**逐字节保原文 + W7**
@@ -113,10 +117,11 @@
   `svg_grid` 优先与 `convert/` 建 crate（R3 及更早，按 10 篇反馈：7 修 / 3 判外部或用错）。
 # In Progress
 
-- **R64（进行中）**：**`<use>` 引用的 `<defs>` 普通元素不被缩放** —— `<defs><rect id="r" width="10">` +
-  `<g data-scale="xy"><use href="#r" x="10" y="10">` ⇒ 产物 def rect 仍 10（应 20）、xor 300/255、ink 100 vs 400；
-  `<defs><g id="g">` 含多子元素 ⇒ xor 408/255。`<symbol viewBox>` 经 `<use>` 已正确（xor 0、ink 1600/1600）。
-  同轮收 `<foreignObject>`/`<switch>` 静默放行（fail-closed 或登记）与 obb `clipPath` 引用 pattern 的口径。
+- **R65（进行中）**：**`convert --check` 对非有限数值仍判 compatible** —— `stroke-width="1e999"`/`"NaN"`、
+  `x="1e999"`、`d="M 1e999 0 L 10 10"`、`font-size`/`textLength`/`stop offset`/`points` 全 rc=0 compatible，
+  判据 `parse::<f32>().is_err()` 判不出 `inf`/`NaN` ⇒ 改成"解析失败**或** `!is_finite()`"，并补齐覆盖面
+  （`d`/`font-size`/`textLength`/`offset`/滤镜数值）；同轮给 R19 加**源码级守卫**（每个 `#[test]` 至少一个断言、
+  禁 `#[ignore]`），挡"同名抽空"。
 # Known Issues
 
 （只留**未决**项；机制见括号里的文件。已解决条目不再保留——历史看账本与 git。）
@@ -127,21 +132,16 @@
 
 1. **滤镜图元长度的残余**（R58 门控、R59/R60 光源与单轴）：只剩各向异性 `feImage`（640/127）、
    `feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值无法精确）登记不修。
-2. **`convert --check` 对非有限数值仍判 compatible**：`stroke-width="1e999"` 的未打标输入 ⇒ rc=0、stderr 0 B、
-   原样保留，随后 `plot-grid` 才打 W7 ⇒ "compatible" 不等于"合成后几何一致"，待加非有限检测。
-3. **内容域与图元的残余**（R62 收口主面）：obb `clipPath` body 引用 pattern 仍 `16000/255`（不修；
+2. **内容域与图元的残余**（R62 收口主面）：obb `clipPath` body 引用 pattern 仍 `16000/255`（不修；
    评审给出可 0/0 的手工候选 ⇒ 缺的是"正确语义"判定，不是无解）；单轴 `data-scale` 配 `rotate`/`stroke` 的
    `<ellipse>` 仍错（`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制。
-4. **`<foreignObject>`/`<switch>` 被 `convert` 静默放行**：`convert --check` 说 compatible、stderr 0 字节、产物
-   原样保留；`plot-grid` 只缩 `<switch>` 里的 rect、`foreignObject` 四边不动 ⇒ 浏览器会画错位（resvg/cairosvg
-   都不渲染它，今天像素看不出）。语料 0 命中 ⇒ 零回归风险，待排期。
-5. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
+3. **`tspan x`/`dy` 重排**（R48 评审 P2，暂不做）：文档序 ≠ 视觉序，
    `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
    需要视觉序模型，登记待排期。
-6. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
+4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
-   **精确相等**（701 = 409+59+233），但只挡增删、**挡不住同名抽空**（把测试体换成 `{}` 仍全绿）；要挡需按
-   测试名做锚，未做。
+   **精确相等**（711 = 419+59+233）、R64b 另加默认变异（m4）当牙齿，但只挡增删与已覆盖的分支、**挡不住
+   同名抽空**（把测试体换成 `{}` 仍全绿）；源码级守卫（每个 `#[test]` 至少一个断言）R65 在做。
 
 ## 其他未决项
 
