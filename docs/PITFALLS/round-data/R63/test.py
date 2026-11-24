@@ -33,7 +33,6 @@ import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[4]
-DATA = Path(__file__).resolve().parent / "data"
 BIN = Path(os.environ.get("SVG_GRID_BIN", str(ROOT / "target/release/svg_grid")))
 PIN = Path(os.environ.get("SVG_GRID_PIN_BIN", "/tmp/r63_before_bin"))
 # Family A is the "visibility" face of the contract: point it at the pre-fix
@@ -44,8 +43,35 @@ TMP = Path(tempfile.mkdtemp(prefix="r63-evidence-"))
 FOOTER = ("svg_grid: warning: non-fatal warning(s) — the exit code and the "
           "output file are unchanged")
 W7 = "could not be rewritten, kept verbatim"
-PANEL = DATA / "panel.svg"
-W7SVG = DATA / "w7.svg"
+PANEL = TMP / "panel.svg"
+W7SVG = TMP / "w7.svg"
+# Inlined on purpose: a tracked `*.svg` under round-data/ would change the whole
+# repository's svg count that R52/test.py (family E) pins, and would put a
+# fixture with a non-finite stroke-width back into the corpus R63 measures.
+PANEL.write_text(
+    '<svg width="100" height="80" viewBox="0 0 100 80" '
+    'xmlns="http://www.w3.org/2000/svg">\n'
+    '<rect data-panel-box="main" x="0" y="0" width="100" height="80" '
+    'fill="none" stroke="none"/>\n'
+    '<g data-scale="position"><circle cx="50" cy="40" r="3" fill="#000000"/></g>\n'
+    '</svg>\n',
+    encoding="utf-8")
+W7SVG.write_text(
+    '<svg width="100" height="80" viewBox="0 0 100 80" '
+    'xmlns="http://www.w3.org/2000/svg">\n'
+    '<defs>\n'
+    '<pattern id="pw" patternUnits="userSpaceOnUse" width="10" height="10" '
+    'patternTransform="wobble(1)"><rect width="10" height="10" '
+    'fill="#cccccc"/></pattern>\n'
+    '<filter id="fb"><feGaussianBlur stdDeviation="2 3 4"/></filter>\n'
+    '</defs>\n'
+    '<rect data-panel-box="main" x="0" y="0" width="100" height="80" '
+    'fill="none" stroke="none"/>\n'
+    '<rect x="10" y="10" width="30" height="20" fill="url(#pw)" '
+    'filter="url(#fb)" stroke-width="1e999"/>\n'
+    '<rect x="50" y="10" width="30" height="20" fill="#000000"/>\n'
+    '</svg>\n',
+    encoding="utf-8")
 PASSED, FAILED = [], []
 
 

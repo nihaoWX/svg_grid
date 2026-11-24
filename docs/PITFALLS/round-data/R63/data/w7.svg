@@ -1,9 +1,0 @@
-<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
-<defs>
-<pattern id="pw" patternUnits="userSpaceOnUse" width="10" height="10" patternTransform="wobble(1)"><rect width="10" height="10" fill="#cccccc"/></pattern>
-<filter id="fb"><feGaussianBlur stdDeviation="2 3 4"/></filter>
-</defs>
-<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
-<rect x="10" y="10" width="30" height="20" fill="url(#pw)" filter="url(#fb)" stroke-width="1e999"/>
-<rect x="50" y="10" width="30" height="20" fill="#000000"/>
-</svg>
