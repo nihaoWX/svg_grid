@@ -1,0 +1,64 @@
+id = "R58"
+date = "2026-11-24"
+verdict = "混合"
+
+family = [
+  "滤镜图元长度不跟随面板缩放：门控是 primitiveUnits（默认 userSpaceOnUse）而不是 filterUnits；各向异性下 <number-optional-number> 必须写双值，单值/几何平均都是错解",
+  "定义体（pattern / mask / clipPath body）里 <text>/<tspan> 的 font-size 不缩：属性与 style 两种写法同病；普通面板文本必须保持不缩",
+  "filter / mask 缺失的区域属性被凭空写成 0×0，内容整块消失（R46 引入的回归；同族既有变体：完全没有区域属性的 userSpaceOnUse filter/mask）",
+]
+
+closures = [
+  { finding = "R58-F1", tier = "代码" },
+  { finding = "R58-F2", tier = "代码" },
+  { finding = "R58-F3", tier = "代码" },
+  { finding = "R58-F4", tier = "代码" },
+  { finding = "R58-F5", tier = "代码" },
+  { finding = "R58-F6", tier = "代码" },
+  { finding = "R58-F7", tier = "检查" },
+  { finding = "R58-F8", tier = "证据" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57",
+]
+touched = []
+
+note = """
+为什么认定同类：A 是 R46 把"paint server 长度跟随面板"做到一半留下的空洞（filter 区域做了、图元长度没做），
+C 是 R46 同一处引入的回归（rewrite_rect 对缺失属性 unwrap_or("0") 并写回）；B 是新领土，但与 A/C 同在
+"定义体里的用户长度必须随面板缩放"这条语义上，R38/R55 已因该语义反复翻车，所以三条都先渲染实测再写期望。
+
+根因是否已证：已证（逐像素）。A：`stdDeviation=2` 在 2× 面板 xor 8360/89，改 4 ⇒ xor 0；各向异性
+`2` ⇒ 39808、"8 10" ⇒ 0、"8.944" ⇒ 69016。B：pattern body font-size 12 ⇒ 墨量 276 vs 1092，改 24 ⇒ xor 0。
+C：href-only filter 修前墨量 0、删掉凭空写入的 0 尺寸后墨量 9588（A 修完为 xor 0）。
+
+怎么修才不弄坏前面：新增 `src/transform/filters.rs`（primitiveUnits 门 + 图元长度表 + 双值/精确格式），
+`primitives.rs` 增 `rewrite_region`（只改元素自己写了的区域属性，R41-F5 先例），`walk.rs` 增 body 标志
+（只有定义体里的 text/tspan 才缩 font-size，普通面板文本不动——tag-protocol 契约）。跑 R38/R41/R43/R46/R55
+与全量 R3..R57；语料 214 文件 convert/--report + 58 fixture plot-grid/--plan 与 r50base 逐字节 0 差异。
+
+已知残余（只登记不声称修好）：lighting 各向异性（法线随非等比缩放变，45934/2）；feImage 各向异性
+（preserveAspectRatio 在变换前适配，640/127，拒绝加 none）；feDisplacementMap（噪声按 1× 设备分辨率采样，
+127/255）；定义体 font-size 各向异性（几何平均让墨量 5328 vs 5352，逐像素不可能一致，要精确需给该 text 追加
+transform="scale(1 k)"，本轮不做）。
+
+R19/R57 说明：R19/test.py 把测试总数钉死为 598 = 306 + 59 + 233，R57/test.py 又断言 R19 快照"本轮精确"
+（其源码第 200 行还写死 `== 598`）。本轮按派单"测试只增不减"新增 35 条 lib 测试
+（633 = 341 + 59 + 233），故这两轮各红 2 条精确计数断言（R19：总数/lib 条数；R57：lib 快照/总数快照），
+其余断言全绿；旧证据共 53 轮，51 轮 rc=0。这两个脚本自身写明"增删测试必须同轮更新"，但派单禁止改别人的
+证据脚本，故保持原样；R57 写死 598，即使更新 R19 快照也无法变绿，需由后续轮次统一处置。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R58/test.py
+# 有牙：被测二进制指向修前 base（a724c08），A/B/C 的属性与逐像素断言必须红（186 passed / 95 failed, rc=1）
+SVG_GRID_BIN=/tmp/r50base/target/release/svg_grid python3 docs/PITFALLS/round-data/R58/test.py
+# 渲染器缺失必须红（除非 --allow-skip）
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R58/test.py
+"""

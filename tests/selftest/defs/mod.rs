@@ -186,9 +186,12 @@ fn a_user_space_filter_box_follows_the_geometry() {
         svg.contains(r#"filterUnits="userSpaceOnUse" x="20" y="20" width="80" height="40""#),
         "a userSpaceOnUse filter region is panel geometry: {svg}"
     );
+    // Corrected by R58: primitive lengths are gated by `primitiveUnits` (default
+    // userSpaceOnUse), not by `filterUnits`; the old expectation froze the bug.
+    // Measured through d1render at s=2: radius 2 => xor 840, radius 4 => xor 0.
     assert!(
-        svg.contains("<feMorphology operator=\"dilate\" radius=\"2\"/>"),
-        "filter primitives are not geometry and must not be rewritten: {svg}"
+        svg.contains("<feMorphology operator=\"dilate\" radius=\"4\"/>"),
+        "primitiveUnits=userSpaceOnUse makes primitive lengths panel geometry: {svg}"
     );
 }
 

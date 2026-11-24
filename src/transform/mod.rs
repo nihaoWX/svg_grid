@@ -9,10 +9,13 @@
 //! parses the `*Units` attributes the way the renderer does, [`defs`] decides which
 //! policy a definition is evaluated under (and copies it when several disagree),
 //! [`hoist`] lifts a nested definition that is also referenced from outside, and
-//! [`links`] resolves what a paint server inherits from its `href` target.
+//! [`links`] resolves what a paint server inherits from its `href` target,
+//! [`filters`] rewrites the user lengths inside a `<filter>`'s primitives under
+//! `primitiveUnits` (R58).
 
 mod defs;
 mod dispatch;
+mod filters;
 mod hoist;
 mod lengths;
 mod links;
@@ -78,3 +81,5 @@ pub(super) enum ScalePolicy {
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod tests_r58;

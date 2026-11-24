@@ -11,7 +11,8 @@ use super::patterns::{
     pattern_body_is_verbatim, pattern_units_is_user_space, rewrite_pattern_tile,
 };
 use super::primitives::{
-    rewrite_axes, rewrite_pair, rewrite_points, rewrite_rect, rewrite_rotate_transform,
+    rewrite_axes, rewrite_pair, rewrite_points, rewrite_rect, rewrite_region,
+    rewrite_rotate_transform,
 };
 use super::transforms::rewrite_paint_transform;
 use super::units::{units_of, Units};
@@ -55,31 +56,35 @@ pub(super) fn rewrite_primitive(
                 passthroughs,
             )?;
         }
-        "text" => rewrite_pair(
-            element,
-            "x",
-            "y",
-            policy,
-            source,
-            target,
-            index,
-            passthroughs,
-        )?,
+        "text" => {
+            rewrite_pair(
+                element,
+                "x",
+                "y",
+                policy,
+                source,
+                target,
+                index,
+                passthroughs,
+            )?;
+        }
         // A `<tspan>`'s `x`/`y` are *absolute* positions in the current user
         // coordinate system (they override the parent `<text>`'s position), so
         // they must move with the text or the run silently stays behind. Unlike
         // `<text>` (whose `rewrite_pair` requires both axes), the two axes are
         // rewritten independently: `<tspan x="10" dy="1.2em">` carries only one
         // coordinate, and skipping it would misplace the run.
-        "tspan" => rewrite_axes(
-            element,
-            &[("x", false), ("y", true)],
-            policy,
-            source,
-            target,
-            index,
-            passthroughs,
-        )?,
+        "tspan" => {
+            rewrite_axes(
+                element,
+                &[("x", false), ("y", true)],
+                policy,
+                source,
+                target,
+                index,
+                passthroughs,
+            )?;
+        }
         "use" => {
             rewrite_pair(
                 element,
@@ -261,18 +266,22 @@ pub(super) fn rewrite_primitive(
             if units_of(element, "maskUnits", Units::ObjectBoundingBox)
                 == Units::UserSpaceOnUse =>
         {
-            rewrite_rect(element, policy, source, target, index, passthroughs)?
+            rewrite_region(element, policy, source, target, index, passthroughs)?
         }
         // A filter region is likewise user-space only under
-        // `filterUnits="userSpaceOnUse"`; the primitives inside are never
-        // rewritten (see `transform_element`). `filterUnits` *does* inherit along
-        // `href` (`src/parser/filter.rs:170-171` → `convert_units` →
-        // `resolve_attr`), unlike the mask units below.
+        // `filterUnits="userSpaceOnUse"`. `filterUnits` *does* inherit along `href`
+        // (`src/parser/filter.rs:170-171` → `convert_units` → `resolve_attr`),
+        // unlike the mask units below — which is exactly why the region is
+        // rewritten with `rewrite_region` and not `rewrite_rect`: a `<filter
+        // href="#base"/>` spells **no** region itself and must keep inheriting it
+        // instead of having a 0-sized one invented (round-data/R58; measured ink 0
+        // against 9588). The primitives inside are handled by
+        // [`super::filters`] under their own gate (`primitiveUnits`).
         "filter"
             if resolved_units(element, links, "filterUnits", Units::ObjectBoundingBox)
                 == Units::UserSpaceOnUse =>
         {
-            rewrite_rect(element, policy, source, target, index, passthroughs)?
+            rewrite_region(element, policy, source, target, index, passthroughs)?
         }
         _ => {}
     }

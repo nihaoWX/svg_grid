@@ -117,6 +117,51 @@ pub(super) fn rewrite_rect(
     Ok(())
 }
 
+/// Rewrite the region of a definition that owns an **optional** `x`/`y`/`width`/
+/// `height` -- a `<filter>` or a `<mask>` (round-data/R58).
+///
+/// Unlike a `<rect>`, a missing region attribute is **not** zero: the renderer
+/// defaults it, or inherits it along `href` (a `<filter href="#base"/>` takes its
+/// whole region from `base`). [`rewrite_rect`] fills every absent attribute with
+/// `"0"` and writes it back, which turns such a definition into a 0-sized region:
+/// the filtered/masked content disappears completely (measured: ink 0 instead of
+/// 9588, and cairosvg refuses the produced document with "The SVG size is
+/// undefined"). So this variant rewrites **only what the element itself spells**:
+/// positions through [`rewrite_axes`] (they get the panel offset), sizes through
+/// [`rewrite_scaled_length`] (they only scale). An absent attribute stays absent
+/// and keeps whatever the renderer would have used.
+pub(super) fn rewrite_region(
+    element: &mut Element,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
+    rewrite_axes(
+        element,
+        &[("x", false), ("y", true)],
+        policy,
+        source,
+        target,
+        index,
+        passthroughs,
+    )?;
+    for (attr, axis) in [("width", LengthAxis::X), ("height", LengthAxis::Y)] {
+        rewrite_scaled_length(
+            element,
+            attr,
+            policy,
+            source,
+            target,
+            axis,
+            index,
+            passthroughs,
+        )?;
+    }
+    Ok(())
+}
+
 /// The viewport of a `<marker>` whose `markerUnits` is `userSpaceOnUse`: the
 /// reference box and the reference point are user lengths, so they follow the
 /// panel like any other shape coordinate.

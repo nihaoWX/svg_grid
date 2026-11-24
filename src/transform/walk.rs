@@ -6,6 +6,8 @@
 
 use super::defs::{self, DefsPlan};
 use super::dispatch::rewrite_primitive;
+use super::filters;
+use super::lengths::{rewrite_scaled_length, LengthAxis};
 use super::links::IdIndex;
 use super::patterns::{self, pattern_body_is_verbatim, PatternIndex};
 use super::primitives::rewrite_marker_box;
@@ -69,12 +71,18 @@ pub(crate) fn transform_svg(
         links: &links,
         defs: &defs,
     };
-    transform_element(root, ScalePolicy::None, &context, passthroughs)
+    transform_element(root, ScalePolicy::None, false, &context, passthroughs)
 }
 
+/// `body` is true for every element whose numbers live in a **definition body**
+/// (a pattern/mask/clipPath/marker body rather than panel geometry). It changes
+/// exactly one thing today: a `<text>`/`<tspan>` there has its `font-size` scaled
+/// (round-data/R58). Panel text keeps its point size under every policy, as the tag
+/// protocol requires, so the flag must not be inferred from the policy alone.
 pub(super) fn transform_element(
     element: &mut Element,
     inherited: ScalePolicy,
+    body: bool,
     context: &Context<'_>,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
@@ -89,6 +97,33 @@ pub(super) fn transform_element(
     });
 
     rewrite_primitive(element, policy, context, passthroughs)?;
+
+    // A body drawn in the panel's user space (a pattern without `viewBox`, a mask or
+    // a clipPath body) scales its coordinates, so its glyphs have to grow with them:
+    // leaving `font-size="12"` verbatim in a body whose `x`/`y` doubled makes the
+    // text half the intended size (measured at s=2: xor 1524 / maxdiff 255, ink 276
+    // against 1092; writing 24 is xor 0). Both spellings are handled because
+    // [`rewrite_scaled_length`] rewrites the attribute *and* an inline
+    // `style="font-size: 12px"`; a `<tspan font-size="12">` is the same defect.
+    //
+    // This is gated on `body`, not on the policy: ordinary panel `<text>` carries
+    // `Xy` too (its coordinates follow the panel) but its size is normalised
+    // separately on the paper (`--normalize-input-max-side`), and
+    // `ARCHITECTURE/tag-protocol.md` says `font-size` never scales with a policy.
+    // `Position`/`None` bodies (`data-scale="position"`) keep their point size
+    // anyway: their factor is `None` inside [`rewrite_scaled_length`].
+    if body && matches!(element.name.as_str(), "text" | "tspan") {
+        rewrite_scaled_length(
+            element,
+            "font-size",
+            policy,
+            context.source,
+            context.target,
+            LengthAxis::Uniform,
+            context.index,
+            passthroughs,
+        )?;
+    }
 
     // A `<pattern>` body is **tile local** in both renderers: the tile box
     // (`x/y/width/height`, rewritten above) is mapped into the cell, but the body's
@@ -134,7 +169,7 @@ pub(super) fn transform_element(
         };
         for child in &mut element.children {
             if let Node::Element(child) = child {
-                transform_element(child, body, context, passthroughs)?;
+                transform_element(child, body, true, context, passthroughs)?;
             }
         }
         return Ok(());
@@ -179,7 +214,7 @@ pub(super) fn transform_element(
         }
         for child in &mut element.children {
             if let Node::Element(child) = child {
-                transform_element(child, body, context, passthroughs)?;
+                transform_element(child, body, true, context, passthroughs)?;
             }
         }
         return Ok(());
@@ -198,11 +233,18 @@ pub(super) fn transform_element(
         return Ok(());
     }
 
-    // A `<filter>`'s primitives are not shapes: their numbers are filter-region
-    // coordinates, and the composer never rewrites them. Descending would only
-    // rewrite a `<path>`/`<rect>` that happens to sit inside a primitive and
-    // break the filter's own geometry.
+    // A `<filter>`'s primitives are not shapes, but their numbers *are* user
+    // lengths whenever `primitiveUnits` is `userSpaceOnUse` — which is its
+    // **default** (`usvg-0.47.0/src/parser/filter.rs:171`). Leaving them verbatim
+    // keeps `stdDeviation`/`dx`/`radius`/`baseFrequency`/the light at the unscaled
+    // panel's size (measured at s=2: `feGaussianBlur stdDeviation="2"` xor 8360).
+    // So the primitives get their own rewrite pass instead of the generic descent:
+    // the generic one would look at a `<path>`/`<rect>` that happens to sit inside
+    // a primitive as if it were panel geometry (`super::filters`).
     if element.name == "filter" {
+        if filters::primitive_units_are_user_space(element, context) {
+            filters::rewrite_primitives(element, policy, context, passthroughs)?;
+        }
         return Ok(());
     }
 
@@ -216,9 +258,14 @@ pub(super) fn transform_element(
         return Ok(());
     }
 
+    // A `<mask>` body and a `<clipPath>` body are definition bodies too, but their
+    // numbers are placed in the **referencing element's** user space (translated to
+    // the cell), so they keep the inherited policy for coordinates; only the
+    // font-size rule needs to know they are bodies.
+    let child_body = body || matches!(element.name.as_str(), "mask" | "clipPath");
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            transform_element(child, policy, context, passthroughs)?;
+            transform_element(child, policy, child_body, context, passthroughs)?;
         }
     }
 
