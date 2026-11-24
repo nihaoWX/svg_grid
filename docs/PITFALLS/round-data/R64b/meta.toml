@@ -1,0 +1,30 @@
+id = "R64b"
+date = "2026-11-25"
+verdict = "复发"
+
+family = [
+  "“对照没有牙齿”第二次出现：R64 的 u6/u15 只断言属性数字，删掉 walk.rs 的 is_definition 守卫（m4）后 cargo test 仍全绿；现改为整段 golden 序列化断言，且默认就跑 m4 变异要求它变红。",
+  "C 组登记数字不可复现：12000/255、4000 红、删 x/y ⇒ 0/0 是漏掉 data-scale 组测出来的，已按评审口径改成 per-pixel 16000 / per-channel 32000 / max 255 等实测值，并登记三个候选证伪。",
+]
+
+closures = [
+  { finding = "R64b-F1", tier = "检查" },
+  { finding = "R64b-F2", tier = "规则" },
+]
+
+run_before = ["R19", "R57", "R64"]
+touched = []
+
+note = """
+为什么认定同类：R64 已把 u6/u15 写成控制，但只断言 width/height；守卫一删 cargo test 仍绿，只有 R64/test.py 的字节比对能抓——同一族第二次出现。
+根因与建议修法（已证）：u6/u15 断言的只是两个数字，删掉 walk.rs:122 的 `&& defs::is_definition(element)` 后产物少的只是 materialise 的 x="0" y="0"；改成整段 golden 后 m4 下 a_use_inside_a_viewbox_pattern_body_stays_verbatim 必红（418 passed / 1 failed）。
+本轮是 R64 评审 P1-1/P2-1/P2-3 的收尾，不是新缺陷：只改测试与 R64 的证据文本，生产代码未动，测试数仍 711 = 419 + 59 + 233。
+怎么修才不弄坏前面：跑 R19/R57/R64 的 test.py；`run_before` 里三条就是本轮该先绿的旧证据。
+R64b 的证据就是 m4 变异让 cargo test 变红，所以 test.py 默认跑变异（--skip-mutation 只跳过它，① ② 仍跑）。
+"""
+
+how_to_run = """
+cd <repo> && python3 docs/PITFALLS/round-data/R64b/test.py                    # rc=0 全过；含 m4 变异，约 20 s
+cd <repo> && python3 docs/PITFALLS/round-data/R64b/test.py --skip-mutation    # 只跑 ① 名单 ② 计数
+# rc=1 = 有红；rc=2 = 缺 cargo/git 或不在仓库根（fail-closed；变异跑不动也是 rc=2 前的环境错误，不静默跳过）
+"""
