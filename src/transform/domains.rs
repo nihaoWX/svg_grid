@@ -110,7 +110,9 @@ fn policy_rank(policy: ScalePolicy) -> u8 {
 ///
 /// Only the constructs with a measured defect are listed: a `<pattern>` whose
 /// resolved content units are `objectBoundingBox` or whose resolved `viewBox`
-/// parses, a `<marker>` with its own valid `viewBox`, and a gradient whose resolved
+/// parses, a `<marker>` with its own valid `viewBox`, a `<symbol>` with a valid
+/// `viewBox` (the `<use>` viewport maps that box to the instance's width/height,
+/// so the body is viewBox units — R64 control u6), and a gradient whose resolved
 /// `gradientUnits` is `objectBoundingBox` (the renderer's default). An unmapped
 /// body (`patternContentUnits="userSpaceOnUse"` without a `viewBox`, an
 /// objectBoundingBox mask/clipPath body) keeps the R46 propagation: its numbers
@@ -124,12 +126,24 @@ pub(super) fn body_is_verbatim(
     match element.name.as_str() {
         "pattern" => patterns::pattern_body_is_verbatim(element, patterns),
         "marker" => marker_body_is_verbatim(element),
+        "symbol" => symbol_body_is_verbatim(element),
         "linearGradient" | "radialGradient" => {
             resolved_units(element, links, "gradientUnits", Units::ObjectBoundingBox)
                 == Units::ObjectBoundingBox
         }
         _ => false,
     }
+}
+
+/// Whether a `<symbol>`'s body is already expanded to the `<use>` viewport by the
+/// renderer (`usvg`'s `ViewBox::to_transform`), so its numbers must not scale.
+///
+/// A `<symbol>` without a `viewBox` has no such mapping: the body is drawn in the
+/// instance's user space, so it keeps following the referrer's policy.
+pub(super) fn symbol_body_is_verbatim(element: &Element) -> bool {
+    element
+        .attr("viewBox")
+        .is_some_and(patterns::valid_view_box)
 }
 
 /// Whether a `<marker>`'s body is already expanded to its viewport by the

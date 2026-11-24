@@ -1,0 +1,77 @@
+id = "R64"
+date = "2026-11-25"
+verdict = "修复"
+
+family = [
+  "P1：<use> 的 href/xlink:href 早就是引用（R46 的 referenced_ids 已解析，u4 的按策略克隆因此已生效），但它引用的目标若不是 pattern/marker/mask/filter/渐变/clipPath 这七种“定义”，就永远拿不到 Slot：DefsPlan::slot_of 先按 is_definition 过滤，于是 <defs><rect id=r>/<defs><g id=g> 被引用时 refs[r] 里的策略无处落地，定义子树里的 <use x/y> 也从未按引用者策略缩。修法：slot_of 增加 reference_only（写在 <defs> 里或某个定义 body 里），collect 增加 in_defs 并把 owner/bodies 的登记放宽到“reference_only 且带 id”的一切元素；walk::transform_element 增加 in_defs 参数，用同一个 reference_only 查询 slot。定义子树内的 <use> 因此和叶子图元一样按引用的域缩放。",
+  "P1：照 <symbol viewBox=…> 经 <use> 的对照不能变：symbol 的 body 已被 <use> 的 width/height 把 viewBox 映射到实例，属 Verbatim。本轮把它接进 domains::body_is_verbatim（symbol_body_is_verbatim = 有合法 viewBox），walk 在 symbol 分支停下、不再缩 body；但仍以 None 下探一层，因为 R64 之前那条路径会 materialise <rect> 的默认 x=0 y=0（例如 u6/u15 的产物），不下探就改字节。",
+  "P1：<foreignObject> 与 <switch> 此前被 convert 静默放行（--check 报 compatible、stderr 0 字节、产物原样写出；d1render/cairosvg 都不画 foreignObject，switch 只画第一个子元素，所以像素看不出）。本轮选 fail-closed：convert 对两者各报一条 structural finding、rc=1、不写产物；reason 里写明“内容会静默丢失”与“无法评估条件，重写每个 child 不能保证是浏览器画的那个”。语料 214 个 tracked svg 里两者命中数都是 0，所以不牵动任何既有产物字节。",
+  "登记不改（C）：obb clipPath body 里引用 pattern 仍是 16000/255（R62 的数，默认 plot-margin、200×160、s=2；R64 用 --plot-margin 0 复测是 12000/255，差值只在取景）。R62 评审给的手工候选（clip body 保持 1×0.5、pattern tile 16/8）在本轮逐条复现不出来：产物里 clip body 的 x/y 被写成面板坐标（x=24 y=24），把它删成 0/0、tile 改 16×8 / 16×16、tile 内 rect 改 8×8，以及这些改动的组合，xor 全部仍是 16000/255（margin 0 时 12000/255），且 tile 8 与 16 的像素完全相同。两台 oracle（d1render、cairosvg）对源图都画整块 16000 红，对产物只画 25% 覆盖的 4000 红，说明 d1render/cairosvg 都不消费 obb clip body 内的 pattern 覆盖——这不是“数字没算对”，而是“obb clip body 里的 pattern 该在哪个坐标系解析”尚未定义。语料 0 命中、不影响任何现有证据，故只登记。",
+  "登记不改：<use> 的目标写在可绘制树里（不是 <defs>）时不改。目标 id 同时是“画在原位”和“被引用”的两个用途：给 slot 会把原位绘制也缩放（双重缩放），克隆又会把 body 画两遍。u7 修前 600/255（ink 200 vs 800），修后仍 600/255。",
+  "不在本轮：<textPath href>、<feImage href> 等其它 href 消费者只登记；单轴 rotate/stroke 既有残余、tspan 视觉序、W6 假阳性均未触碰。",
+]
+
+closures = [
+  { finding = "R64-F1", tier = "代码" },
+  { finding = "R64-F2", tier = "代码" },
+  { finding = "R64-F3", tier = "代码" },
+  { finding = "R64-F4", tier = "代码" },
+  { finding = "R64-F5", tier = "代码" },
+  { finding = "R64-F6", tier = "登记" },
+  { finding = "R64-F7", tier = "登记" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61", "R62", "R62b", "R63",
+]
+touched = [
+  { round = "R19", why = "测试总数 701→711（BASELINE 与 COUNTS.lib 409→419；R64 的 9 条 tests_r64 + scan 的 1 条 foreignObject/switch）" },
+  { round = "R57", why = "第 6/200 行写死的总数 701→711（711 = 419 + 59 + 233）" },
+]
+
+note = """
+每条先 d1render 实测再写码（四列表在 test.py 末尾；oracle 与 R58/R59/R61/R62 相同：等向 = 源图按 s 渲染）。
+本轮修前 = 6742535（HARNESS R63 收口，代码同 fea3fc4）的构建；修后 = 本轮提交的 target/release/svg_grid。
+
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline
+
+# 修前二进制：本轮 code_before 6742535 的构建（sha256 ef5fc28b3ce8ec265ad6aeede369a2093a71dcce93a424ab2ab38abdc2f2e329）
+git worktree add --detach /tmp/r64_pin 6742535
+CARGO_TARGET_DIR=/tmp/r64_pin_target cargo build --release --offline
+cp /tmp/r64_pin_target/release/svg_grid /tmp/r64_before_bin
+# 本脚本默认 PIN=/tmp/r64_before_bin，可用 SVG_GRID_PIN_BIN 覆盖。
+
+# 全绿（29 checks；A/A2/B/C/D/T 六族）
+python3 docs/PITFALLS/round-data/R64/test.py
+# 有牙：把可见二进制指回修前 ⇒ A 族 6 条必须红（rc=1）
+SVG_GRID_PIN_BIN=/tmp/r64_before_bin python3 docs/PITFALLS/round-data/R64/test.py
+# 缺渲染器/二进制必须 rc=2（不静默 skip）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R64/test.py
+
+口径：
+  1) <use> 的目标分两类：写在 <defs>（或某个定义 body）里 ⇒ 只被引用渲染，按引用者
+     的域缩；写在可绘制树里 ⇒ 既是原位内容又是被引用内容，本轮不动（u7 登记）。
+     reference_only 的判据是“在 <defs> 里 或 在定义 body 里”，与元素 tag 无关，
+     所以 <rect id=r> 与 <g id=g> 都能拿到 slot。
+  2) 域仍然只有 UserSpace(policy) 与 Verbatim。symbol 有合法 viewBox ⇒ Verbatim
+     （<use> 的 width/height 已把 viewBox 映射到实例）；无 viewBox 的 symbol 没有
+     映射，仍随引用者策略。
+  3) Verbatim 的“普通元素”（非七种定义）不 return，而是以 None 继续走一遍 rewrite：
+     数值上是 no-op，字节上与 R64 之前相同（<rect> 会 materialise x=0 y=0）。
+     这是两条对照（u6/u15）逐字节不变的原因。
+  4) 克隆仍由 R46 的 wanted/names 决定：同一目标被 xy 与 y 同时引用 ⇒ 两份副本
+     r 与 r--svg-grid-y，各自按自己的域缩（u4）；两个 <use> 同域 ⇒ 共用一份（u17）。
+  5) B 选 fail-closed 而不是登记，理由：convert 的契约是“产品会被 plot-grid 原样搬运”，
+     foreignObject 的内容这里根本不渲染、switch 的条件这里无法评估，两者都会让
+     产物与浏览器画面不一致；语料 0 命中，fail-closed 的代价是 0 个既有产物变化。
+  6) C（obb clipPath 里的 pattern）只登记：见 family 第 4 条与 test.py 末尾的复现记录。
+
+旧证据说明：本轮按目录逐个跑 R3..R63 的 test.py（R19 已 retire 不在口径），
+结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 711 = 419 + 59 + 233。
+"""

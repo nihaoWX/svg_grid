@@ -48,7 +48,7 @@ ENTRY_LIMIT = 4500                                 # 门面（main.rs）要薄
 # 这是**上一轮的精确计数**：任何一轮增删测试都必须在同一轮更新这里，否则本条立刻红。
 # （R55 曾把恒假的等式换成下限 190/60/57/73，于是删掉 579 条里的 388 条仍全绿——R55 评审
 # P1-1 用 gate_demo.py 实测；R57 按该评审改回精确相等，并把快照更新到本轮真实值。）
-BASELINE = 701                                     # `cargo test --offline` 的用例总数（精确相等）
+BASELINE = 711                                     # `cargo test --offline` 的用例总数（精确相等）
 # R59 增 10 条 lib 测试 ⇒ 341→351；R60 增 16 条（tests_r60.rs）并删 1 条旧的位移测试
 # ⇒ 351→366（本轮同样靠这条变红提醒更新）。R62 把 defs.rs 的 5 条 R46 断言搬进
 # tests_r62.rs（移动不是删除），另加 domains 4 + 内容域 7 + ellipse 6 + D 契约 3 + scan 1
@@ -56,7 +56,9 @@ BASELINE = 701                                     # `cargo test --offline` 的�
 # a_group_data_scale_reaches_its_children（容器 data-scale 下传，R46/R49 证据抓到）⇒ 404；
 # R62 复审再修 `href` 换域（P1-b），新增 tests_r62c.rs 的 3 条 href 域断言 ⇒ lib 407。
 # R63 加 2 条（椭圆 rx/ry 各向异性、三层 gradient href 链）⇒ lib 409，总数 701 = 409 + 59 + 233。
-COUNTS = {"unittests src/lib.rs": 409, "unittests src/main.rs": 59,
+# R64 加 10 条（<use> 引用定义的域：tests_r64.rs 9 条 + scan 的 foreignObject/switch 1 条）
+# ⇒ lib 419，总数 711 = 419 + 59 + 233。
+COUNTS = {"unittests src/lib.rs": 419, "unittests src/main.rs": 59,
           "tests/selftest/main.rs": 233}
 # `tests/` 下允许存在的**非测试目标**目录：语料 + 历史资产（不是本轮引入的，也不装 main.rs）。
 # `user_tests/` 是用户按 INSTRUCTIONS.md 放的"真实使用体验"语料（2026-11-22 起），

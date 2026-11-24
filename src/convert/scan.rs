@@ -100,6 +100,30 @@ fn walk_scan(
                 ),
             }
         }
+        // `<foreignObject>` carries its own viewport and non-SVG content. The
+        // renderer the composer targets (resvg through `d1render`) draws nothing for
+        // it — measured: a 20x20 `<foreignObject>` with a black `<rect>` inside
+        // contributes 0 ink, and the composer's own pass leaves its `x`/`y`/`width`/
+        // `height` unscaled. Accepting it would drop the author's content without a
+        // word, which is exactly the silence this gate exists to prevent (R64).
+        "foreignObject" => push!(
+            "foreignObject",
+            "<foreignObject> holds foreign (usually HTML) content in its own viewport; the \
+             renderer draws none of it, so the content would be silently lost"
+                .to_string(),
+        ),
+        // `<switch>` draws exactly one child (the first whose `requiredFeatures`/
+        // `systemLanguage`/... pass). The composer cannot evaluate those conditions
+        // and rewrites every child as ordinary panel geometry, so which child ends up
+        // drawn — and whether its numbers were scaled for that role — is decided by
+        // the renderer, not by the converter (R64).
+        "switch" => push!(
+            "switch",
+            "<switch> draws only the first child whose conditions the renderer supports; the \
+             composer cannot evaluate them and would rewrite every child, so the output is not \
+             guaranteed to be the child the browser draws"
+                .to_string(),
+        ),
         "svg" if !is_root => push!(
             "svg",
             "nested <svg> establishes its own viewport and coordinate system, which the composer \
@@ -299,6 +323,23 @@ mod tests {
                 .any(|f| f.tag == "ellipse" && f.reason.contains("rx")),
             "{findings:?}"
         );
+    }
+
+    /// `<foreignObject>` content and `<switch>`'s conditional children are not
+    /// modelled: the renderer draws none of the former and exactly one of the
+    /// latter, while the composer would keep and rescale all of it. Accepting them
+    /// silently — the state before R64 — drops content or draws the wrong child.
+    #[test]
+    fn foreign_object_and_switch_are_rejected() {
+        let findings = incompatible(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<foreignObject x='0' y='0' width='10' height='10'><rect width='10' height='10'/></foreignObject>
+<switch><rect width='10' height='10'/></switch>
+</svg>"#,
+        );
+        let tags: Vec<&str> = findings.iter().map(|f| f.tag.as_str()).collect();
+        assert!(tags.contains(&"foreignObject"), "{findings:?}");
+        assert!(tags.contains(&"switch"), "{findings:?}");
     }
 
     #[test]

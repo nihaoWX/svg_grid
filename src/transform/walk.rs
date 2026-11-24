@@ -6,7 +6,7 @@
 
 use super::defs::{self, DefsPlan};
 use super::dispatch::rewrite_primitive;
-use super::domains::{marker_body_is_verbatim, Slot};
+use super::domains::{marker_body_is_verbatim, symbol_body_is_verbatim, Slot};
 use super::filters;
 use super::lengths::{rewrite_scaled_length, LengthAxis};
 use super::links::IdIndex;
@@ -72,7 +72,14 @@ pub(crate) fn transform_svg(
         links: &links,
         defs: &defs,
     };
-    transform_element(root, ScalePolicy::None, false, &context, passthroughs)
+    transform_element(
+        root,
+        ScalePolicy::None,
+        false,
+        false,
+        &context,
+        passthroughs,
+    )
 }
 
 /// `body` is true for every element whose numbers live in a **definition body**
@@ -80,10 +87,18 @@ pub(crate) fn transform_svg(
 /// exactly one thing today: a `<text>`/`<tspan>` there has its `font-size` scaled
 /// (round-data/R58). Panel text keeps its point size under every policy, as the tag
 /// protocol requires, so the flag must not be inferred from the policy alone.
+///
+/// `in_defs` is true for anything written inside a `<defs>` block. Together with
+/// `body` it marks a **reference scope**: content that is not drawn where it is
+/// written but instantiated by whoever points at it, so its `id` may have a referrer
+/// policy even when the element is an ordinary `<rect>`/`<g>` rather than one of
+/// [`defs::DEFINITION_TAGS`] (round-data/R64: a `<use href="#r">` pointed at a plain
+/// `<rect>` inside `<defs>` never scaled it).
 pub(super) fn transform_element(
     element: &mut Element,
     inherited: ScalePolicy,
     body: bool,
+    in_defs: bool,
     context: &Context<'_>,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
@@ -98,13 +113,25 @@ pub(super) fn transform_element(
     // (round-data/R62). Then the whole subtree is left alone — tile, coordinates,
     // body and `stroke-width` alike; the referenced definitions were resolved to
     // this slot too, so they are skipped on their own visit.
-    let slot = context.defs.slot_of(element);
-    if slot.is_some_and(Slot::is_verbatim) {
+    // `reference_only` says "this element is only drawn through a reference": a
+    // definition tag, or any element written inside `<defs>`/a definition body. Those
+    // are the elements whose `id` can carry a referrer's policy (round-data/R64);
+    // ordinary panel geometry keeps following the tree.
+    let reference_only = in_defs || body;
+    let slot = context.defs.slot_of(element, reference_only);
+    if slot.is_some_and(Slot::is_verbatim) && defs::is_definition(element) {
         return Ok(());
     }
     let policy = match slot {
         Some(Slot::UserSpace(policy)) => policy,
-        _ => element
+        // A plain element in a definition scope that is reached only from a body the
+        // renderer already maps: there is nothing to scale, but the pre-R64 walk did
+        // rewrite it with the scope's (root: `None`) policy, which materialises a
+        // `<rect>`'s default `x="0" y="0"`. Skipping that pass would change bytes for
+        // input that must stay identical (R64 control u15), so fall through with
+        // `None` — numerically a no-op, byte-for-byte the old output.
+        Some(Slot::Verbatim) => ScalePolicy::None,
+        None => element
             .attr("data-scale")
             .map(parse_policy)
             .unwrap_or(inherited),
@@ -183,7 +210,7 @@ pub(super) fn transform_element(
         };
         for child in &mut element.children {
             if let Node::Element(child) = child {
-                transform_element(child, body, true, context, passthroughs)?;
+                transform_element(child, body, true, in_defs, context, passthroughs)?;
             }
         }
         return Ok(());
@@ -228,7 +255,7 @@ pub(super) fn transform_element(
         }
         for child in &mut element.children {
             if let Node::Element(child) = child {
-                transform_element(child, body, true, context, passthroughs)?;
+                transform_element(child, body, true, in_defs, context, passthroughs)?;
             }
         }
         return Ok(());
@@ -275,6 +302,35 @@ pub(super) fn transform_element(
         return Ok(());
     }
 
+    // A `<symbol>` is not drawn where it sits either: `<use>` places it in a nested
+    // viewport. A **valid `viewBox`** makes the renderer map that box onto the
+    // instance's `width`/`height` (`usvg-0.47.0/src/parser/use.rs` builds the viewport
+    // and `ViewBox::to_transform`), so the body is already expanded to the instance
+    // size and its numbers are viewBox units — scaling them again doubles the motif.
+    // Measured at s=2 on the control: `viewBox="0 0 10 10"` + `<use width=20
+    // height=20>` renders xor 0 / ink 1600 against the source; writing the body's
+    // `10x10` as `20x20` gives xor 1792 (round-data/R64). Without a `viewBox` there is
+    // no mapping and the body is in the instance's user space, so it keeps descending.
+    if element.name == "symbol" && symbol_body_is_verbatim(element) {
+        // The body is already in instance units, so it must not scale — but it was
+        // still *visited* before R64 (with the then-inherited `None`), which
+        // materialises defaults such as a `<rect>`'s `x="0" y="0"`. Descend with
+        // `None` so the control's bytes stay identical (u6).
+        for child in &mut element.children {
+            if let Node::Element(child) = child {
+                transform_element(
+                    child,
+                    ScalePolicy::None,
+                    true,
+                    in_defs,
+                    context,
+                    passthroughs,
+                )?;
+            }
+        }
+        return Ok(());
+    }
+
     // A `<mask>` body and a `<clipPath>` body are definition bodies too, but their
     // numbers are placed in the **referencing element's** user space (translated to
     // the cell), so they keep the inherited policy for coordinates; only the
@@ -295,7 +351,14 @@ pub(super) fn transform_element(
     }
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            transform_element(child, policy, child_body, context, passthroughs)?;
+            transform_element(
+                child,
+                policy,
+                child_body,
+                in_defs || element.name == "defs",
+                context,
+                passthroughs,
+            )?;
         }
     }
 

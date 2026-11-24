@@ -63,17 +63,24 @@ pub(super) struct DefsPlan {
 }
 
 impl DefsPlan {
-    /// The slot a definition element's numbers are read in, if a referrer decides
-    /// it. `Slot::Verbatim` means the walk must leave the whole subtree untouched.
+    /// The slot an element's numbers are read in, if a referrer decides it.
+    /// `Slot::Verbatim` means the walk must leave the whole subtree untouched.
+    ///
+    /// `reference_only` marks an element that is **only drawn through a reference**:
+    /// one of [`DEFINITION_TAGS`], or any element written inside `<defs>` or inside
+    /// another definition's body. That is the population whose `id` a `<use href>`
+    /// (or a `url(#…)`) can point at, and a `<rect id="r">` in `<defs>` is scaled in
+    /// the referrer's user space exactly like a `<pattern>` is (round-data/R64) — so
+    /// the gate cannot be "is one of the seven definition tags" alone.
     ///
     /// `None` means "no referrer says anything": the walk then falls back to the
-    /// `data-scale` inherited where the definition is written, which is exactly
-    /// what this composer did before the round started. Definitions placed at the
-    /// root (the shape the defect takes) inherit `None` either way, while a
-    /// definition written inside a scale group keeps behaving as it always did —
-    /// so untouched input keeps its bytes.
-    pub(super) fn slot_of(&self, element: &Element) -> Option<Slot> {
-        if !is_definition(element) {
+    /// `data-scale` inherited where the element is written, which is exactly what
+    /// this composer did before the round started. Definitions placed at the root
+    /// (the shape the defect takes) inherit `None` either way, while one written
+    /// inside a scale group keeps behaving as it always did — so untouched input
+    /// keeps its bytes.
+    pub(super) fn slot_of(&self, element: &Element, reference_only: bool) -> Option<Slot> {
+        if !is_definition(element) && !reference_only {
             return None;
         }
         element
@@ -140,7 +147,15 @@ pub(super) fn referrers(
     links: &IdIndex,
 ) -> HashMap<String, BTreeSet<Slot>> {
     let mut gather = Gather::default();
-    collect(root, ScalePolicy::None, None, patterns, links, &mut gather);
+    collect(
+        root,
+        ScalePolicy::None,
+        None,
+        false,
+        patterns,
+        links,
+        &mut gather,
+    );
 
     // `refs[D]` is `direct[D]` plus the referrer set of every definition that
     // points at `D`. A mapped body maps every incoming slot to `Verbatim` before
@@ -184,10 +199,14 @@ struct Gather {
     bodies: HashMap<String, bool>,
 }
 
+/// `in_defs` is true for anything written inside a `<defs>` block, which — like a
+/// definition body — makes an `id` a possible reference target even on an ordinary
+/// `<rect>`/`<g>` (round-data/R64).
 fn collect(
     element: &Element,
     inherited: ScalePolicy,
     enclosing: Option<&str>,
+    in_defs: bool,
     patterns: &PatternIndex,
     links: &IdIndex,
     gather: &mut Gather,
@@ -196,11 +215,15 @@ fn collect(
         .attr("data-scale")
         .map(parse_policy)
         .unwrap_or(inherited);
+    // A `<rect id="r">` in `<defs>` is a reference target just like a
+    // `<pattern id="p">`: it is never drawn where it sits, but instantiated in the
+    // user space of whoever points at it (round-data/R64).
+    let reference_only = in_defs || enclosing.is_some();
     let owner = element
         .attr("id")
-        .filter(|_| is_definition(element))
+        .filter(|_| is_definition(element) || reference_only)
         .map(str::to_string);
-    if let (Some(id), true) = (owner.as_deref(), is_definition(element)) {
+    if let Some(id) = owner.as_deref() {
         gather.bodies.insert(
             id.to_string(),
             domains::body_is_verbatim(element, patterns, links),
@@ -225,9 +248,20 @@ fn collect(
             }
         }
     }
+    // Children of a `<defs>` block (and of a nested `<defs>`) are reference-only too,
+    // even when no enclosing definition owns them yet.
+    let children_in_defs = in_defs || element.name == "defs";
     for child in &element.children {
         if let Node::Element(child) = child {
-            collect(child, policy, enclosing, patterns, links, gather);
+            collect(
+                child,
+                policy,
+                enclosing,
+                children_in_defs,
+                patterns,
+                links,
+                gather,
+            );
         }
     }
 }
