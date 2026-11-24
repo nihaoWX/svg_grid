@@ -4,13 +4,13 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收掉 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R49 依次收掉单位属性语义、组合图字母重号、doctor 告警码漂移、定义元素缩放单位、文本字符引用、
-  字母查重的漏判与误伤、嵌套定义克隆的重复 id。余下 pre-existing 均已开报告（见 `# Known Issues`）。
+  R43–R50 依次收掉单位属性语义、组合图字母重号、doctor 告警码漂移、定义元素缩放单位、文本字符引用、
+  字母查重的漏判与误伤、嵌套定义克隆的重复 id、非 XML 1.0 字符被解码进产物。余下 pre-existing 均已开报告（见 `# Known Issues`）。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 482 项**（264 lib + 59 main + 159 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 496 项**（272 lib + 59 main + 165 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W7/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变）；
@@ -25,8 +25,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R49 已入账**；
-  `link` 组 L1–L64；`round-data/R3…R49` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R50 已入账**；
+  `link` 组 L1–L64；`round-data/R3…R50` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -38,6 +38,10 @@
 
 （每条一行；细节在账本与 `ARCHITECTURE.md` §已定型的决定，不在此重复。）
 
+- 2026-11-24 **R50 非 XML 1.0 字符被解码进产物**：`src/dom.rs` 新增 `is_xml_char`（严格 XML 1.0 `Char`
+  产生式）+ `decode_reference`，`src/convert/dom.rs` 复用同一份判据；文本/属性/CDATA/字面控制字符一律
+  fail-closed（rc=1、不写产物、点名引用与码位）；新增强不变量测试 `every_accepted_output_is_well_formed`。
+  修前 `&#1;` rc=0 但产物不良构（`d1render` rc=3）→ 修后 rc=1。测试 482→496，提交 `1fbc3c3`。
 - 2026-11-24 **R49 嵌套定义克隆的重复 id**：新增 `src/transform/hoist.rs`（被外壳之外以不同 policy 引用的
   嵌套定义先提升到顶层只拆一次）；`defs.rs:split_children` 加 `narrow`，递归进某份拷贝时把内层 wanted 收窄为
   `{该拷贝的 policy}`，未被引用的内层定义现场分配唯一 id；`normalize.rs` 新增 `content_is_user_space`，
@@ -99,11 +103,10 @@
   布局语义 cowplot 化五项、`convert/` 建 crate、`<image>`/`--png-dpi`。
 # In Progress
 
-- **R50（进行中）**：R47 引入的**产物不良构**回归。`quick_xml::escape::unescape` 把 `&#1;`/`&#xFFFE;`
-  这类非 XML 1.0 字符解码成裸控制字符写进产物 ⇒ `convert` rc=0 但 `d1render` **rc=3**
-  （`a non-XML character '\u{1}' found`）；属性路径（`data-x="a&#1;b"`）同样中招且是 pre-existing。
-  修法：两条路径共用一处 XML 1.0 `Char` 判据，非法即 fail-closed（rc=1、点名引用与码位、不写产物），
-  并加"产物必须能被重新解析"的强不变量测试；附带更正 R47-F7 行号 413→442。
+- **R51（进行中）**：R48 对抗评审的 1 阻断 + 4 项 P2/P3。**A（阻断）**：嵌套 marker 被重复计数
+  （`<g label=0><text label=1>A</text></g>` 单输入单字形被误判 rc=2，base rc=0）。**B**：`<defs>`+`<use>`
+  假阴性。**C**：NBSP 被 `split_whitespace` 当空白。**D**：不可见关键字大小写与 `!important`。
+  **E**：`fill="none"` 的 text 被计入。
 # Known Issues
 
 （只留**未决**项；每条的机制解释见括号里的文件。已解决的旧条目不再保留——历史看账本与 git。）
@@ -120,11 +123,9 @@
    W9 行原样打印悬空 id、W7 行原样打印属性值 ⇒ 用户内容含表序更靠前的短语时，doctor 的 W9/W7 门禁
    **fail-open**（base FAIL → head PASS `['W4a']`）。同族：`src/warnings/rules_tests.rs:236-266` 的短语副本、
    `round-data/R17/test.py:44-46` 死变量、R45 使旧行号再漂但未记 `modify`。
-4. **字母查重的两处新缺口**（R48 对抗评审）：① **嵌套 marker 被重复计数**——外层 marker 的
-   `collect_text` 递归进内层 marker 的 `<text>`，内层又被单独收一次 ⇒ 一个字形两个 `LetterSite`，
-   `<g data-svg-grid-label="0"><text data-svg-grid-label="1">A</text></g>` 单输入单字形被误判 rc=2
-   （base rc=0）；② `<defs>`+`<use>` 假阴性（`NON_RENDERED` 无条件跳 `<defs>`）。同族：`tspan x/dy`
-   重排、NBSP 被 `split_whitespace` 当空白、不可见关键字大小写敏感。
+4. **`tspan x`/`dy` 重排**（R48 评审 P2，R51 明确不做）：文档序 ≠ 视觉序，
+   `<tspan x="50">A</tspan><tspan x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
+   需要视觉序模型，登记待排期。
 5. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
    告警前缀，在 base 上也是红的（8 FAIL）；`verify` 与"旧证据全绿"的口径**不含 R19**。
 
@@ -171,10 +172,9 @@
 # Next Steps
 
 1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（§0 有 R27–R49 的提交表）。六缺陷、defs/pattern 语义、
-   字母重号、doctor 告警码、定义元素缩放单位、文本字符引用、字母查重、嵌套克隆重复 id 均已收口；
-   **进行中 = R50**（R47 引入的产物不良构：非 XML 1.0 字符被解码成裸控制字符，两条路径一起 fail-closed）。
-   之后消费剩余报告（`classify` 表序遮蔽、字母查重的嵌套 marker 重复计数与 `<defs>`/`<use>` 假阴性），
-   最后做交付前全量复核：`cargo test`（482）、`svg_grid doctor`
+   字母重号、doctor 告警码、定义元素缩放单位、文本字符引用、字母查重、嵌套克隆重复 id、非 XML 1.0 字符
+   均已收口；**进行中 = R51**（字母查重的剩余缺口）。之后消费剩余报告（`classify` 表序遮蔽），
+   最后做交付前全量复核：`cargo test`（496）、`svg_grid doctor`
    57/0/1、`pitfalls-manager verify` rc=0、两副本指南 `diff -r`。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 →
    删驱动文档 → 若本轮有改名/移动/拆分，**提交后 `link`**（否则悬空自检会报出来）。
