@@ -318,8 +318,11 @@ CASES = [
                 'xChannelSelector="R" yChannelSelector="G"/>'),
          # round-data/R60: the renderer applies `scale` quadratically
          # (offset = (c-0.5) * scale^2 * axis), so a uniform 2x cell takes
-         # 10 * sqrt(2) = 14.142, not the linear 20 (measured: xor 0 either way
-         # here, but the displacement is 2x too far with 20 on a solid map).
+         # 10 * sqrt(2) = 14.142, not the linear 20.  This fixture cannot tell
+         # them apart (xor 0 for both 14.142 and 20), so it only pins the
+         # attribute; the discriminating pixel evidence (constant map, source
+         # 200x200 -> cell 400x400: 14.142 -> xor 0, 20 -> 39420, 13.5 -> 4072)
+         # lives in round-data/R61/test.py.
          attrs=[("feDisplacementMap", None, {"scale": "14.142"}),
                 ("feTurbulence", None, {"baseFrequency": "0.025"})],
          pixel=("within", 200, 255), note="residual: the composed doc samples the noise at 1x"),

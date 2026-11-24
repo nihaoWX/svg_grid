@@ -193,8 +193,22 @@ pub fn rewrite(d: &str, map: &AxisMap) -> Result<String, String> {
         }
     }
 
+    // A finite input coordinate times a huge axis factor can overflow `f32`;
+    // `format_number` would then emit `inf`/`NaN`, which is not a legal SVG number.
+    // The caller keeps the original `d` verbatim (W7) when this happens.
+    if tokens
+        .iter()
+        .any(|token| token.parse::<f32>().is_ok_and(|value| !value.is_finite()))
+    {
+        return Err(NON_FINITE.to_string());
+    }
     Ok(tokens.join(" "))
 }
+
+/// Sentinel `rewrite` error: the scaled coordinates are not finite, so the caller
+/// must keep `d` exactly as written. Distinguished from a parse error, which has
+/// its own W7 wording.
+pub(crate) const NON_FINITE: &str = "scaled coordinate is not finite";
 
 fn push_point(tokens: &mut Vec<String>, point: (f32, f32)) {
     tokens.push(format_number(point.0));

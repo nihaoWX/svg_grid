@@ -48,6 +48,36 @@ pub(super) fn note_non_finite(
     }
 }
 
+/// Multiply `value` by `factor`, returning the product **only when it is finite**.
+///
+/// A finite source value and a finite factor can still overflow `f32`
+/// (`1e38 * 8`), and [`crate::format_number`] would then print `inf`/`NaN`, which
+/// is not a legal SVG number. Every computed writeback goes through this check and
+/// keeps the original text (warning W7) when it returns `None`.
+pub(crate) fn scaled_finite(value: f32, factor: f32) -> Option<f32> {
+    let scaled = value * factor;
+    (factor.is_finite() && scaled.is_finite()).then_some(scaled)
+}
+
+/// Record W7 for a computed length whose product is not finite: the attribute is
+/// kept exactly as written. Wording distinguishes the two causes the review found;
+/// both name the input through [`Passthroughs::record`]'s `index`.
+pub(crate) fn note_overflow(
+    passthroughs: &mut Passthroughs,
+    index: usize,
+    element: &Element,
+    attr: &str,
+    raw: &str,
+    factor: f32,
+) {
+    let detail = if factor.is_finite() {
+        format!("scaled value if written would not be finite: {raw:?}")
+    } else {
+        format!("non-finite scale factor (source geometry is not finite): {raw:?}")
+    };
+    passthroughs.record(index, &element.name, attr, detail);
+}
+
 /// Scale a length that may be written either as a presentation *attribute* or as
 /// a declaration inside the element's inline `style="..."` (both dialects put
 /// `stroke-width` — and svglite `font-size` — in the style). The scale policy is
@@ -74,12 +104,16 @@ pub(super) fn rewrite_scaled_length(
             // written exactly as before.
             Some(factor) => {
                 let value = parse_f32(&raw, attr)?;
-                if value.is_finite() {
-                    element.set_attr(attr, crate::format_number(value * factor));
-                } else {
+                if !value.is_finite() {
                     // Never write `inf`/`NaN` back: the warning says the value is
                     // kept verbatim, and `inf` is not even a legal SVG number.
                     note_non_finite(passthroughs, index, element, attr, &raw, value);
+                } else if let Some(scaled) = scaled_finite(value, factor) {
+                    element.set_attr(attr, crate::format_number(scaled));
+                } else {
+                    // The input was finite but `value * factor` overflowed, so the
+                    // attribute stays exactly as written and W7 says why.
+                    note_overflow(passthroughs, index, element, attr, &raw, factor);
                 }
             }
             // The policy leaves the length untouched, so the value is already
@@ -96,13 +130,33 @@ pub(super) fn rewrite_scaled_length(
 
     if let Some(factor) = factor {
         if let Some(style) = element.attr("style").map(str::to_string) {
-            if let Some(scaled) = crate::style::scale_length(&style, attr, factor) {
+            let (scaled, kept) = crate::style::scale_length_report(&style, attr, factor);
+            if let Some(scaled) = scaled {
                 element.set_attr("style", scaled);
+            }
+            // The style path must warn exactly like the attribute path (R61/D):
+            // a token that could not be rewritten stays in the original text.
+            for token in kept {
+                passthroughs.record(
+                    index,
+                    &element.name,
+                    attr,
+                    format!("style token {token:?} kept verbatim: not finite"),
+                );
             }
         }
     }
 
     Ok(())
+}
+
+/// A representative length factor, used only to *word* a W7 detail: whether the
+/// factor itself was non-finite. Policies that scale no axis (`position`, `none`)
+/// answer `1`.
+pub(super) fn length_factor(policy: ScalePolicy, source: Rect, target: Rect) -> f32 {
+    length_scale_factor(policy, source, target, LengthAxis::X)
+        .or_else(|| length_scale_factor(policy, source, target, LengthAxis::Y))
+        .unwrap_or(1.0)
 }
 
 pub(super) fn length_scale_factor(

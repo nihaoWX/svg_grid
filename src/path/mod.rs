@@ -50,6 +50,7 @@ pub use flatten::bbox;
 // re-export is kept so the module's surface matches the pre-split `src/path.rs`.
 #[allow(unused_imports)]
 pub use flatten::{flatten, Subpath};
+pub(crate) use rewrite::NON_FINITE;
 pub use rewrite::{rewrite, AxisMap};
 
 /// Default flattening tolerance, in the *source* user units of the panel.

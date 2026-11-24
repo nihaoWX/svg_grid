@@ -129,7 +129,8 @@ fn spot_light_positions_take_one_factor_per_axis() {
     // sx=4/sy=5: x/y/pointsAtX/pointsAtY follow their own axis, z/pointsAtZ the
     // RMS of the two axis factors (10 * sqrt((16+25)/2) = 45.276928), not the
     // geometric mean (44.721, round-data/R60). The full precision matters: the
-    // renderer applies the number as a float, and 45.277 alone is 11 pixels off.
+    // renderer applies the number as a float, and 45.277 alone differs on 5
+    // pixels (maxdiff 1; the exact value differs on none).
     let out = scaled(
         "xy",
         r##"<feSpecularLighting surfaceScale="2" specularConstant="1" specularExponent="20">

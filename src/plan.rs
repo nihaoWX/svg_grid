@@ -124,6 +124,7 @@ impl PlannedInput {
 /// inputs' files: [`plot_grid`] renders what it returns, [`plan_grid`] reports it.
 pub(crate) fn prepare(
     request: &GridRequest,
+    passthroughs: &mut warnings::Passthroughs,
 ) -> Result<(Vec<Option<PreparedInput>>, layout::GridLayout)> {
     if request.inputs.is_empty() {
         return Err(SvgGridError::InvalidInput(
@@ -135,7 +136,7 @@ pub(crate) fn prepare(
     // aspect ratio to derive natural column widths and row heights.
     let mut prepared: Vec<Option<PreparedInput>> = Vec::with_capacity(request.inputs.len());
     let mut aspects: Vec<Option<f32>> = Vec::with_capacity(request.inputs.len());
-    for input in &request.inputs {
+    for (index, input) in request.inputs.iter().enumerate() {
         let input_path = match input {
             SvgInput::Path(path) => path,
             SvgInput::Spacer => {
@@ -172,7 +173,7 @@ pub(crate) fn prepare(
             None
         };
         if let Some(normalize) = &request.normalize {
-            normalize::normalize_svg(&mut root, normalize.max_side)?;
+            normalize::normalize_svg(&mut root, normalize.max_side, index, passthroughs)?;
         }
         let panel = geom::find_panel_box(&root)?;
         let canvas = geom::find_canvas_box(&root)?;
@@ -240,7 +241,10 @@ fn plan_grid_checked(
     labels: Option<&LabelSpec>,
     verbose: bool,
 ) -> Result<GridPlan> {
-    let (prepared, grid) = prepare(&request)?;
+    // `--plan` does not render, so it keeps the W7 attributes silent exactly like
+    // before this round; the collector exists only to satisfy `prepare`'s contract.
+    let mut passthroughs = warnings::Passthroughs::default();
+    let (prepared, grid) = prepare(&request, &mut passthroughs)?;
     crate::validate_label_conflicts(&prepared, labels)?;
     let mut warnings = warnings::Warnings::default();
     collect_auto_conversion_diagnostics(&request.inputs, &prepared, &mut warnings);

@@ -29,6 +29,7 @@ mod walk;
 
 use crate::dom::Element;
 
+pub(crate) use lengths::{note_overflow, scaled_finite};
 pub(crate) use units::{marker_units_are_user_space, units_of, Units};
 pub(crate) use walk::{parse_policy, transform_svg};
 
@@ -88,3 +89,5 @@ mod tests_r58;
 mod tests_r59;
 #[cfg(test)]
 mod tests_r60;
+#[cfg(test)]
+mod tests_r61;

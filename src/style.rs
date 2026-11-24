@@ -22,7 +22,27 @@
 ///   are left as they are, so an unparseable value is never corrupted;
 /// * returns `None` when the property is not declared, or when none of its tokens
 ///   yielded a parseable number (the input is then left completely unchanged).
-pub(crate) fn scale_length(style: &str, prop: &str, factor: f32) -> Option<String> {
+///
+/// The tokens that could not be rewritten that were deliberately left verbatim because
+/// their value (or product with `factor`) is not finite. The transform path turns
+/// each into warning W7; the normalization path records them the same way, so a
+/// `style="stroke-width:inf"` speaks exactly like `stroke-width="inf"`.
+pub(crate) fn scale_length_report(
+    style: &str,
+    prop: &str,
+    factor: f32,
+) -> (Option<String>, Vec<String>) {
+    let mut kept = Vec::new();
+    let scaled = scale_length_inner(style, prop, factor, &mut kept);
+    (scaled, kept)
+}
+
+fn scale_length_inner(
+    style: &str,
+    prop: &str,
+    factor: f32,
+    kept: &mut Vec<String>,
+) -> Option<String> {
     let mut out = String::with_capacity(style.len() + 8);
     let mut changed = false;
     let mut rest = style;
@@ -32,7 +52,7 @@ pub(crate) fn scale_length(style: &str, prop: &str, factor: f32) -> Option<Strin
             Some((declaration, remainder)) => (declaration, Some(remainder)),
             None => (rest, None),
         };
-        match rewrite_declaration(declaration, prop, factor) {
+        match rewrite_declaration(declaration, prop, factor, kept) {
             Some(rewritten) => {
                 out.push_str(&rewritten);
                 changed = true;
@@ -56,18 +76,23 @@ pub(crate) fn scale_length(style: &str, prop: &str, factor: f32) -> Option<Strin
 }
 
 /// Rewrite one `name: value` declaration when `name` (trimmed) equals `prop`.
-fn rewrite_declaration(declaration: &str, prop: &str, factor: f32) -> Option<String> {
+fn rewrite_declaration(
+    declaration: &str,
+    prop: &str,
+    factor: f32,
+    kept: &mut Vec<String>,
+) -> Option<String> {
     let (name, value) = declaration.split_once(':')?;
     if name.trim() != prop {
         return None;
     }
-    let value = scale_value(value, factor)?;
+    let value = scale_value(value, factor, kept)?;
     Some(format!("{name}:{value}"))
 }
 
 /// Scale every numeric token in a declaration value, preserving the separators
 /// (whitespace / commas) verbatim.
-fn scale_value(value: &str, factor: f32) -> Option<String> {
+fn scale_value(value: &str, factor: f32, kept: &mut Vec<String>) -> Option<String> {
     let mut out = String::with_capacity(value.len() + 8);
     let mut changed = false;
     let mut rest = value;
@@ -86,7 +111,7 @@ fn scale_value(value: &str, factor: f32) -> Option<String> {
             .find(|ch: char| ch.is_whitespace() || ch == ',')
             .unwrap_or(rest.len());
         let token = &rest[..token_len];
-        match scale_token(token, factor) {
+        match scale_token(token, factor, kept) {
             Some(scaled) => {
                 out.push_str(&scaled);
                 changed = true;
@@ -106,7 +131,7 @@ fn scale_value(value: &str, factor: f32) -> Option<String> {
 /// Multiply the numeric prefix of a length token by `factor`, keeping whatever
 /// follows (the unit, or a stray suffix) verbatim. Returns `None` for a token with
 /// no parseable numeric prefix.
-fn scale_token(token: &str, factor: f32) -> Option<String> {
+fn scale_token(token: &str, factor: f32, kept: &mut Vec<String>) -> Option<String> {
     // Longest prefix (by character boundary) that parses as a number. `char_indices`
     // never yields `token.len()`, so the full-token case is handled separately.
     let (number_end, value) = match token.parse::<f32>() {
@@ -127,11 +152,14 @@ fn scale_token(token: &str, factor: f32) -> Option<String> {
     if !value.is_finite() {
         // A non-finite value is kept verbatim rather than rewritten to `inf`
         // (round-data/R60): the warning promises the original text, and `inf` is not
-        // a legal SVG length.
+        // a legal SVG length. Report it so the style path speaks like the attribute
+        // path (round-data/R61).
+        kept.push(token.to_string());
         return None;
     }
     let scaled = value * factor;
     if !scaled.is_finite() {
+        kept.push(token.to_string());
         return None;
     }
     Some(format!(
@@ -143,7 +171,11 @@ fn scale_token(token: &str, factor: f32) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::scale_length;
+    use super::scale_length_report;
+
+    fn scale_length(style: &str, prop: &str, factor: f32) -> Option<String> {
+        scale_length_report(style, prop, factor).0
+    }
 
     #[test]
     fn scales_a_single_px_length_keeping_the_unit() {

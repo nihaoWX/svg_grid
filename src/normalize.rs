@@ -1,9 +1,18 @@
 use crate::dom::{Element, Node};
 use crate::error::{Result, SvgGridError};
 use crate::geom;
-use crate::transform::{is_view_box, marker_units_are_user_space, units_of, Definitions, Units};
+use crate::transform::{
+    is_view_box, marker_units_are_user_space, note_overflow, scaled_finite, units_of, Definitions,
+    Units,
+};
+use crate::warnings::Passthroughs;
 
-pub fn normalize_svg(root: &mut Element, max_side: f32) -> Result<()> {
+pub fn normalize_svg(
+    root: &mut Element,
+    max_side: f32,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
     if max_side <= 0.0 {
         return Err(SvgGridError::InvalidInput(
             "input normalization max side must be greater than zero".to_string(),
@@ -19,7 +28,19 @@ pub fn normalize_svg(root: &mut Element, max_side: f32) -> Result<()> {
     }
 
     let defs = Definitions::collect(root);
-    scale_element(root, max_side / current_max_side, &defs);
+    let factor = max_side / current_max_side;
+    if !factor.is_finite() {
+        // The canvas itself is degenerate (`width="1e-45"`) so every product would
+        // be `inf`/`NaN`; the input is kept exactly as written and W7 names it.
+        passthroughs.record(
+            index,
+            &root.name,
+            "width",
+            "non-finite normalization factor, input kept verbatim".to_string(),
+        );
+        return Ok(());
+    }
+    scale_element(root, factor, &defs, index, passthroughs);
     Ok(())
 }
 
@@ -69,25 +90,37 @@ const DEFINITION_TAGS: [&str; 7] = [
     "clipPath",
 ];
 
-fn scale_element(element: &mut Element, factor: f32, defs: &Definitions) {
+fn scale_element(
+    element: &mut Element,
+    factor: f32,
+    defs: &Definitions,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
     if DEFINITION_TAGS.contains(&element.name.as_str()) {
-        scale_definition(element, factor, defs);
+        scale_definition(element, factor, defs, index, passthroughs);
         return;
     }
 
-    scale_numeric_attrs(element, &GEOMETRY_ATTRS, factor);
-    scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
-    scale_view_box(element, factor);
-    scale_points(element, factor);
-    scale_path(element, factor);
-    scale_rotate_transform(element, factor);
-    scale_children(element, factor, defs);
+    scale_numeric_attrs(element, &GEOMETRY_ATTRS, factor, index, passthroughs);
+    scale_style_lengths(element, &SCALED_STYLE_PROPS, factor, index, passthroughs);
+    scale_view_box(element, factor, index, passthroughs);
+    scale_points(element, factor, index, passthroughs);
+    scale_path(element, factor, index, passthroughs);
+    scale_rotate_transform(element, factor, index, passthroughs);
+    scale_children(element, factor, defs, index, passthroughs);
 }
 
-fn scale_children(element: &mut Element, factor: f32, defs: &Definitions) {
+fn scale_children(
+    element: &mut Element,
+    factor: f32,
+    defs: &Definitions,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            scale_element(child, factor, defs);
+            scale_element(child, factor, defs, index, passthroughs);
         }
     }
 }
@@ -100,31 +133,49 @@ fn scale_children(element: &mut Element, factor: f32, defs: &Definitions) {
 /// `maskUnits`, `maskContentUnits` and `markerUnits` are read off the element
 /// itself (`mask.rs:20-30`, `marker.rs:222`). A `viewBox` body is already mapped
 /// onto the tile/viewport by the renderer, so it must stay verbatim.
-fn scale_definition(element: &mut Element, factor: f32, defs: &Definitions) {
+fn scale_definition(
+    element: &mut Element,
+    factor: f32,
+    defs: &Definitions,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
     // The definition's **own** `stroke-width`/`font-size` are inherited by its
     // body, so they live in the body's coordinate system, not the panel's. Under
     // `objectBoundingBox` they are fractions of the referencing box and under a
     // `viewBox` they are viewBox units; the renderer already maps both, so
     // scaling them here shrinks the outline twice (round-data/R49).
     if content_is_user_space(element, defs) {
-        scale_numeric_attrs(element, &["font-size", "stroke-width"], factor);
-        scale_style_lengths(element, &SCALED_STYLE_PROPS, factor);
+        scale_numeric_attrs(
+            element,
+            &["font-size", "stroke-width"],
+            factor,
+            index,
+            passthroughs,
+        );
+        scale_style_lengths(element, &SCALED_STYLE_PROPS, factor, index, passthroughs);
     }
-    scale_rotate_transform(element, factor);
+    scale_rotate_transform(element, factor, index, passthroughs);
 
     match element.name.as_str() {
         "pattern" => {
             if defs.units(element, "patternUnits", Units::ObjectBoundingBox)
                 == Units::UserSpaceOnUse
             {
-                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+                scale_numeric_attrs(
+                    element,
+                    &["x", "y", "width", "height"],
+                    factor,
+                    index,
+                    passthroughs,
+                );
             }
-            scale_view_box(element, factor);
+            scale_view_box(element, factor, index, passthroughs);
             let verbatim = defs.units(element, "patternContentUnits", Units::UserSpaceOnUse)
                 == Units::ObjectBoundingBox
                 || has_view_box(element);
             if !verbatim {
-                scale_children(element, factor, defs);
+                scale_children(element, factor, defs, index, passthroughs);
             }
         }
         "marker" => {
@@ -134,47 +185,73 @@ fn scale_definition(element: &mut Element, factor: f32, defs: &Definitions) {
                     element,
                     &["markerWidth", "markerHeight", "refX", "refY"],
                     factor,
+                    index,
+                    passthroughs,
                 );
             }
-            scale_view_box(element, factor);
+            scale_view_box(element, factor, index, passthroughs);
             if user_space && !has_view_box(element) {
-                scale_children(element, factor, defs);
+                scale_children(element, factor, defs, index, passthroughs);
             }
         }
         "mask" => {
             if units_of(element, "maskUnits", Units::ObjectBoundingBox) == Units::UserSpaceOnUse {
-                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+                scale_numeric_attrs(
+                    element,
+                    &["x", "y", "width", "height"],
+                    factor,
+                    index,
+                    passthroughs,
+                );
             }
             if units_of(element, "maskContentUnits", Units::UserSpaceOnUse) == Units::UserSpaceOnUse
             {
-                scale_children(element, factor, defs);
+                scale_children(element, factor, defs, index, passthroughs);
             }
         }
         "filter" => {
             if units_of(element, "filterUnits", Units::ObjectBoundingBox) == Units::UserSpaceOnUse {
-                scale_numeric_attrs(element, &["x", "y", "width", "height"], factor);
+                scale_numeric_attrs(
+                    element,
+                    &["x", "y", "width", "height"],
+                    factor,
+                    index,
+                    passthroughs,
+                );
             }
             // Filter primitives are in `primitiveUnits` (user space by default);
             // their own lengths were already rewritten before this round.
-            scale_children(element, factor, defs);
+            scale_children(element, factor, defs, index, passthroughs);
         }
         "linearGradient"
             if defs.units(element, "gradientUnits", Units::ObjectBoundingBox)
                 == Units::UserSpaceOnUse =>
         {
-            scale_numeric_attrs(element, &["x1", "y1", "x2", "y2"], factor);
+            scale_numeric_attrs(
+                element,
+                &["x1", "y1", "x2", "y2"],
+                factor,
+                index,
+                passthroughs,
+            );
         }
         "radialGradient"
             if defs.units(element, "gradientUnits", Units::ObjectBoundingBox)
                 == Units::UserSpaceOnUse =>
         {
-            scale_numeric_attrs(element, &["cx", "cy", "r", "fx", "fy", "fr"], factor);
+            scale_numeric_attrs(
+                element,
+                &["cx", "cy", "r", "fx", "fy", "fr"],
+                factor,
+                index,
+                passthroughs,
+            );
         }
         "clipPath"
             if units_of(element, "clipPathUnits", Units::UserSpaceOnUse)
                 == Units::UserSpaceOnUse =>
         {
-            scale_children(element, factor, defs);
+            scale_children(element, factor, defs, index, passthroughs);
         }
         _ => {}
     }
@@ -220,16 +297,33 @@ fn has_view_box(element: &Element) -> bool {
 /// Scale the numeric length of every presentational property in the element's
 /// inline `style="..."`, leaving everything else (order, spacing, unrelated
 /// declarations) untouched.
-fn scale_style_lengths(element: &mut Element, props: &[&str], factor: f32) {
+fn scale_style_lengths(
+    element: &mut Element,
+    props: &[&str],
+    factor: f32,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
     let Some(style) = element.attr("style").map(str::to_string) else {
         return;
     };
     let mut current = style;
     let mut changed = false;
     for prop in props {
-        if let Some(next) = crate::style::scale_length(&current, prop, factor) {
+        let (next, kept) = crate::style::scale_length_report(&current, prop, factor);
+        if let Some(next) = next {
             current = next;
             changed = true;
+        }
+        // A token the style helper left verbatim (value or product not finite)
+        // speaks the same way as the attribute path (round-data/R61 D).
+        for token in kept {
+            passthroughs.record(
+                index,
+                &element.name,
+                prop,
+                format!("style token {token:?} kept verbatim: not finite"),
+            );
         }
     }
     if changed {
@@ -237,30 +331,40 @@ fn scale_style_lengths(element: &mut Element, props: &[&str], factor: f32) {
     }
 }
 
-fn scale_numeric_attrs(element: &mut Element, attrs: &[&str], factor: f32) {
+fn scale_numeric_attrs(
+    element: &mut Element,
+    attrs: &[&str],
+    factor: f32,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
     for attr in attrs {
-        let Some(value) = element.attr(attr) else {
+        let Some(value) = element.attr(attr).map(str::to_string) else {
             continue;
         };
-        let Some(scaled) = scale_numeric_prefix(value, factor) else {
+        let Some((number_end, number)) = numeric_prefix(&value) else {
             continue;
         };
-        element.set_attr(attr, scaled);
+        match scaled_finite(number, factor) {
+            Some(scaled) => element.set_attr(
+                attr,
+                format!("{}{}", crate::format_number(scaled), &value[number_end..]),
+            ),
+            None => note_overflow(passthroughs, index, element, attr, &value, factor),
+        }
     }
 }
 
-/// Multiply the numeric prefix of a length attribute by `factor`, keeping
-/// whatever follows verbatim. svglite writes `textLength="102.4264px"` (a unit
-/// suffix we must preserve), and the same rule is the right one for `width`,
-/// `height`, `r`, … : a bare `"100"` scales as before, `"100px"` becomes
-/// `"200px"`, and a token with no numeric prefix (`"auto"`, `"middle"`) is left
-/// alone. Mirrors [`crate::style::scale_token`].
-fn scale_numeric_prefix(value: &str, factor: f32) -> Option<String> {
+/// Split a length attribute into its numeric prefix and the verbatim suffix.
+/// svglite writes `textLength="102.4264px"` (a unit suffix we must preserve), and
+/// the same rule is the right one for `width`, `height`, `r`, … . A token with no
+/// numeric prefix (`"auto"`, `"middle"`) is left alone.
+fn numeric_prefix(value: &str) -> Option<(usize, f32)> {
     // Longest prefix (by character boundary) that parses as a number.
     // `char_indices` never yields `value.len()`, so the full-value case is
     // handled separately.
-    let (number_end, number) = match value.parse::<f32>() {
-        Ok(number) => (value.len(), number),
+    match value.parse::<f32>() {
+        Ok(number) => Some((value.len(), number)),
         Err(_) => {
             let mut best = None;
             for (index, _) in value.char_indices() {
@@ -271,18 +375,18 @@ fn scale_numeric_prefix(value: &str, factor: f32) -> Option<String> {
                     best = Some((index, number));
                 }
             }
-            best?
+            best
         }
-    };
-    Some(format!(
-        "{}{}",
-        crate::format_number(number * factor),
-        &value[number_end..]
-    ))
+    }
 }
 
-fn scale_view_box(element: &mut Element, factor: f32) {
-    let Some(view_box) = element.attr("viewBox") else {
+fn scale_view_box(
+    element: &mut Element,
+    factor: f32,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
+    let Some(view_box) = element.attr("viewBox").map(str::to_string) else {
         return;
     };
     let values: Vec<_> = view_box.split_whitespace().collect();
@@ -296,20 +400,28 @@ fn scale_view_box(element: &mut Element, factor: f32) {
     let Some(parsed) = parsed else {
         return;
     };
+    let mut scaled = [0.0f32; 4];
+    for (slot, value) in scaled.iter_mut().zip(&parsed) {
+        let Some(product) = scaled_finite(*value, factor) else {
+            note_overflow(passthroughs, index, element, "viewBox", &view_box, factor);
+            return;
+        };
+        *slot = product;
+    }
     element.set_attr(
         "viewBox",
         format!(
             "{} {} {} {}",
-            crate::format_number(parsed[0] * factor),
-            crate::format_number(parsed[1] * factor),
-            crate::format_number(parsed[2] * factor),
-            crate::format_number(parsed[3] * factor)
+            crate::format_number(scaled[0]),
+            crate::format_number(scaled[1]),
+            crate::format_number(scaled[2]),
+            crate::format_number(scaled[3])
         ),
     );
 }
 
-fn scale_points(element: &mut Element, factor: f32) {
-    let Some(points) = element.attr("points") else {
+fn scale_points(element: &mut Element, factor: f32, index: usize, passthroughs: &mut Passthroughs) {
+    let Some(points) = element.attr("points").map(str::to_string) else {
         return;
     };
     let mut out = Vec::new();
@@ -320,10 +432,15 @@ fn scale_points(element: &mut Element, factor: f32) {
         let (Ok(x), Ok(y)) = (x.parse::<f32>(), y.parse::<f32>()) else {
             return;
         };
+        let (Some(x), Some(y)) = (scaled_finite(x, factor), scaled_finite(y, factor)) else {
+            // One non-finite vertex invalidates the whole list: keep it verbatim.
+            note_overflow(passthroughs, index, element, "points", &points, factor);
+            return;
+        };
         out.push(format!(
             "{},{}",
-            crate::format_number(x * factor),
-            crate::format_number(y * factor)
+            crate::format_number(x),
+            crate::format_number(y)
         ));
     }
     element.set_attr("points", out.join(" "));
@@ -333,7 +450,7 @@ fn scale_points(element: &mut Element, factor: f32) {
 /// other primitives, so its geometry keeps pace with the rescaled `viewBox`. A
 /// uniform factor means arcs stay arcs (see `crate::path`); an unparseable `d`
 /// is left untouched, exactly like `scale_points`.
-fn scale_path(element: &mut Element, factor: f32) {
+fn scale_path(element: &mut Element, factor: f32, index: usize, passthroughs: &mut Passthroughs) {
     let Some(d) = element.attr("d").map(str::to_string) else {
         return;
     };
@@ -345,13 +462,27 @@ fn scale_path(element: &mut Element, factor: f32) {
         x_length: factor,
         y_length: factor,
     };
-    if let Ok(rewritten) = crate::path::rewrite(&d, &map) {
-        element.set_attr("d", rewritten);
+    match crate::path::rewrite(&d, &map) {
+        Ok(rewritten) => element.set_attr("d", rewritten),
+        Err(error) if error == crate::path::NON_FINITE => {
+            passthroughs.record(
+                index,
+                &element.name,
+                "d",
+                format!("scaled path is not finite, kept verbatim: {d:?}"),
+            );
+        }
+        Err(_) => {}
     }
 }
 
-fn scale_rotate_transform(element: &mut Element, factor: f32) {
-    let Some(transform) = element.attr("transform") else {
+fn scale_rotate_transform(
+    element: &mut Element,
+    factor: f32,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) {
+    let Some(transform) = element.attr("transform").map(str::to_string) else {
         return;
     };
     let Some(inner) = transform
@@ -370,73 +501,28 @@ fn scale_rotate_transform(element: &mut Element, factor: f32) {
     let (Ok(x), Ok(y)) = (parts[1].parse::<f32>(), parts[2].parse::<f32>()) else {
         return;
     };
+    let (Some(x), Some(y)) = (scaled_finite(x, factor), scaled_finite(y, factor)) else {
+        note_overflow(
+            passthroughs,
+            index,
+            element,
+            "transform",
+            &transform,
+            factor,
+        );
+        return;
+    };
     element.set_attr(
         "transform",
         format!(
             "rotate({}, {}, {})",
             parts[0],
-            crate::format_number(x * factor),
-            crate::format_number(y * factor)
+            crate::format_number(x),
+            crate::format_number(y)
         ),
     );
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::dom::{parse, serialize};
-
-    fn normalized(svg: &str, max_side: f32) -> String {
-        let mut root = parse(svg).unwrap();
-        normalize_svg(&mut root, max_side).unwrap();
-        serialize(&root).unwrap()
-    }
-
-    #[test]
-    fn an_object_bounding_box_pattern_keeps_its_own_stroke_width() {
-        let text = normalized(
-            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
-                  <pattern id="h" width="0.25" height="0.25"
-                           patternContentUnits="objectBoundingBox" stroke-width="0.1">
-                    <rect x="0" y="0" width="0.1" height="0.1" fill="none" stroke="#000"/>
-                  </pattern>
-                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
-                </svg>"##,
-            50.0,
-        );
-        assert!(text.contains(r#"stroke-width="0.1""#), "{text}");
-        assert!(!text.contains(r#"stroke-width="0.050""#), "{text}");
-    }
-
-    #[test]
-    fn a_user_space_pattern_scales_its_own_stroke_width() {
-        let text = normalized(
-            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
-                  <pattern id="h" patternUnits="userSpaceOnUse"
-                           patternContentUnits="userSpaceOnUse" x="0" y="0"
-                           width="20" height="20" stroke-width="2">
-                    <rect x="0" y="0" width="6" height="6" fill="none" stroke="#000"/>
-                  </pattern>
-                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
-                </svg>"##,
-            50.0,
-        );
-        assert!(text.contains(r#"stroke-width="1""#), "{text}");
-    }
-
-    #[test]
-    fn a_pattern_with_a_view_box_keeps_its_own_stroke_width() {
-        let text = normalized(
-            r##"<svg xmlns="http://www.w3.org/2000/svg" width="100" height="80">
-                  <pattern id="h" patternUnits="userSpaceOnUse"
-                           patternContentUnits="userSpaceOnUse" x="0" y="0"
-                           width="20" height="20" viewBox="0 0 20 20" stroke-width="2">
-                    <rect x="0" y="0" width="6" height="6" fill="none" stroke="#000"/>
-                  </pattern>
-                  <rect x="10" y="10" width="80" height="60" fill="url(#h)"/>
-                </svg>"##,
-            50.0,
-        );
-        assert!(text.contains(r#"stroke-width="2""#), "{text}");
-    }
-}
+#[path = "normalize_tests.rs"]
+mod tests;

@@ -37,13 +37,14 @@
 
 use std::collections::{HashMap, HashSet};
 
-use super::lengths::{length_scale_factor, map_point, LengthAxis};
+use super::lengths::{length_scale_factor, map_point, note_overflow, scaled_finite, LengthAxis};
 use super::links::{internal_target, link_of};
 use super::units::{convert_units, Units};
 use super::ScalePolicy;
 use crate::dom::{Element, Node};
 use crate::error::Result;
 use crate::geom::Rect;
+use crate::warnings::Passthroughs;
 
 /// `patternUnits` defaults to `objectBoundingBox` (`usvg-0.47.0/src/parser/
 /// paint_server.rs:168`).
@@ -262,6 +263,8 @@ pub(super) fn rewrite_pattern_tile(
     source: Rect,
     target: Rect,
     patterns: &PatternIndex,
+    index: usize,
+    passthroughs: &mut Passthroughs,
 ) -> Result<()> {
     // Resolve first, mutate after: the values may live on another pattern.
     let x = tile_number(element, patterns, "x");
@@ -276,8 +279,29 @@ pub(super) fn rewrite_pattern_tile(
     if x.is_some() || y.is_some() {
         let (mapped_x, mapped_y) =
             map_point(x.unwrap_or(0.0), y.unwrap_or(0.0), policy, source, target);
-        element.set_attr("x", crate::format_number(mapped_x));
-        element.set_attr("y", crate::format_number(mapped_y));
+        // The tile origin is a point: if either coordinate overflowed, keep both
+        // attributes verbatim rather than writing half a tile.
+        if !mapped_x.is_finite() || !mapped_y.is_finite() {
+            let factor = super::lengths::length_factor(policy, source, target);
+            for (attr, raw, mapped) in [
+                ("x", x.map(|v| v.to_string()), mapped_x),
+                ("y", y.map(|v| v.to_string()), mapped_y),
+            ] {
+                if !mapped.is_finite() {
+                    note_overflow(
+                        passthroughs,
+                        index,
+                        element,
+                        attr,
+                        raw.as_deref().unwrap_or("0"),
+                        factor,
+                    );
+                }
+            }
+        } else {
+            element.set_attr("x", crate::format_number(mapped_x));
+            element.set_attr("y", crate::format_number(mapped_y));
+        }
     }
     for (attr, value, axis) in [
         ("width", width, LengthAxis::X),
@@ -288,7 +312,17 @@ pub(super) fn rewrite_pattern_tile(
             continue;
         }
         if let Some(factor) = length_scale_factor(policy, source, target, axis) {
-            element.set_attr(attr, crate::format_number(value * factor));
+            match scaled_finite(value, factor) {
+                Some(scaled) => element.set_attr(attr, crate::format_number(scaled)),
+                None => note_overflow(
+                    passthroughs,
+                    index,
+                    element,
+                    attr,
+                    &value.to_string(),
+                    factor,
+                ),
+            }
         }
     }
     Ok(())

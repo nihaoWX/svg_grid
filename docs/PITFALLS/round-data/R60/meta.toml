@@ -44,8 +44,9 @@ note = """
 F1-spot-rms（P1-1，R60-F1，挂 R59-F1/R58-F2）：4x5 下 feSpotLight z/pointsAtZ 是 RMS
 sqrt((sx²+sy²)/2) = 43.0116 * 10 / 10 = 45.276928（resvg-0.47.0/src/filter/mod.rs::transform_light_source
 的 sz = (sx²+sy²).sqrt()/SQRT_2），不是 Uniform 的几何平均 44.721。修前 37011/206（属性 z=44.721），
-修后 0/0（x=80 y=100 z=45.276928 pointsAtX=200 pointsAtY=200）。全精度必要：写成 45.277 会翻 11 像素
-（渲染器直接消费 f32），故 LengthAxis::LightZ 用 resvg 同一个算式而不是再四舍五入。
+修后 0/0（x=80 y=100 z=45.276928 pointsAtX=200 pointsAtY=200）。全精度必要：写成 45.277 会翻 5 像素
+（maxdiff 1；R61 复测：point light 1 像素，精确值 0 像素）——渲染器直接消费 f32，
+故 LengthAxis::LightZ 用 resvg 同一个算式而不是再四舍五入。
 F1-point-rms：fePointLight 的 z 是 R58 继承的同一个 bug，修前 95008/2，修后 0/0。
 F2-spot-paz：pointsAtZ=5 同走 LightZ（5*RMS=22.638464），修前 35728/193，修后 0/0。
 F3-two-cell（P1-2，R60-F2）：两个 100x80 面板 --width 200 --height 80 --ncol 2 --plot-margin 0，

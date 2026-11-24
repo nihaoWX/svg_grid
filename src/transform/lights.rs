@@ -15,12 +15,13 @@
 //!   factors. The geometric mean (`sqrt(sx*sy)`) is what R58/R59 wrote: on 4×5 it
 //!   writes `44.721` and leaves xor 37011 / maxdiff 206, where the RMS writes
 //!   `45.276928` and leaves xor 0 / maxdiff 0. Three decimals are not enough
-//!   (`45.277` still leaves 11 pixels), so the value goes out with the shortest
-//!   round-trip digits, like `feTurbulence baseFrequency`;
+//!   (`45.277` already differs on 5 pixels, maxdiff 1; the exact value differs on
+//!   none), so the value goes out with the shortest round-trip digits, like
+//!   `feTurbulence baseFrequency`;
 //! * only `specularExponent`/`limitingConeAngle` are dimensionless and stay.
 
 use super::filters::scale_axis_precise;
-use super::lengths::{map_point, LengthAxis};
+use super::lengths::{map_point, note_overflow, LengthAxis};
 use super::primitives::rewrite_axes;
 use super::walk::Context;
 use super::ScalePolicy;
@@ -119,6 +120,19 @@ fn rewrite_positions(
             continue;
         }
         let mapped = if *is_y { dy } else { dx };
+        if !mapped.is_finite() {
+            // The default position 0 still has to move into the cell; if the
+            // translation itself is not finite, leave the default alone (W7).
+            note_overflow(
+                passthroughs,
+                context.index,
+                element,
+                attr,
+                "0",
+                super::lengths::length_factor(policy, context.source, context.target),
+            );
+            continue;
+        }
         if mapped != 0.0 {
             element.set_attr(attr, crate::format_number(mapped));
         }

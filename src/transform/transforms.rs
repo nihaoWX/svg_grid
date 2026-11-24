@@ -50,20 +50,30 @@ pub(super) fn rewrite_paint_transform(
     index: usize,
     passthroughs: &mut Passthroughs,
 ) {
+    let Some(raw) = element.attr(attr).map(str::to_string) else {
+        return;
+    };
     let sx = length_scale_factor(policy, source, target, LengthAxis::X).unwrap_or(1.0);
     let sy = length_scale_factor(policy, source, target, LengthAxis::Y).unwrap_or(1.0);
     // A degenerate cell (zero width/height) has no meaningful conjugation, and a
     // missing scale policy means the transform is already correct.
-    if !sx.is_finite() || !sy.is_finite() || sx.abs() < f32::EPSILON || sy.abs() < f32::EPSILON {
+    if !sx.is_finite() || !sy.is_finite() {
+        // The factor itself is not finite (source geometry is sick): the transform
+        // stays exactly as written, and W7 names the input that carries the value.
+        passthroughs.record(
+            index,
+            &element.name,
+            attr,
+            format!("non-finite scale factor, transform kept verbatim: {raw:?}"),
+        );
+        return;
+    }
+    if sx.abs() < f32::EPSILON || sy.abs() < f32::EPSILON {
         return;
     }
     if (sx - 1.0).abs() < 1e-6 && (sy - 1.0).abs() < 1e-6 {
         return;
     }
-
-    let Some(raw) = element.attr(attr).map(str::to_string) else {
-        return;
-    };
     let segments = match parse(&raw) {
         Ok(segments) => segments,
         Err(reason) => {
@@ -80,6 +90,24 @@ pub(super) fn rewrite_paint_transform(
     let Some(rewritten) = rewrite(&segments, sx, sy) else {
         return;
     };
+    // The conjugation multiplies coordinates by the axis factors; a finite source
+    // matrix times a large factor can still overflow `f32`, and `format_number`
+    // would print `inf`/`NaN`. Reparse the generated text and keep the original
+    // bytes unless every number is finite.
+    let finite = parse(&rewritten).is_ok_and(|segments| {
+        segments
+            .iter()
+            .all(|s| s.values.iter().all(|v| v.is_finite()))
+    });
+    if !finite {
+        passthroughs.record(
+            index,
+            &element.name,
+            attr,
+            format!("scaled transform is not finite, kept verbatim: {raw:?}"),
+        );
+        return;
+    }
     element.set_attr(attr, rewritten);
 }
 
@@ -105,7 +133,9 @@ fn rewrite(segments: &[Segment], sx: f32, sy: f32) -> Option<String> {
     let conjugated = Matrix::diagonal(sx, sy)
         .multiply(&total)
         .multiply(&Matrix::diagonal(1.0 / sx, 1.0 / sy));
-    if conjugated.approx_equals(&total) {
+    // Keep going when the conjugation overflowed: the caller re-parses the text
+    // and keeps the attribute verbatim with W7, rather than silently dropping it.
+    if conjugated.is_finite() && conjugated.approx_equals(&total) {
         return None;
     }
     if conjugated.is_translation() {
@@ -251,10 +281,12 @@ impl Segment {
             }
             Kind::Scale | Kind::Rotate | Kind::SkewX | Kind::SkewY => {}
         }
+        // A value that stopped being finite is a change the caller must report,
+        // even though `approx_equal(inf, huge)` would call it equal.
         let moved = values
             .iter()
             .zip(&self.values)
-            .any(|(new, old)| !approx_equal(*new, *old));
+            .any(|(new, old)| !new.is_finite() || !approx_equal(*new, *old));
         let separator = if self.kind == Kind::Matrix { " " } else { ", " };
         let numbers = values
             .iter()
@@ -324,6 +356,12 @@ impl Matrix {
             e: self.a * other.e + self.c * other.f + self.e,
             f: self.b * other.e + self.d * other.f + self.f,
         }
+    }
+
+    fn is_finite(&self) -> bool {
+        [self.a, self.b, self.c, self.d, self.e, self.f]
+            .iter()
+            .all(|value| value.is_finite())
     }
 
     fn is_translation(&self) -> bool {

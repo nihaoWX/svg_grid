@@ -1,0 +1,76 @@
+id = "R61"
+date = "2026-11-24"
+verdict = "修复"
+
+family = [
+  "P2（R60 评审）：输入与因子都有限、但乘积溢出 f32 时，写回仍是 format_number(value*factor) ⇒ 产物出现 inf/NaN/-inf（rect x/width、circle cx、polygon points、path d、stroke-width、stdDeviation、feDisplacementMap scale、normalize 因子）且不报 W7。pre-existing（pin cd5875d 与 /tmp/r50base e0c6033 一致）。",
+  "修法：所有计算写回点统一走 scaled_finite（因子与乘积都有限才写），否则逐字节保留原文 + W7；写回分组原子（rect/image 四边、cx/cy、points、d、filter 1-2 数字）；因子本身非有限时 W7 点名 input #0，rc 仍 0、产物良构可渲染。",
+  "P3 口径更正：spot light z 三位小数 45.277 实测 5 像素（maxdiff 1）、point light 1 像素、精确值 0 像素；原文“11 像素 / 精确值仍留 4 像素”作废。",
+  "P3 证据空转：R60 F5-xy 的字符串替换在 data URI 插值之后（恒 128、只测属性）⇒ 改为插值前注入并补真实像素位移断言；R58 A9 fixture 两种取值 xor 都为 0（不可判别）⇒ 注释指路，可判别用例进 R61；rotate 非有限守卫端到端不可达 ⇒ 改单测。style= 路径与属性路径统一报 W7（D）。",
+]
+
+closures = [
+  { finding = "R61-F1", tier = "代码" },
+  { finding = "R61-F2", tier = "代码" },
+  { finding = "R61-F3", tier = "代码" },
+  { finding = "R61-F4", tier = "代码" },
+  { finding = "R61-F5", tier = "代码" },
+  { finding = "R61-F6", tier = "口径" },
+  { finding = "R61-F7", tier = "证据/口径" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60",
+]
+touched = [
+  { round = "R60", why = "test.py 的 F5-xy 改为插值前注入 displacement map（body(map_uri)）并补真实像素位移断言：40→38、50→48，各 1..6 px；75→82 checks" },
+  { round = "R60", why = "meta.toml 的“45.277 会翻 11 像素”改为“5 像素（maxdiff 1；point light 1 像素，精确值 0 像素）”" },
+  { round = "R58", why = "test.py A9 加注释：该 fixture 对 14.142/20 的 xor 都为 0，不可判别，指路 R61 的像素证据" },
+  { round = "R19", why = "测试总数 658→674（BASELINE 与 COUNTS.lib 382）" },
+  { round = "R57", why = "第 6/200 行写死的总数 658→674" },
+]
+
+note = """
+每条先 d1render 实测再写码（四列的表在 test.py 末尾；oracle 与 R58/R59 相同：
+等向 = 源图按 s 渲染，oracle PNG 由 d1render 直接渲染源图得到）。
+本轮修前 = R60 HEAD cd5875d；修后 = 本轮提交的 target/release/svg_grid。
+
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline
+
+# 修前二进制：R60 的 HEAD（= 本轮 code_before cd5875d 的构建，评审也用它）
+# 评审已经构建好：/tmp/r60_eval/pin/target/release/svg_grid
+# 也可以自建：
+rm -rf /tmp/r61before && mkdir -p /tmp/r61before
+git archive cd5875d | tar -x -C /tmp/r61before
+cp -r fontlib /tmp/r61before/
+(cd /tmp/r61before && cargo build --release --offline)
+# 本脚本默认 BEFORE=/tmp/r60_eval/pin/target/release/svg_grid，可用 SVG_GRID_BEFORE 覆盖。
+
+# 全绿（85 checks）
+python3 docs/PITFALLS/round-data/R61/test.py
+# 有牙：把被测二进制指回 R60 ⇒ 修复前必须有红（rc=1）
+SVG_GRID_BIN=/tmp/r60_eval/pin/target/release/svg_grid python3 docs/PITFALLS/round-data/R61/test.py
+# 缺二进制/渲染器必须 rc=1（--allow-skip 才允许 skip）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R61/test.py
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R61/test.py
+
+决定（详见 blocker 报告 §7）：
+  1) 1e-45 在 --normalize-input-max-side 400 下写 x="0"：因子与乘积都有限，只是
+     format_number 的三位小数规则；修前修后渲染一致，不算本缺陷，保留语义。
+  2) 源图自带 nan/inf 时保留原字节（"kept verbatim" 契约）；不变量语料只用有限源。
+  3) --plan 用临时 Passthroughs，不打印 W7（它不写产物），保持现有告警面。
+  4) 写回分组原子：一组里任一乘积非有限，整组保留（半组写回会混两个坐标空间）。
+  5) style= 路径与属性路径统一报 W7；style="stroke-width:inf" 也报。
+
+旧证据说明（E）：账本里“R3..R60 全绿 56/56”是在真实仓库路径 + 完整
+/tmp/rXbefore 前置二进制下跑的：9 个脚本用 REPO=HERE.parents[5]（R3 R9 R10 R11
+R13 R20 R21 R23 R33），且上一轮脚本会递归调用更早的轮次。worktree 副本
+（路径深度不同、缺 /tmp/rXbefore）不能整体复现；本轮在真实仓库路径下逐轮跑，
+结果见提交说明。
+"""

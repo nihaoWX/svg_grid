@@ -62,7 +62,7 @@
 //!   Measured on an anisotropic cell (source 100×80 → 400×400, sx=4/sy=5): the
 //!   geometric mean writes `44.721` and leaves xor 37011 / maxdiff 206, the RMS
 //!   writes `45.276928` and is xor 0 / maxdiff 0 (three decimals, `45.277`, would
-//!   still leave 11 pixels). R59 registered that residual as
+//!   still differ on 5 pixels, maxdiff 1). R59 registered that residual as
 //!   intrinsic ("the normal changes under a non-uniform scale"); it was this
 //!   missing factor.
 //!
@@ -83,7 +83,9 @@
 //! primitive to the unscaled panel's box (measured: `stdDeviation="2" x="10"
 //! y="10" width="80" height="60"` xor 16984 / maxdiff 255).
 
-use super::lengths::{length_scale_factor, note_non_finite, LengthAxis};
+use super::lengths::{
+    length_scale_factor, note_non_finite, note_overflow, scaled_finite, LengthAxis,
+};
 use super::lights::{is_light_source, is_lighting};
 use super::links::resolved_units;
 use super::primitives::rewrite_axes;
@@ -273,8 +275,8 @@ fn scale_axis(
 /// The same, written with the shortest round-trip digits.
 ///
 /// A light's `z` is the one length where the project's three decimals are too
-/// coarse: measured on the anisotropic cell (sx=4/sy=5, `z="10"`), `45.277` leaves
-/// 11 pixels differing where the exact RMS factor `45.276928` leaves 4, because the
+/// coarse: measured on the anisotropic cell (sx=4/sy=5, `z="10"`), `45.277` differs
+/// on 5 pixels (maxdiff 1) where `45.276928` differs on none, because the
 /// shading is a smooth ramp near black and a 1e-4 change is enough to flip the
 /// rounding of a pixel. Like `feTurbulence baseFrequency`, this keeps full digits.
 pub(super) fn scale_axis_precise(
@@ -306,7 +308,12 @@ fn scale_axis_with(
     let Some(value) = parsed_or_kept(element, attr, &raw, context, passthroughs) else {
         return Ok(());
     };
-    element.set_attr(attr, format_length(value * factor, precise));
+    match scaled_finite(value, factor) {
+        Some(scaled) => element.set_attr(attr, format_length(scaled, precise)),
+        // The product is not finite (or the factor is not): write nothing and let
+        // W7 say the attribute was kept verbatim.
+        None => note_overflow(passthroughs, context.index, element, attr, &raw, factor),
+    }
     Ok(())
 }
 
@@ -397,12 +404,13 @@ fn scale_pair(
         return Ok(());
     }
 
-    let convert = |value: f32, factor: f32| {
-        if invert {
+    let convert = |value: f32, factor: f32| -> Option<f32> {
+        let converted = if invert {
             value / factor
         } else {
             value * factor
-        }
+        };
+        (factor.is_finite() && converted.is_finite()).then_some(converted)
     };
     let Some(x) = parsed_or_kept(element, attr, tokens[0], context, passthroughs) else {
         return Ok(());
@@ -412,7 +420,10 @@ fn scale_pair(
     // value has to become an explicit pair (measured: the geometric mean is far
     // worse than the pair).
     if tokens.len() == 1 && (fx - fy).abs() < f32::EPSILON {
-        element.set_attr(attr, format_length(convert(x, fx), precise));
+        match convert(x, fx) {
+            Some(scaled) => element.set_attr(attr, format_length(scaled, precise)),
+            None => note_overflow(passthroughs, context.index, element, attr, &raw, fx),
+        }
         return Ok(());
     }
     let y = match tokens.get(1) {
@@ -424,12 +435,16 @@ fn scale_pair(
         },
         None => x,
     };
+    let (Some(x), Some(y)) = (convert(x, fx), convert(y, fy)) else {
+        note_overflow(passthroughs, context.index, element, attr, &raw, fx);
+        return Ok(());
+    };
     element.set_attr(
         attr,
         format!(
             "{} {}",
-            format_length(convert(x, fx), precise),
-            format_length(convert(y, fy), precise)
+            format_length(x, precise),
+            format_length(y, precise)
         ),
     );
     Ok(())

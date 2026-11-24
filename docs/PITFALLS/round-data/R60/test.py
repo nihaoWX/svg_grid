@@ -412,6 +412,15 @@ def family_f4():
     check(got == "0.1", "F4: an obb stdDeviation stays a fraction", got)
 
 
+def top_ink(path, col):
+    """The y of the first inked pixel of a column: the rect's top edge."""
+    w, h, ch, rows = read_png(path)
+    for y in range(h):
+        if rows[y][col * ch] < 128:
+            return y
+    return None
+
+
 def left_ink(path, row):
     """The x of the first inked pixel of a scanline: the rect's left edge, in device
     pixels.  The filter rasters natively at the cell size, so this is an exact oracle
@@ -430,14 +439,18 @@ def family_f5():
     # with sx=4 the exact value for `1` is `2`, not `4`.  The black rect starts at
     # x=40 in the cell (10 * 4), so the left edge is the oracle: +2 px when exact,
     # +8 px with the old linear value.
-    body = ('<defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" '
-            'height="80"><feImage href="%s" result="map"/>'
-            '<feDisplacementMap in="SourceGraphic" in2="map" scale="1" '
-            'xChannelSelector="R" yChannelSelector="G"/></filter></defs>'
-            '<rect x="10" y="10" width="80" height="60" fill="black" filter="url(#f)"/>'
-            % const_map(255, 128))
+    # The map URI must be substituted BEFORE the fixture is built, otherwise the
+    # replacement below is a no-op and both axes keep G=128 (only the attribute
+    # assertion would then exercise the xy path).
+    def body(map_uri, scale="1"):
+        return ('<defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" '
+                'height="80"><feImage href="%s" result="map"/>'
+                '<feDisplacementMap in="SourceGraphic" in2="map" scale="%s" '
+                'xChannelSelector="R" yChannelSelector="G"/></filter></defs>'
+                '<rect x="10" y="10" width="80" height="60" fill="black" filter="url(#f)"/>'
+                % (map_uri, scale))
     src = tmp("F5-x-src.svg")
-    src.write_text(source_svg(body, "x"))
+    src.write_text(source_svg(body(const_map(255, 128)), "x"))
     edges = {}
     for tag, binary in (("before", BEFORE), ("after", BIN)):
         out = tmp("F5-x-%s.svg" % tag)
@@ -458,16 +471,48 @@ def family_f5():
         "left edge 42", "d1", "n/a")
     # Two axes have no exact single value: sqrt(8) in x and sqrt(10) in y for the same
     # number, so the fallback is their geometric mean, (4*5)^(1/4) = 2.115.
+    # Both channels are 255 now (R -> dx, G -> dy), so the pixels must move on
+    # BOTH axes. A scale="0" control gives the undisplaced edges (40, 50); the
+    # exact 2.115 moves the left edge by 0.5*2.115^2*sx and the top edge by
+    # 0.5*2.115^2*sy device pixels.
     src = tmp("F5-xy-src.svg")
-    src.write_text(source_svg(body.replace("const_map(255, 128)", "const_map(255, 255)"), "xy"))
+    src.write_text(source_svg(body(const_map(255, 255)), "xy"))
     out = tmp("F5-xy-after.svg")
-    rc, _ = compose(BIN, src, out, 400, height=400)
+    rc, err = compose(BIN, src, out, 400, height=400)
     got = (element(out.read_text(), "feDisplacementMap") or {}).get("scale") if rc == 0 else None
     check(got == "2.115", "F5 xy: scale == 2.115 ((4*5)^(1/4))", got)
-    check(rc == 0, "F5 xy: composes")
+    if check(rc == 0, "F5 xy: composes", err[-120:]):
+        png = tmp("F5-xy-after.png")
+        check(render(out, png, 1), "F5 xy: d1 renders")
+        left = left_ink(png, 150)
+        top = top_ink(png, 150)
+        control_src = tmp("F5-xy-control-src.svg")
+        control_src.write_text(source_svg(body(const_map(255, 255), scale="0"), "xy"))
+        control = tmp("F5-xy-control.svg")
+        rc0, _ = compose(BIN, control_src, control, 400, height=400)
+        png0 = tmp("F5-xy-control.png")
+        ok0 = rc0 == 0 and render(control, png0, 1)
+        check(ok0, "F5 xy: control composes and renders")
+        if ok0:
+            left0 = left_ink(png0, 150)
+            top0 = top_ink(png0, 150)
+            check(left0 == 40 and top0 == 50, "F5 xy: control edges (40, 50)",
+                  (left0, top0))
+            check(left is not None and left < left0,
+                  "F5 xy: x displacement moves the left edge", (left0, left))
+            check(top is not None and top < top0,
+                  "F5 xy: y displacement moves the top edge", (top0, top))
+            # C=255 displaces toward smaller device coordinates; the pixel step is
+            # ~0.5 * scale^2 = 2.2 (the review measured the same 40 -> 38, 50 -> 48).
+            check(1 <= left0 - left <= 6,
+                  "F5 xy: dx ~ 2 px for scale 2.115", left0 - left)
+            check(1 <= top0 - top <= 6,
+                  "F5 xy: dy ~ 2 px for scale 2.115", top0 - top)
+            row("F5-xy", "edges (%s, %s)" % (left0, top0),
+                "edges (%s, %s)" % (left, top), "both axes move", "d1", "n/a")
     # One axis at a time, y: sqrt(5) = 2.236.
     src = tmp("F5-y-src.svg")
-    src.write_text(source_svg(body, "y"))
+    src.write_text(source_svg(body(const_map(255, 128)), "y"))
     out = tmp("F5-y-after.svg")
     rc, _ = compose(BIN, src, out, 400, height=400)
     got = (element(out.read_text(), "feDisplacementMap") or {}).get("scale") if rc == 0 else None

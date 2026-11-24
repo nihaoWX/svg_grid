@@ -157,18 +157,25 @@ pub fn plot_grid(spec: PlotGridSpec) -> Result<()> {
 /// `verbose` is true, W1–W9 and their shared cause notes are printed to stderr
 /// after the output is written. The exit code and the output bytes never change.
 pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<()> {
-    let (prepared, grid) = prepare(&GridRequest {
-        inputs: spec.inputs.clone(),
-        width: spec.width,
-        height: spec.height,
-        nrow: spec.nrow,
-        ncol: spec.ncol,
-        rel_widths: spec.rel_widths.clone(),
-        rel_heights: spec.rel_heights.clone(),
-        margin: spec.margin,
-        gap: spec.gap,
-        normalize: spec.normalize.clone(),
-    })?;
+    // Attributes the composer could not rewrite but deliberately kept verbatim
+    // (W7: a malformed `<path d>` or a non-finite/overflowing numeric attribute).
+    // `prepare` normalizes the inputs, so the collector has to exist before it.
+    let mut passthroughs = warnings::Passthroughs::default();
+    let (prepared, grid) = prepare(
+        &GridRequest {
+            inputs: spec.inputs.clone(),
+            width: spec.width,
+            height: spec.height,
+            nrow: spec.nrow,
+            ncol: spec.ncol,
+            rel_widths: spec.rel_widths.clone(),
+            rel_heights: spec.rel_heights.clone(),
+            margin: spec.margin,
+            gap: spec.gap,
+            normalize: spec.normalize.clone(),
+        },
+        &mut passthroughs,
+    )?;
     let drawn: Vec<bool> = prepared.iter().map(Option::is_some).collect();
 
     // W3 is a hard error now, and so is W8: both are "necessary information" in
@@ -210,12 +217,8 @@ pub fn plot_grid_with_diagnostics(spec: PlotGridSpec, verbose: bool) -> Result<(
         &mut warnings,
     );
 
-    // Attributes the composer could not rewrite but deliberately kept verbatim
-    // while transforming the inputs (W7: a malformed `<path d>` or a non-finite
-    // numeric attribute). Gathered across every input so the warning speaks once
-    // per call, and flushed with W1–W6 after the output is written.
-    let mut passthroughs = warnings::Passthroughs::default();
-
+    // W7 is gathered across every input (normalization + transform) so the
+    // warning speaks once per call, and flushed with W1–W6 after writing.
     // `url(#…)` references the composed output cannot resolve (W9): a paint server
     // or a clip path that a stage above dropped. Nothing fails and nothing moves —
     // the shapes are just painted with nothing — so this is the one mechanical

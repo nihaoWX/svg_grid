@@ -237,7 +237,15 @@ pub(super) fn rewrite_primitive(
         // (round-data/R41).
         "pattern" => {
             if pattern_units_is_user_space(element, patterns) {
-                rewrite_pattern_tile(element, policy, source, target, patterns)?;
+                rewrite_pattern_tile(
+                    element,
+                    policy,
+                    source,
+                    target,
+                    patterns,
+                    context.index,
+                    passthroughs,
+                )?;
             }
             // `patternTransform` is user space too, **even when the tile box is
             // `objectBoundingBox`**: the renderer composes it after the tile's

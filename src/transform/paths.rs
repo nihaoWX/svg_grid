@@ -29,6 +29,17 @@ pub(super) fn rewrite_path(
         // bytes. A browser is lenient about such data, and rejecting the whole
         // figure for it would narrow what used to work. Structural garbage in
         // *other* attributes (`rect x="abc"`) still fails closed.
+        // The `d` parsed, but a scaled coordinate overflowed `f32`; writing it
+        // would put `inf`/`NaN` in the document, so the path stays verbatim.
+        Err(error) if error == crate::path::NON_FINITE => passthroughs.record(
+            index,
+            &element.name,
+            "d",
+            format!(
+                "scaled path is not finite, kept verbatim: {:?}",
+                excerpt(&d, 40)
+            ),
+        ),
         Err(error) => passthroughs.record(
             index,
             &element.name,

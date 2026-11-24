@@ -6,7 +6,10 @@ use crate::error::Result;
 use crate::geom::{parse_f32, Rect};
 use crate::warnings::Passthroughs;
 
-use super::lengths::{map_point, note_non_finite, rewrite_scaled_length, LengthAxis};
+use super::lengths::{
+    length_factor, map_point, note_non_finite, note_overflow, rewrite_scaled_length, scaled_finite,
+    LengthAxis,
+};
 use super::ScalePolicy;
 
 #[allow(clippy::too_many_arguments)]
@@ -36,6 +39,24 @@ pub(super) fn rewrite_pair(
         return Ok(());
     }
     let (x, y) = map_point(x, y, policy, source, target);
+    if !x.is_finite() || !y.is_finite() {
+        // The pair is written together or not at all: a finite source coordinate
+        // times an overflowing factor (or a non-finite factor) must not become
+        // `inf`/`NaN` on either axis.
+        for (attr, raw, mapped) in [(x_attr, &x_raw, x), (y_attr, &y_raw, y)] {
+            if !mapped.is_finite() {
+                note_overflow(
+                    passthroughs,
+                    index,
+                    element,
+                    attr,
+                    raw,
+                    length_factor(policy, source, target),
+                );
+            }
+        }
+        return Ok(());
+    }
     element.set_attr(x_attr, crate::format_number(x));
     element.set_attr(y_attr, crate::format_number(y));
 
@@ -80,6 +101,17 @@ pub(super) fn rewrite_axes(
         } else {
             map_point(value, 0.0, policy, source, target).0
         };
+        if !mapped.is_finite() {
+            note_overflow(
+                passthroughs,
+                index,
+                element,
+                attr,
+                &raw,
+                length_factor(policy, source, target),
+            );
+            continue;
+        }
         element.set_attr(attr, crate::format_number(mapped));
     }
 
@@ -124,10 +156,32 @@ pub(super) fn rewrite_rect(
         ScalePolicy::Position | ScalePolicy::None => (x0 + width, y0 + height),
     };
 
+    let width = (x1 - x0).abs();
+    let height = (y1 - y0).abs();
+    if ![x0, y0, width, height]
+        .iter()
+        .all(|value| value.is_finite())
+    {
+        // One overflowing side invalidates the whole box (R60 review): mapping the
+        // other three would move geometry the renderer cannot draw, and the width
+        // of an `inf - inf` subtraction is `NaN`.
+        let factor = length_factor(policy, source, target);
+        for (attr, raw, writer) in [
+            ("x", &x_raw, x0),
+            ("y", &y_raw, y0),
+            ("width", &width_raw, width),
+            ("height", &height_raw, height),
+        ] {
+            if !writer.is_finite() {
+                note_overflow(passthroughs, index, element, attr, raw, factor);
+            }
+        }
+        return Ok(());
+    }
     element.set_attr("x", crate::format_number(x0));
     element.set_attr("y", crate::format_number(y0));
-    element.set_attr("width", crate::format_number((x1 - x0).abs()));
-    element.set_attr("height", crate::format_number((y1 - y0).abs()));
+    element.set_attr("width", crate::format_number(width));
+    element.set_attr("height", crate::format_number(height));
 
     Ok(())
 }
@@ -215,7 +269,17 @@ pub(super) fn rewrite_marker_box(
             default,
             super::lengths::length_scale_factor(policy, source, target, axis),
         ) {
-            element.set_attr(attr, crate::format_number(default * factor));
+            match scaled_finite(default, factor) {
+                Some(scaled) => element.set_attr(attr, crate::format_number(scaled)),
+                None => note_overflow(
+                    passthroughs,
+                    index,
+                    element,
+                    attr,
+                    &default.to_string(),
+                    factor,
+                ),
+            }
         }
     }
     Ok(())
@@ -246,6 +310,7 @@ pub(super) fn rewrite_points(
         note_non_finite(passthroughs, index, element, "points", y_raw, y);
         finite &= x.is_finite() && y.is_finite();
         let (x, y) = map_point(x, y, policy, source, target);
+        finite &= x.is_finite() && y.is_finite();
         out.push(format!(
             "{},{}",
             crate::format_number(x),
@@ -255,6 +320,14 @@ pub(super) fn rewrite_points(
 
     // One non-finite vertex invalidates the whole list; keep it verbatim.
     if !finite {
+        note_overflow(
+            passthroughs,
+            index,
+            element,
+            "points",
+            &points,
+            length_factor(policy, source, target),
+        );
         return Ok(());
     }
     element.set_attr("points", out.join(" "));
@@ -311,6 +384,17 @@ pub(super) fn rewrite_rotate_transform(
         return Ok(());
     }
     let (x, y) = map_point(x, y, policy, source, target);
+    if !x.is_finite() || !y.is_finite() {
+        note_overflow(
+            passthroughs,
+            index,
+            element,
+            "transform",
+            &transform,
+            length_factor(policy, source, target),
+        );
+        return Ok(());
+    }
     element.set_attr(
         "transform",
         format!(
