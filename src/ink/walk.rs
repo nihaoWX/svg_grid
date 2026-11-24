@@ -136,11 +136,14 @@ fn is_display_none(element: &Element) -> bool {
 ///
 /// The inline list is a real cascade (R54): `/* … */` comments are stripped, when
 /// the same property is declared twice the later declaration wins, and a
-/// declaration carrying `!important` outranks one without it (among equal
-/// `!important` flags the later one still wins). Both reference renderers agree
-/// on the last two rules; they only disagree on whether a `display:none /* c */`
-/// comment is stripped (resvg says yes, cairosvg keeps the literal value) and
-/// this follows resvg, as R51 did for keyword case.
+/// declaration carrying `!important` outranks one without it. Among *equal*
+/// `!important` declarations the **first** one wins: resvg 0.47 keeps the first
+/// and cairosvg keeps the last (measured, R56 P1), and this follows resvg as R51
+/// did for keyword case.
+///
+/// The renderers also disagree on whether a `/* … */` comment is stripped at all
+/// (`display:none /* c */` is `none` for resvg but a literal value for
+/// cairosvg); again resvg wins.
 pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<Cow<'a, str>> {
     if let Some(style) = element.attr("style") {
         let style = strip_comments(style);
@@ -154,7 +157,12 @@ pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<Cow<'a,
                 continue;
             }
             match split_important(value) {
-                (value, true) => important = Some(value),
+                // First `!important` wins (resvg 0.47): a later one must not
+                // replace it, or `display:block !important;display:none
+                // !important` would hide a letter resvg draws (R56 P1).
+                (value, true) => {
+                    important.get_or_insert(value);
+                }
                 (value, false) => plain = Some(value),
             }
         }
@@ -189,21 +197,19 @@ fn strip_comments(style: &str) -> Cow<'_, str> {
     }
 }
 
-/// Split a trailing `!important` from a declaration value.
+/// Split a trailing `!important` from a declaration value. Any trailing `!` is
+/// dropped, whatever follows it: resvg treats `display:none !` and
+/// `display:none ! foo` as `none` (measured, R56 P1), so the lagging token must
+/// not leak into the value we compare keywords against.
 fn split_important(value: &str) -> (&str, bool) {
     let value = value.trim();
-    let Some((head, tail)) = value.rsplit_once('!') else {
+    let Some((head, _flag)) = value.rsplit_once('!') else {
         return (value, false);
     };
-    if tail.trim().eq_ignore_ascii_case("important") {
-        (head.trim_end(), true)
-    } else {
-        (value, false)
-    }
+    (head.trim_end(), true)
 }
 
-/// Drop a trailing CSS `!important`… (see [`split_important`], which also reports
-/// whether the flag was present; the cascade above needs both facts).
+/// Read a numeric presentation attribute through [`parse_number`].
 pub(super) fn number_attr(element: &Element, name: &str) -> Option<f64> {
     element.attr(name).and_then(parse_number)
 }
@@ -225,4 +231,55 @@ pub(crate) fn parse_number(value: &str) -> Option<f64> {
         }
     }
     best
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn style_of(markup: &str, prop: &str) -> Option<String> {
+        let root = crate::dom::parse(markup).expect("test markup parses");
+        let text = root
+            .children
+            .iter()
+            .find_map(|node| match node {
+                Node::Element(element) if element.name == "text" => Some(element),
+                _ => None,
+            })
+            .expect("a <text> child");
+        style_prop(text, prop).map(|value| value.into_owned())
+    }
+
+    #[test]
+    fn style_prop_keeps_the_first_important_declaration() {
+        // resvg 0.47: the first equal `!important` wins (measured, R56 P1).
+        let both = r#"<svg><text style="display:block !important;display:none !important"/></svg>"#;
+        assert_eq!(style_of(both, "display").as_deref(), Some("block"));
+        // An important declaration still outranks a plain one, wherever it sits.
+        let mixed = r#"<svg><text style="display:none !important;display:block"/></svg>"#;
+        assert_eq!(style_of(mixed, "display").as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn style_prop_lets_the_later_plain_declaration_win() {
+        let later = r#"<svg><text style="display:none;display:block"/></svg>"#;
+        assert_eq!(style_of(later, "display").as_deref(), Some("block"));
+        let later_none = r#"<svg><text style="display:block;display:none"/></svg>"#;
+        assert_eq!(style_of(later_none, "display").as_deref(), Some("none"));
+    }
+
+    #[test]
+    fn style_prop_strips_comments_and_a_stray_bang() {
+        let comment = r#"<svg><text style="display:none /* c *//* d */"/></svg>"#;
+        assert_eq!(style_of(comment, "display").as_deref(), Some("none"));
+        // Anything after the last `!` is dropped, `important` or not (R56 P1).
+        for style in ["display:none !", "display:none ! foo"] {
+            let markup = format!(r#"<svg><text style="{style}"/></svg>"#);
+            assert_eq!(
+                style_of(&markup, "display").as_deref(),
+                Some("none"),
+                "{style}"
+            );
+        }
+    }
 }

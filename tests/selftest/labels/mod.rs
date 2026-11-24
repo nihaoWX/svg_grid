@@ -451,6 +451,7 @@ mod duplicates;
 mod messages;
 mod nested;
 mod r54;
+mod r56;
 mod recursive;
 mod text;
 mod uses;

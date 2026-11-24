@@ -215,6 +215,12 @@ where
     if as_instance && target.name != "symbol" {
         return;
     }
+    // A `<symbol>` with a `viewBox` clips its content to that rectangle; when the
+    // instance's ink misses the box the renderer draws nothing (measured ink 0,
+    // R56 P3e).
+    if as_instance && !crate::label_clip::instance_draws(target) {
+        return;
+    }
     if ctx.depth >= MAX_USE_DEPTH
         || ctx
             .ancestors
@@ -238,10 +244,16 @@ fn enter(element: &Element, inherited_visible: bool, as_instance: bool) -> Optio
     if !as_instance && NON_RENDERED.contains(&element.name.as_str()) {
         return None;
     }
-    if matches!(
-        style_prop(element, "display").as_deref().map(str::trim),
-        Some("none")
-    ) {
+    // `display` does not apply to a `<symbol>` itself (SVG 1.1): a symbol marked
+    // display:none is still drawn through `<use>` (measured d1 ink 40, cairosvg
+    // 0, R56 P3). A `<g style="display:none">` instance, by contrast, is hidden.
+    let display_applies = !(as_instance && element.name == "symbol");
+    if display_applies
+        && matches!(
+            style_prop(element, "display").as_deref().map(str::trim),
+            Some("none")
+        )
+    {
         return None;
     }
     if style_prop(element, "opacity")

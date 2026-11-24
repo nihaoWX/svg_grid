@@ -332,10 +332,14 @@ CASES = {
 
 def main():
     print(f"bin={BIN}\nold={OLD}\nd1={RENDER}\ncairo={CAIRO}")
+    # A missing input is a hard failure: returning the value of check() would
+    # exit 0 because bool False is 0 (R56 P2.3).
     if not BIN.exists():
-        return check(False, f"binary exists: {BIN}")
+        check(False, f"binary exists: {BIN}")
+        return 1
     if not OLD.exists():
-        return check(False, f"old binary exists: {OLD}")
+        check(False, f"old binary exists: {OLD}")
+        return 1
     if not RENDER.exists() and not skip("d1render available", str(RENDER)):
         return finish()
     if not CAIRO.exists() and not skip("cairosvg available", str(CAIRO)):

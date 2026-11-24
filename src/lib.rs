@@ -5,6 +5,7 @@ mod geom;
 pub mod home;
 mod ink;
 mod input;
+mod label_clip;
 mod label_conflicts;
 mod label_letters;
 mod label_paint;

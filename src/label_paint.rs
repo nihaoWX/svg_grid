@@ -96,7 +96,7 @@ fn paints(value: &str, ids: &HashMap<&str, &Element>) -> bool {
     let Some(rest) = value.strip_prefix("url(") else {
         // Case-sensitive on purpose: `URL(#missing)` is not a reference and both
         // renderers draw it black, as they do for any other colour keyword.
-        return !matches!(value, "none" | "transparent");
+        return colour_paints(value);
     };
     let Some((id, fallback)) = parse_reference(rest) else {
         return true;
@@ -105,6 +105,37 @@ fn paints(value: &str, ids: &HashMap<&str, &Element>) -> bool {
         Some(target) => paint_server_paints(target, ids),
         None => fallback.is_some_and(|fallback| paints(fallback, ids)),
     }
+}
+
+/// Does a plain colour paint? `none`/`transparent` never do, and a colour whose
+/// alpha channel is zero is invisible to resvg even though it is a real colour:
+/// `fill="#00000000"`, `fill="rgba(0,0,0,0)"` and `stop-color="#00000000"` all
+/// leave ink 0 (measured, R56 P2.2). cairosvg still paints a zero-alpha hex
+/// colour but agrees on `rgba()`; this follows resvg, as R51 did for case.
+fn colour_paints(value: &str) -> bool {
+    if matches!(value, "none" | "transparent") {
+        return false;
+    }
+    colour_alpha(value) != Some(0.0)
+}
+
+/// The alpha channel of a colour literal, when it carries one: `#rrggbbaa` and
+/// `rgba(r,g,b,a)`. `None` means "opaque or not a colour we parse".
+fn colour_alpha(value: &str) -> Option<f64> {
+    if let Some(hex) = value.strip_prefix('#') {
+        if hex.len() == 8 && hex.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return u8::from_str_radix(&hex[6..], 16)
+                .ok()
+                .map(|alpha| f64::from(alpha) / 255.0);
+        }
+        return None;
+    }
+    let inner = value.strip_prefix("rgba(")?.strip_suffix(')')?;
+    let parts: Vec<&str> = inner.split(',').collect();
+    if parts.len() != 4 {
+        return None;
+    }
+    parts[3].trim().parse::<f64>().ok()
 }
 
 /// Split the inside of `url(...)` into the local id and the optional fallback
@@ -127,50 +158,66 @@ fn parse_reference(rest: &str) -> Option<(&str, Option<&str>)> {
 /// in both renderers for `fill="url(#some-rect)"`.
 fn paint_server_paints(target: &Element, ids: &HashMap<&str, &Element>) -> bool {
     match target.name.as_str() {
-        "linearGradient" | "radialGradient" => gradient_paints(target, ids, 0),
+        "linearGradient" | "radialGradient" => gradient_paints(target, ids),
         "pattern" => pattern_paints(target),
         _ => false,
     }
 }
 
 /// A gradient paints when at least one stop does. A gradient with no stops of its
-/// own falls back to its `href` chain; an empty one paints nothing (measured ink
-/// 0 for `<linearGradient id="g"/>`), while an all-transparent or
-/// `stop-opacity="0"` one also paints nothing.
-fn gradient_paints(gradient: &Element, ids: &HashMap<&str, &Element>, depth: u32) -> bool {
-    let mut has_stop = false;
-    for child in &gradient.children {
-        let Node::Element(stop) = child else {
-            continue;
+/// own inherits them from its `href` chain, however long that chain is (R56 P3);
+/// an empty one paints nothing (measured ink 0 for `<linearGradient id="g"/>`),
+/// while an all-transparent or `stop-opacity="0"` one also paints nothing.
+fn gradient_paints(gradient: &Element, ids: &HashMap<&str, &Element>) -> bool {
+    // Walk the whole `href` chain, not a fixed number of hops: resvg resolves a
+    // ten-deep chain (measured ink 40, R56 P3), and the old depth-4 cap dropped
+    // those letters. A pointer seen twice means the chain is circular; neither
+    // renderer draws anything for `a --href--> b --href--> a` (measured ink 0).
+    let mut seen: Vec<*const Element> = Vec::new();
+    let mut current = gradient;
+    loop {
+        if seen.iter().any(|node| std::ptr::eq(*node, current)) {
+            return false;
+        }
+        seen.push(current);
+        let mut has_stop = false;
+        for child in &current.children {
+            let Node::Element(stop) = child else {
+                continue;
+            };
+            if stop.name != "stop" {
+                continue;
+            }
+            has_stop = true;
+            if stop_paints(stop) {
+                return true;
+            }
+        }
+        if has_stop {
+            return false;
+        }
+        let Some(next) = current
+            .attr("href")
+            .or_else(|| current.attr("xlink:href"))
+            .map(str::trim)
+            .and_then(|href| href.strip_prefix('#'))
+            .and_then(|id| ids.get(id))
+        else {
+            return false;
         };
-        if stop.name != "stop" {
-            continue;
-        }
-        has_stop = true;
-        if stop_paints(stop) {
-            return true;
-        }
+        current = next;
     }
-    if has_stop || depth >= 4 {
-        return false;
-    }
-    gradient
-        .attr("href")
-        .or_else(|| gradient.attr("xlink:href"))
-        .map(str::trim)
-        .and_then(|href| href.strip_prefix('#'))
-        .and_then(|id| ids.get(id))
-        .is_some_and(|target| gradient_paints(target, ids, depth + 1))
 }
 
-/// One `<stop>` paints unless its colour is literally `transparent` (measured ink
-/// 0) or its `stop-opacity` is zero. `stop-color="none"` is invalid and resvg
-/// paints it black, so it is *not* treated as transparent (measured d1 ink 40;
-/// cairosvg disagrees — R54 follows resvg, as R51 did).
+/// One `<stop>` paints unless its colour paints nothing — literally `transparent`
+/// or a zero alpha channel (measured ink 0, R56 P2.2) — or its `stop-opacity` is
+/// zero. `stop-color="none"` is invalid and resvg paints it black, so it is *not*
+/// treated as transparent (measured d1 ink 40; cairosvg disagrees — R54 follows
+/// resvg, as R51 did).
 fn stop_paints(stop: &Element) -> bool {
     let color = style_prop(stop, "stop-color");
     let color = color.as_deref().map(str::trim).unwrap_or("black");
-    if color.eq_ignore_ascii_case("transparent") {
+    if color.eq_ignore_ascii_case("transparent") || !colour_paints(color) {
         return false;
     }
     style_prop(stop, "stop-opacity")
@@ -270,6 +317,35 @@ mod tests {
              </linearGradient><radialGradient id=\"g\" href=\"#base\"/></svg>",
             "url(#g)"
         ));
+    }
+
+    #[test]
+    fn a_zero_alpha_colour_paints_nothing() {
+        for value in ["#00000000", "rgba(0,0,0,0)", "rgba(1,2,3,0.0)"] {
+            assert!(!paints_in("<svg/>", value), "{value} is invisible");
+        }
+        for value in ["#000000ff", "#00000080", "rgba(0,0,0,0.5)"] {
+            assert!(paints_in("<svg/>", value), "{value} leaves ink");
+        }
+        // Not a colour alpha: leave these to the ordinary path.
+        assert!(paints_in("<svg/>", "#fff"));
+        assert!(paints_in("<svg/>", "rgb(0,0,0)"));
+    }
+
+    #[test]
+    fn a_gradient_href_chain_has_no_fixed_depth_and_stops_on_a_cycle() {
+        let mut chain = String::from("<svg><linearGradient id=\"g0\"><stop offset=\"0\" stop-color=\"black\"/></linearGradient>");
+        for i in 1..=10 {
+            chain.push_str(&format!(
+                "<linearGradient id=\"g{i}\" href=\"#g{}\" />",
+                i - 1
+            ));
+        }
+        chain.push_str("</svg>");
+        assert!(paints_in(&chain, "url(#g10)"));
+        let cycle =
+            "<svg><linearGradient id=\"a\" href=\"#b\"/><linearGradient id=\"b\" href=\"#a\"/></svg>";
+        assert!(!paints_in(cycle, "url(#a)"));
     }
 
     #[test]

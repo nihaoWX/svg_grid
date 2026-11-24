@@ -1,0 +1,65 @@
+id = "R56"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "内联 style 级联：同属性多条 !important 时取最后一个，与 resvg 0.47（取第一个）相反；孤立 ! 不算 important",
+  "零 alpha 颜色（#rrggbbaa / rgba()，含 gradient stop）仍被当成出墨；gradient href 链被 4 层上限截断",
+  "<symbol> 经 use 实例化：style=display:none 被误当隐藏（resvg 照画）；viewBox 把内容裁掉时仍计字母",
+  "R54 证据脚本缺二进制时 fail-open（sys.exit(False) ⇒ exit 0）；R54 账本三条 lines_before 过期",
+]
+
+closures = [
+  { finding = "R56-F1", tier = "代码" },
+  { finding = "R56-F2", tier = "代码" },
+  { finding = "R56-F3", tier = "代码" },
+  { finding = "R56-F4", tier = "代码" },
+  { finding = "R56-F5", tier = "代码" },
+  { finding = "R56-F6", tier = "代码" },
+  { finding = "R56-F7", tier = "检查" },
+  { finding = "R56-F8", tier = "检查" },
+  { finding = "R56-F9", tier = "检查" },
+]
+
+run_before = ["R54", "R51", "R48", "R55"]
+touched = []
+
+note = """
+为什么认定同类：R54 把 style 级联改成"剥注释 + 后声明胜 + !important 优先"，但把"同为 !important 时后者胜"
+当成了两台渲染器的共识——实测是假的：resvg 0.47 取**第一个** !important，cairosvg 取最后一个。同一处语义
+R38/R39/R40/R54 已翻车四次，所以本轮每条分支都先 d1render 实测（cairosvg 只作对照列），再写代码与期望值。
+
+根因与修法（全部实测）：
+- `src/ink/walk.rs::style_prop` 的 important 槽位改为 `get_or_insert`（第一个 !important 胜）；普通声明仍后者胜，
+  !important 仍压普通；`split_important` 把最后一个 `!` 之后的一切都当 important 标记（`display:none !` /
+  `display:none ! foo` 实测 resvg 都隐藏）。注释里"两台渲染器一致"的假陈述删掉，改为"resvg 取第一个，cairosvg
+  取最后一个，按 R51 先例跟 resvg"。
+- `src/label_paint.rs`：新增 `colour_paints`/`colour_alpha`（#rrggbbaa 与 rgba() 的 alpha=0 不算出墨，stop-color
+  同路）；`gradient_paints` 改成沿整条 href 链循环 + 指针环守卫（不再有 4 层上限）。
+- `src/label_letters.rs::enter`：`display` 不作用于 `<symbol>` 自身（经 use 实例化时照画，实测 d1 ink 40）。
+- 新增 `src/label_clip.rs`：`<symbol viewBox>` 把内容裁掉时实例不出墨（实测 6x6 viewBox + y=20 文本 ink 0，
+  20x20 时 91）；`expand_use` 在实例化前调用它。
+- `docs/PITFALLS/round-data/R54/test.py` 的两处早退从 `return check(False, …)` 改成 `check(False, …); return 1`
+  （原来经 sys.exit(False) 退出码 0，fail-open）。
+
+怎么修才不弄坏前面：R54 的 A/B/C/D/E 全部仍绿（r54.rs 22 条 + nested.rs 5 条）；R51/R48/R44/R55 证据重跑；
+语料 220 文件 + 58 fixture 的 convert/plot-grid/--plan 逐字节 0 差异；旧证据 52 轮（R3..R56，R19 已 retire）
+顶层全绿。
+
+行为变更披露（P2.1）：单片 `<g label="0"><text>A</text><text label="1">A</text></g>` 从 R54 起 rc=0（R54 前 rc=2）。
+按 R54 的整棵子树口径外壳="AA"、内层="A"，两者不同 ⇒ 不判重，语义自洽（渲染器确实画两个 A，ink 46/80）。
+R54 直接换掉了旧断言却没披露，本轮用渲染器钉住新口径（r56.rs::cli_counts_one_letter_per_drawn_glyph_under_a_covering_marker
+做 PNG 逐字节对照）并在报告里点名。
+
+登记（未修，各有实测数字）：`fill-opacity=" 0 "` 等属性尾随空格（resvg 当非法值照画、我们隐藏，fail-closed 方向）；
+`stroke-width="1e-9"` / `fill-opacity="1e-4"`（无像素但计出墨，fail-closed）；obb 零尺寸 pattern（需 bbox）；
+`<symbol viewBox="10 10 6 6">` 里文本仍被 resvg 画出（rect 却正确裁剪，属 resvg 自身怪癖）。
+"""
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R56/test.py
+# 有牙：指向修前二进制（1db03ac），P1/P2/P3e 的"修后 rc"断言必须红（实测 15 条）
+SVG_GRID_BIN=/tmp/r56bin/svg_grid_before python3 docs/PITFALLS/round-data/R56/test.py
+# 渲染器缺失必须红（除非 --allow-skip）
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R56/test.py
+"""
