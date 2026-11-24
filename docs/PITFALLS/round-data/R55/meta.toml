@@ -13,6 +13,9 @@ closures = [
   { finding = "R55-F3", tier = "代码" },
   { finding = "R55-F4", tier = "代码" },
   { finding = "R55-F5", tier = "检查" },
+  { finding = "R55-F6", tier = "代码" },
+  { finding = "R55-F7", tier = "检查" },
+  { finding = "R55-F8", tier = "检查" },
 ]
 
 run_before = ["R38", "R43", "R48", "R51"]
