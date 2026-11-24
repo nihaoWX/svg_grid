@@ -10,8 +10,9 @@
    `poppler_dialect`、`rdkit_dialect`、`s22_repro`、`shape_paint` 这些历史资产目录）；
    `compose_tests/`、`doctor_tests/` 已删；`cargo test` 只编出**一个**集成测试目标
    `tests/selftest/main.rs`。
-② **用例数不变**：迁移前 `cargo test --offline` = lib 60 + bin 57 + compose_tests 60 + doctor_tests 13
-   = **190**（写死）；迁移后 lib 60 + bin 57 + selftest **73** = **190** —— 73 = 60 + 13，一条没丢。
+② **用例数精确相等**：迁移前 `cargo test --offline` = lib 60 + bin 57 + compose_tests 60 + doctor_tests 13
+   = **190**；迁移后 lib 60 + bin 57 + selftest **73** = **190** —— 73 = 60 + 13，一条没丢。
+   R57 起快照是**上一轮的精确计数**（598 = 306 + 59 + 233），增删测试必须同轮更新，否则立刻红。
 ③ **体积与模块树**：所有 `tests/**/*.rs` ≤ 20000 B；源码里没有 `include!(`（R8 的教训：rustfmt 看不见）；
    每个非 `mod.rs`/`main.rs` 的 `.rs` 都被上层 `mod` 声明；`selftest/main.rs` 只做 `mod` 声明且 ≤ 4500 B。
 ④ **前缀随调用方**（本轮要修的 R18 遗留）：`svg_grid convert` 的错误/告警/`already converted` 前缀是
@@ -44,13 +45,12 @@ FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
 
 LIMIT = 20000                                      # R8 的口径：按字节从严（20 KB）
 ENTRY_LIMIT = 4500                                 # 门面（main.rs）要薄
-# R19 断言的本意是"迁移一条测试都没丢"。R19 当时把快照写成了**等式**，可用例数每一轮都在
-# 增长（R55 时 lib 298 + bin 59 + selftest 222 = 579），等式从 R42 起就恒假、R19 一直红着，
-# 反而掩盖了真正的丢失。R55 改成**下限**：每个目标与总数只许 ≥ 迁移前的数字，新轮次加用例
-# 不会再把这条证据变红，而少一条就立刻红。快照数字保持 R19 原值不变。
-BASELINE = 190                                     # 迁移前 `cargo test --offline` 的用例总数（下限）
-COUNTS = {"unittests src/lib.rs": 60, "unittests src/main.rs": 57,
-          "tests/selftest/main.rs": 73}
+# 这是**上一轮的精确计数**：任何一轮增删测试都必须在同一轮更新这里，否则本条立刻红。
+# （R55 曾把恒假的等式换成下限 190/60/57/73，于是删掉 579 条里的 388 条仍全绿——R55 评审
+# P1-1 用 gate_demo.py 实测；R57 按该评审改回精确相等，并把快照更新到本轮真实值。）
+BASELINE = 598                                     # `cargo test --offline` 的用例总数（精确相等）
+COUNTS = {"unittests src/lib.rs": 306, "unittests src/main.rs": 59,
+          "tests/selftest/main.rs": 233}
 # `tests/` 下允许存在的**非测试目标**目录：语料 + 历史资产（不是本轮引入的，也不装 main.rs）。
 # `user_tests/` 是用户按 INSTRUCTIONS.md 放的"真实使用体验"语料（2026-11-22 起），
 # 与 fixtures 同类：只放输入/成品，不装 main.rs。R55 补登记，否则目录树检查恒红。
@@ -153,7 +153,7 @@ def cargo_test_targets():
 
 
 def family_two():
-    print("\n== ② 一条测试都没丢：cargo test 用例数 = 迁移前 ==")
+    print("\n== ② 用例数精确相等：cargo test 用例数 = 上一轮快照 ==")
     targets, result = cargo_test_targets()
     if result.returncode != 0:
         check(False, "`cargo test --offline` 全绿", (result.stdout[-1200:] + result.stderr[-600:]))
@@ -163,14 +163,15 @@ def family_two():
     failed = sum(failed for _, _, failed in targets)
     info("目标与用例数：" + ", ".join(f"{name}={passed}" for name, passed, _ in targets))
     check(failed == 0, "`cargo test --offline` 0 failed", failed)
-    check(total >= BASELINE, f"用例总数 ≥ 迁移前 {BASELINE}（下限）", f"{total} < {BASELINE}")
+    # 精确相等，不是下限：R55 的下限口径容忍删掉 579 条里的 388 条仍全绿（R55 评审 P1-1）。
+    check(total == BASELINE, f"用例总数 == {BASELINE}（精确相等）", f"{total} != {BASELINE}")
     for name, want in COUNTS.items():
-        check((by_name.get(name) or 0) >= want, f"`{name}` ≥ {want} 条（下限）", by_name.get(name))
+        check(by_name.get(name) == want, f"`{name}` == {want} 条（精确相等）", by_name.get(name))
     integ = [name for name, _, _ in targets if name.startswith("tests/")]
     check(integ == ["tests/selftest/main.rs"],
-          "集成测试目标只有 `tests/selftest/main.rs`（73 = 60 + 13）", integ)
-    check((by_name.get("tests/selftest/main.rs") or 0) >= 73,
-          "`selftest` ≥ 73 条（迁移前 compose_tests 60 + doctor_tests 13）", by_name)
+          "集成测试目标只有 `tests/selftest/main.rs`", integ)
+    check(by_name.get("tests/selftest/main.rs") == COUNTS["tests/selftest/main.rs"],
+          f"`selftest` == {COUNTS['tests/selftest/main.rs']} 条（精确相等）", by_name)
 
 
 # ── ③ 体积与模块树 ──────────────────────────────────────────────────────────────────

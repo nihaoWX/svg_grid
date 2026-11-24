@@ -1,0 +1,74 @@
+id = "R57"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "R19 证据把「用例总数」写成下限（190/60/57/73）：删掉 579 条里的 388 条仍全绿 —— 同一个「判据过松」族，R39 之后第二次在证据门禁上翻车",
+  "`tests/selftest/common/mod.rs::temp_path` 只用 `std::process::id()` 区分进程：pid 会被复用 ⇒ 并发跑同一测试时互相覆盖/删除临时文件，`labels::visibility` 偶发假红",
+  "R55 账本口径与实测不符：语料写 220（实为 214，多出的是未跟踪 scratch）；「文件全 ≤20000 B」没限定门禁集合，把 `round-data/*/test.py` 也算进去了",
+]
+
+closures = [
+  { finding = "R57-F1", tier = "检查" },   # R19/test.py：BASELINE/COUNTS 改回精确相等
+  { finding = "R57-F2", tier = "检查" },   # R57/gate_demo.py：11 张合成计数表，只有精确快照 GREEN
+  { finding = "R57-F3", tier = "代码" },   # tests/selftest/common/mod.rs：process_tag() 加纳秒后缀
+  { finding = "R57-F4", tier = "检查" },   # R55/meta.toml：语料 214 + 体积口径限定到 R8/R9 门禁集合
+  { finding = "R57-F5", tier = "检查" },   # R55/meta.toml：登记 R55 评审 P3 的两条已知残余
+  { finding = "R57-F6", tier = "检查" },   # R57/test.py：A/B/C/D 四族，缺失二进制/渲染器 fail-closed
+]
+
+run_before = ["R19", "R55", "R56"]
+touched = []
+
+note = """
+为什么认定同类：R55 的对抗评审（PASS 有条件）在三条上留了 P1-1 / P3。P1-1 是硬伤：R19 证据的用例计数从
+「恒假的等式」被换成了「下限」——`BASELINE = 190`、`COUNTS = {lib: 60, main: 57, selftest: 73}`，而当时真实
+是 579 条。R55 评审的 `gate_demo.py` 实测：把 579 条里删掉 388 条（剩 191）仍然全绿。判据从「恒假」变成
+「恒真」，等于这条门禁不存在。R57 改回精确相等，并把快照更新到本轮真实计数。
+
+根因与修法（全部实测）：
+- `docs/PITFALLS/round-data/R19/test.py`：`BASELINE = 598`、`COUNTS = {"unittests src/lib.rs": 306,
+  "unittests src/main.rs": 59, "tests/selftest/main.rs": 233}`，三处断言（总数、每目标、selftest）全部 `==`。
+  注释写明「这是上一轮的精确计数；任何一轮增删测试都必须在同一轮更新这里，否则本条立刻红」，并点名 R55 的下限
+  事故与 R55 评审 P1-1。副作用是每轮都要改一次快照——这是有意的：改快照的动作就是「我知道用例数变了」的签名。
+- `docs/PITFALLS/round-data/R57/gate_demo.py`：import R19 证据、把 `cargo_test_targets` 换成合成计数表、调
+  `family_two()`，不改仓库。实测 11 张表只有一张 GREEN：精确快照 598（0 条红断言）；总数 597/599（各 2 条红）、
+  lib 305/307（各 2）、main 58/60（各 2）、selftest 232/234（各 3）、R55 的下限形状 60/57/73=190（5 条红）、
+  全部删除（0，5 条红）。红断言名：`用例总数 == 598（精确相等）`、`` `unittests src/lib.rs` == 306 条（精确相等）``、
+  `` `unittests src/main.rs` == 59 条（精确相等）``、`` `tests/selftest/main.rs` == 233 条（精确相等）``、
+  `` `selftest` == 233 条（精确相等）``。
+- `tests/selftest/common/mod.rs::temp_path`：新增 `process_tag()`（`OnceLock<String>`，`pid_nanos`），临时文件名
+  变成 `svg_grid_test_<pid>_<nanos>_<name>`。没有新依赖（只用 std 的 `OnceLock`/`SystemTime`）。实测：用
+  `LD_PRELOAD` 的 C 垫片把 `getpid()` 钉成 4242，8 个进程同时跑 `display_none_cannot_be_restored_by_a_descendant`、
+  共享一个 TMPDIR —— 修前二进制 7/8 红（rcs 101,101,0,101,101,101,101,101），panic 在
+  `tests/selftest/labels/visibility.rs:40`：`read /tmp/.../svg_grid_test_4242_r48_vis_display_base.png: No such file
+  or directory (os error 2)`；修后 8/8 全绿。修前二进制由 `git archive 04042cb` 在 /tmp 里单独构建（仓库未动）。
+- `docs/PITFALLS/round-data/R55/meta.toml`：语料 220 → 214（`git ls-files 'tests/**/*.svg'` 是 214；`find` 数到
+  220 是因为混进未跟踪的 scratch SVG，门禁只跑跟踪集合）；「≤20000 B」限定为「受 R8/R9 门禁的集合（`src/`、
+  `tests/`、`scripts/` 的 `.rs`/`.py`）每个文件 ≤ 20000 B」，并注明 `docs/PITFALLS/round-data/*/test.py` 不在该
+  门禁内（R55/test.py 21693 B、R19/test.py 20373 B、R38/test.py 23058 B 超限属既有口径）；末尾登记 R55 评审 P3 的
+  两条已知残余（各向异性 `scale(2 3)` 早退、残余 xor 1656/28；`scale(2 3) translate(3 4)` → `matrix(2 0 0 3 24 60)`
+  924/28，base 12762/255；href 基元素 transform 渲染器不认，R55 仍共轭它，所以「href 继承」用例只在属性层自洽）。
+- `docs/PITFALLS/round-data/R57/test.py`：A 读 R19 的 `BASELINE`/`COUNTS` 并和真实 `cargo test --offline` 对比
+  （598 = 306+59+233）；B 跑 gate_demo 并逐行断言 RED/GREEN；C 真开 8 个同 pid 进程验证 `temp_path()` 不互相
+  覆盖（`R57_PRE_FIX_SELFTEST=<修前 selftest>` 时额外用修前二进制复现 7/8 红）；D grep R55 账本。缺二进制/渲染器
+  时 fail-closed：`SVG_GRID_BIN=/nope` rc=1，`--allow-skip` 时 rc=0 且 2 条 skipped（不沿用 R56 P2.3 的 fail-open）。
+
+怎么修才不弄坏前面：全量 `cargo test --offline` 连跑 3 次都是 598（306+59+233）、0 failed；fmt/clippy 干净；
+`./install.sh` 后 `target/release/svg_grid` 与 `~/.local/bin/svg_grid` sha256 两侧一致；doctor 57 pass / 0 fail /
+1 skip；语料 214 convert + 58 plot-grid 对 /tmp/r50base（e0c6033）逐字节 0 差异（plot-grid both-failed=1）；
+旧证据 R3..R57 共 53 轮顶层全绿（`R49/shim/ran.txt` 追加 `R57 OK`）。
+
+登记（未修）：R19 证据仍带 7 个历史测试目录与旧二进制前缀的口径（本轮只把计数改精确，没重写目录检查）；
+R55 的两条残余按派单只登记不修——它们需要改渲染/共轭逻辑，属于下一轮的工作。
+"""
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R57/test.py
+# 有牙：把同一张 8 进程表跑在修前 selftest 上（7/8 必须红），另加 A/B 的精确断言
+R57_PRE_FIX_SELFTEST=/tmp/r57old/target/debug/deps/selftest-f1a3992dfd88e812 python3 docs/PITFALLS/round-data/R57/test.py
+# 缺二进制必须红（除非 --allow-skip）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R57/test.py
+# 只做门禁牙齿演示
+python3 docs/PITFALLS/round-data/R57/gate_demo.py
+"""

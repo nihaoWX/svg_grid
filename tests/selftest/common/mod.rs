@@ -4,10 +4,30 @@ pub(crate) mod harness;
 
 use std::fs;
 use std::path::PathBuf;
+use std::sync::OnceLock;
+use std::time::{SystemTime, UNIX_EPOCH};
+
+/// A tag that is unique to this process, stable for its whole lifetime.
+///
+/// `std::process::id()` alone is not enough: the OS reuses pids, so a test binary
+/// that starts after another one exited can land on the same pid and overwrite
+/// its files — `labels::visibility` then failed intermittently with "an accepted
+/// call writes the output" (R57). The process start time in nanoseconds
+/// separates processes; the pid stays in for readability.
+fn process_tag() -> &'static str {
+    static TAG: OnceLock<String> = OnceLock::new();
+    TAG.get_or_init(|| {
+        let nanos = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|elapsed| elapsed.as_nanos())
+            .unwrap_or(0);
+        format!("{}_{}", std::process::id(), nanos)
+    })
+}
 
 pub(crate) fn temp_path(name: &str) -> PathBuf {
     let mut path = std::env::temp_dir();
-    path.push(format!("svg_grid_test_{}_{}", std::process::id(), name));
+    path.push(format!("svg_grid_test_{}_{}", process_tag(), name));
     path
 }
 

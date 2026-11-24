@@ -32,7 +32,17 @@ translate 分量、各向异性求 3×3 后输出 translate/matrix），dispatch
 userSpaceOnUse 渐变分支各调用一次；`walk.rs` 里"必须累积"的反语义注释改正（嵌套是每层各缩一次，不累积）。
 
 怎么修才不弄坏前面：R38 的 A5 断言（patternTransform 原样保留）按新裁决改正并注明出处；跑 R38/R43（pattern
-渲染对照）、R48/R51（paint-server 长度）；语料 220 文件 + 58 fixture 的 convert/plot-grid/--plan 逐字节 0 差异。
+渲染对照）、R48/R51（paint-server 长度）；语料 214 文件（`git ls-files 'tests/**/*.svg'`；`find` 数到 220 是
+因为混进了未跟踪的 scratch SVG）+ 58 fixture 的 convert/plot-grid/--plan 逐字节 0 差异。
+
+体积口径（R57 按 R55 评审 P3 更正）：本条只主张"受 R8/R9 门禁的集合（`src/`、`tests/`、`scripts/` 的
+`.rs`/`.py`）每个文件 ≤ 20000 B"；`docs/PITFALLS/round-data/*/test.py` 不在该门禁内（R55/test.py 21693 B、
+R19/test.py 20373 B、R38/test.py 23058 B 超限属既有口径，本轮不改）。
+
+已知残余（R55 评审 P3 登记，R57 只登记不修）：① 各向异性下纯 `scale(2 3)` 被 `approx_equals(total)` 早退、
+原样保留，残余 xor 1656/28（与 base 相同）；`scale(2 3) translate(3 4)` → `matrix(2 0 0 3 24 60)`，残余
+924/28（base 12762/255）。② href 基元素上的 transform 渲染器不认（三种取值渲染相同），R55 仍共轭它 ⇒
+"href 继承"用例只在属性层自洽，未被像素验证。
 """
 how_to_run = """
 cd <repo> && cargo build --release --offline
