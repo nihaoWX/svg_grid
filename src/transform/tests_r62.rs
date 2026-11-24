@@ -98,6 +98,25 @@ fn slot(policy: ScalePolicy) -> Slot {
     Slot::UserSpace(policy)
 }
 
+/// A container's `data-scale` must reach its children: the copy a child points
+/// at is chosen by the slot the child inherits, not by the document root. This
+/// is the R46/R49 regression R62's first cut introduced and the reason those two
+/// rounds' evidence is part of the acceptance run.
+#[test]
+fn a_group_data_scale_reaches_its_children() {
+    let svg = r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+<pattern id="h" patternUnits="userSpaceOnUse" x="0" y="0" width="6" height="6"><rect width="6" height="6" fill="#000"/></pattern>
+<g data-scale="xy"><rect x="10" y="10" width="40" height="30" fill="url(#h)"/></g>
+<g data-scale="x"><rect x="10" y="50" width="40" height="30" fill="url(#h)"/></g></svg>"##;
+    let mut root = dom::parse(svg).unwrap();
+    let mut passthroughs = Passthroughs::default();
+    transform_svg(&mut root, SRC, TILE, 0, &mut passthroughs).unwrap();
+    let out = dom::serialize(&root).unwrap();
+    assert!(out.contains(r#"fill="url(#h)""#), "{out}");
+    assert!(out.contains(r#"fill="url(#h--svg-grid-x)""#), "{out}");
+}
+
 #[test]
 fn a_referrers_policy_is_the_policy_of_the_referring_element() {
     let refs = refs_of(

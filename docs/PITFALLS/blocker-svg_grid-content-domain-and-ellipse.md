@@ -65,6 +65,11 @@ python3 docs/PITFALLS/round-data/R62/test.py     # A 组 8 个用例
   为 `UserSpace(p)` 时用 p；没有 slot（未引用定义）时仍回退 `data-scale`/继承，
   保证旧产物的字节不变。
 - `src/transform/hoist.rs` 跟随 `Slot`。
+- 复审修复：第一版把**容器**的 slot 丢了（递归时把 `inherited` 而非元素自己的
+  `reference_slot` 传给子节点），`<g data-scale="x">` 里的引用会指回 xy 的副本。
+  R46 的 `A4_copy` 与 R49 的 `A1–A5` 旧证据当场变红抓到；修法是把元素自己的
+  slot（verbatim body 时仍是 `Verbatim`）传给子节点，并加单测
+  `a_group_data_scale_reaches_its_children` 钉死。修后 R46/R49 全绿。
 
 ### B ellipse
 
@@ -120,6 +125,7 @@ D 组（只登记、不改；修前修后同一数字，两侧二进制一致）
 | M4 不补写缺失半径 | `an_ellipse_with_one_radius_materialises_the_equal_one`、`an_ellipse_with_one_radius_under_a_single_axis_policy_keeps_the_other` | B/b2、B/b3、B/b4 |
 | M5 scan 不检查 ellipse | `a_non_numeric_ellipse_radius_is_rejected` | B/b5 |
 | M6 dispatch 去掉 ellipse 臂 | ellipse 5 条单测（b1/b2/b3/b4/样式半径） | B/b1…b4 |
+| M7 子节点不继承容器 data-scale（复审修复前的形态） | `a_group_data_scale_reaches_its_children` | R46 `A4_copy`、R49 `A1–A5` |
 
 ## 6 未做清单（有理由）
 
@@ -131,9 +137,9 @@ D 组（只登记、不改；修前修后同一数字，两侧二进制一致）
 
 ## 7 验收
 
-- `cargo test --offline`：695 = 403 lib + 59 main + 233 selftest（基线 674；R19/R57 同轮更新）。
+- `cargo test --offline`：696 = 404 lib + 59 main + 233 selftest（基线 674；R19/R57 同轮更新）。
 - `cargo fmt --all --check`、`cargo clippy --offline --all-targets -- -D warnings` 干净。
-- `./install.sh` 后两侧 sha256 相同：`8be33eeae3f39361362b96398dd854209bdfba250f6cac126f67943a448bac4a`。
+- `./install.sh` 后两侧 sha256 相同：`2495107bcf1e5e0cc580746bcd747abd8b2d414429fe77305ed31d5ac1ffcfb3`。
 - `svg_grid doctor`：57 pass / 0 fail / 1 skip。
 - 语料 214 个 `tests/**/*.svg` 的 `convert` 产物与 `/tmp/r50base/target/release/svg_grid`
   （@e0c6033）逐字节 0 差异；58 个 fixture 的 `plot-grid` 0 差异。

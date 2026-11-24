@@ -28,8 +28,8 @@ run_before = [
   "R60", "R61",
 ]
 touched = [
-  { round = "R19", why = "测试总数 674→695（BASELINE 与 COUNTS.lib 403；defs.rs 的 5 条 R46 断言搬进 tests_r62/tests_r62b，另加 21 条）" },
-  { round = "R57", why = "第 6/200 行写死的总数 674→695（695 = 403 + 59 + 233）" },
+  { round = "R19", why = "测试总数 674→696（BASELINE 与 COUNTS.lib 404；defs.rs 的 5 条 R46 断言搬进 tests_r62/tests_r62b，另加 22 条，含复审修复的容器继承单测）" },
+  { round = "R57", why = "第 6/200 行写死的总数 674→696（696 = 404 + 59 + 233）" },
   { round = "R61", why = "meta.toml 四处口径更正 + 环境变量名 SVG_GRID_BEFORE_BIN + 三条可选 P3 未做的理由" },
 ]
 
@@ -76,5 +76,5 @@ SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
      换来的只是诊断措辞；第三条只影响失败时的可读性。均已在 R61/meta.toml 登记。
 
 旧证据说明：本轮按目录逐个跑 R3..R61 的 test.py（每个都是纯黑盒、指向本轮二进制），
-结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 695=403+59+233。
+结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 696=404+59+233。复审修复了容器 data-scale 下传的回归（R46/R49 旧证据抓到），并加了对应单测。
 """

@@ -329,6 +329,11 @@ fn split_children(
             inherited
         };
         if let Some((slot, first)) = narrow {
+            let body = if body.is_verbatim() {
+                body
+            } else {
+                copies.reference_slot(&current, slot)
+            };
             // Inside a copy of an outer definition every nested definition is
             // instantiated under **this copy's** domain only. Splitting it by its
             // full referrer set would emit one copy per outer copy and leave
@@ -380,6 +385,7 @@ fn split_children(
             }
             _ => {
                 rewrite_references(&mut current, own, copies);
+                let body = if body.is_verbatim() { body } else { own };
                 split_children(&mut current, body, copies, None);
                 parent.children[index] = Node::Element(current);
             }
