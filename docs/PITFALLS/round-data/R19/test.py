@@ -44,12 +44,18 @@ FONT_DIR = pathlib.Path(os.environ.get("SVG_GRID_FONT_DIR")
 
 LIMIT = 20000                                      # R8 的口径：按字节从严（20 KB）
 ENTRY_LIMIT = 4500                                 # 门面（main.rs）要薄
-BASELINE = 190                                     # 迁移前 `cargo test --offline` 的用例总数（写死）
+# R19 断言的本意是"迁移一条测试都没丢"。R19 当时把快照写成了**等式**，可用例数每一轮都在
+# 增长（R55 时 lib 298 + bin 59 + selftest 222 = 579），等式从 R42 起就恒假、R19 一直红着，
+# 反而掩盖了真正的丢失。R55 改成**下限**：每个目标与总数只许 ≥ 迁移前的数字，新轮次加用例
+# 不会再把这条证据变红，而少一条就立刻红。快照数字保持 R19 原值不变。
+BASELINE = 190                                     # 迁移前 `cargo test --offline` 的用例总数（下限）
 COUNTS = {"unittests src/lib.rs": 60, "unittests src/main.rs": 57,
           "tests/selftest/main.rs": 73}
 # `tests/` 下允许存在的**非测试目标**目录：语料 + 历史资产（不是本轮引入的，也不装 main.rs）。
+# `user_tests/` 是用户按 INSTRUCTIONS.md 放的"真实使用体验"语料（2026-11-22 起），
+# 与 fixtures 同类：只放输入/成品，不装 main.rs。R55 补登记，否则目录树检查恒红。
 ASSET_DIRS = {"fixtures", "fig2_mixed", "mpl_dialect", "poppler_dialect", "rdkit_dialect",
-              "s22_repro", "shape_paint"}
+              "s22_repro", "shape_paint", "user_tests"}
 
 RUNNING_RE = re.compile(r"^\s+(?:Running|Doc-tests) (.+?)(?: \([^)]*\))?\s*$")
 RESULT_RE = re.compile(r"^test result: (\w+)\. (\d+) passed; (\d+) failed;")
@@ -157,14 +163,14 @@ def family_two():
     failed = sum(failed for _, _, failed in targets)
     info("目标与用例数：" + ", ".join(f"{name}={passed}" for name, passed, _ in targets))
     check(failed == 0, "`cargo test --offline` 0 failed", failed)
-    check(total == BASELINE, f"用例总数 = 迁移前 {BASELINE}（写死）", f"{total} != {BASELINE}")
+    check(total >= BASELINE, f"用例总数 ≥ 迁移前 {BASELINE}（下限）", f"{total} < {BASELINE}")
     for name, want in COUNTS.items():
-        check(by_name.get(name) == want, f"`{name}` = {want} 条", by_name.get(name))
+        check((by_name.get(name) or 0) >= want, f"`{name}` ≥ {want} 条（下限）", by_name.get(name))
     integ = [name for name, _, _ in targets if name.startswith("tests/")]
     check(integ == ["tests/selftest/main.rs"],
           "集成测试目标只有 `tests/selftest/main.rs`（73 = 60 + 13）", integ)
-    check(by_name.get("tests/selftest/main.rs") == 73,
-          "`selftest` 73 条 = 迁移前 compose_tests 60 + doctor_tests 13", by_name)
+    check((by_name.get("tests/selftest/main.rs") or 0) >= 73,
+          "`selftest` ≥ 73 条（迁移前 compose_tests 60 + doctor_tests 13）", by_name)
 
 
 # ── ③ 体积与模块树 ──────────────────────────────────────────────────────────────────
@@ -259,7 +265,9 @@ def family_four():
     check(not bad.stderr.startswith("svg_grid_convert: "),
           "子命令的诊断不再自称 `svg_grid_convert:`", bad.stderr[:200])
 
-    warned = run([BIN, "convert", "--input", panel, "--output", TMP / "tagged.svg"])
+    # R55：告警改为只在 `--verbose` 时输出（默认安静），这里补上开关；
+    # 前缀与 V1 分类的断言原样保留。
+    warned = run([BIN, "convert", "--input", panel, "--output", TMP / "tagged.svg", "--verbose"])
     lines = warning_lines(warned.stderr)
     check(warned.returncode == 0 and lines
           and all(line.startswith("svg_grid convert: warning: ") for line in lines),

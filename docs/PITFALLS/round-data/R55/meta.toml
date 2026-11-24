@@ -1,0 +1,41 @@
+id = "R55"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "patternTransform 未按面板比例共轭：tile box / body 已缩，transform 原样保留导致图案错位（含 obb tile、viewBox 父、嵌套）",
+  "gradientTransform 未按面板比例共轭：userSpaceOnUse 的线性/径向渐变整体错位；obb 渐变必须保持",
+]
+
+closures = [
+  { finding = "R55-F1", tier = "代码" },
+  { finding = "R55-F2", tier = "代码" },
+  { finding = "R55-F3", tier = "代码" },
+  { finding = "R55-F4", tier = "代码" },
+  { finding = "R55-F5", tier = "检查" },
+]
+
+run_before = ["R38", "R43", "R48", "R51"]
+touched = []
+
+note = """
+为什么认定同类：R48/R51 已把"paint server 的长度量跟随面板"落过账（gradient 坐标、pattern tile、stroke-width），
+但当时把 patternTransform/gradientTransform 当作"相对 tile 已正确"而豁免；R55 用 d1render 逐像素证明该豁免
+本身是错的。同一处语义 R38（"原样保留/必须累积"）、R39（判据过松）、R40（方向写反）已翻车三次，所以本轮每条
+分支都先渲染实证再写期望值。
+
+根因与修法：新增 `src/transform/transforms.rs`（解析 6 种 transform 关键字 + 共轭 `S·T·S⁻¹`：等向按段改
+translate 分量、各向异性求 3×3 后输出 translate/matrix），dispatch 的 pattern 分支无条件调用它、两个
+userSpaceOnUse 渐变分支各调用一次；`walk.rs` 里"必须累积"的反语义注释改正（嵌套是每层各缩一次，不累积）。
+
+怎么修才不弄坏前面：R38 的 A5 断言（patternTransform 原样保留）按新裁决改正并注明出处；跑 R38/R43（pattern
+渲染对照）、R48/R51（paint-server 长度）；语料 220 文件 + 58 fixture 的 convert/plot-grid/--plan 逐字节 0 差异。
+"""
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R55/test.py
+# 有牙：被测二进制指向修前 base（e0c6033），A/B 的"修后属性/逐像素"断言必须红
+SVG_GRID_BIN=/tmp/r50base/target/release/svg_grid python3 docs/PITFALLS/round-data/R55/test.py
+# 渲染器缺失必须红（除非 --allow-skip）
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R55/test.py
+"""

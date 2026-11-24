@@ -13,6 +13,7 @@ use super::patterns::{
 use super::primitives::{
     rewrite_axes, rewrite_pair, rewrite_points, rewrite_rect, rewrite_rotate_transform,
 };
+use super::transforms::rewrite_paint_transform;
 use super::units::{units_of, Units};
 use super::walk::Context;
 use super::ScalePolicy;
@@ -174,6 +175,17 @@ pub(super) fn rewrite_primitive(
                 index,
                 passthroughs,
             )?;
+            // The transform is written in the same user space as the coordinates,
+            // so it is conjugated through the panel scale (round-data/R55).
+            rewrite_paint_transform(
+                element,
+                "gradientTransform",
+                policy,
+                source,
+                target,
+                index,
+                passthroughs,
+            );
         }
         // `r`/`fr` are radii: under a non-uniform scale a circle would become an
         // ellipse, which `r` cannot express, so they follow `<circle r>`'s rule
@@ -203,14 +215,39 @@ pub(super) fn rewrite_primitive(
                     passthroughs,
                 )?;
             }
+            rewrite_paint_transform(
+                element,
+                "gradientTransform",
+                policy,
+                source,
+                target,
+                index,
+                passthroughs,
+            );
         }
         // The tile box follows the same rule as a `<rect>`: the tile grid repeats
         // with period `width`/`height` from `x`/`y`, and both scale with the axis.
         // `patternUnits` also inherits along `href` and defaults to
         // `objectBoundingBox`, whose fractions already follow the box
         // (round-data/R41).
-        "pattern" if pattern_units_is_user_space(element, patterns) => {
-            rewrite_pattern_tile(element, policy, source, target, patterns)?
+        "pattern" => {
+            if pattern_units_is_user_space(element, patterns) {
+                rewrite_pattern_tile(element, policy, source, target, patterns)?;
+            }
+            // `patternTransform` is user space too, **even when the tile box is
+            // `objectBoundingBox`**: the renderer composes it after the tile's
+            // own box transform (measured, round-data/R55). A `viewBox` does not
+            // exempt it either. Each definition in a nesting chain is conjugated
+            // with the scale that references *it*, so they are never accumulated.
+            rewrite_paint_transform(
+                element,
+                "patternTransform",
+                policy,
+                source,
+                target,
+                index,
+                passthroughs,
+            );
         }
         // A mask region is a rectangle in the user space of the masked element
         // only when `maskUnits="userSpaceOnUse"`; the `objectBoundingBox` default

@@ -1,6 +1,6 @@
 // A `<pattern>` body is tile local, so the composer scales it but never
-// translates it (round-data/R38). `patternTransform` is already tile relative
-// and stays verbatim.
+// translates it (round-data/R38). `patternTransform` does follow the panel scale;
+// that lives in `paint.rs` (round-data/R55).
 
 use std::fs;
 
@@ -194,58 +194,6 @@ fn pattern_body_is_verbatim_when_the_panel_does_not_scale() {
     assert!(
         svg.contains(r##"<rect x="1" y="2" width="2" height="3" fill="#000000"/>"##),
         "a unit-scale panel leaves the pattern body alone: {svg}"
-    );
-
-    let _ = fs::remove_file(input);
-    let _ = fs::remove_file(output);
-}
-
-/// `patternTransform` is already relative to the tile, so it keeps working verbatim.
-/// The composer never writes one; if it ever has to, it must *accumulate* on the
-/// existing value rather than replace it (round-data/R38).
-#[test]
-fn pattern_transform_is_kept_verbatim() {
-    let input = temp_path("pattern_transform.svg");
-    let output = temp_path("pattern_transform_combined.svg");
-    fs::write(
-        &input,
-        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
-<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
-<g data-scale="xy">
-<defs>
-<pattern id="p" patternUnits="userSpaceOnUse" patternTransform="translate(3 4) rotate(30)" x="10" y="10" width="4" height="6">
-<rect x="1" y="2" width="2" height="3" fill="#000000"/>
-</pattern>
-</defs>
-<rect x="10" y="10" width="40" height="30" fill="url(#p)"/>
-</g>
-</svg>"##,
-    )
-    .unwrap();
-
-    plot_grid(PlotGridSpec {
-        inputs: vec![SvgInput::Path(input.clone())],
-        output_svg: output.clone(),
-        output_svgz: None,
-        width: 200.0,
-        height: Some(160.0),
-        nrow: None,
-        ncol: Some(1),
-        rel_widths: vec![],
-        rel_heights: vec![],
-        gap: 0.0,
-        margin: Margins::zero(),
-        align: AlignMode::Panels,
-        labels: None,
-        normalize: None,
-        font_families: None,
-    })
-    .unwrap();
-
-    let svg = fs::read_to_string(&output).unwrap();
-    assert!(
-        svg.contains(r#"patternTransform="translate(3 4) rotate(30)""#),
-        "patternTransform is tile relative and must stay verbatim: {svg}"
     );
 
     let _ = fs::remove_file(input);

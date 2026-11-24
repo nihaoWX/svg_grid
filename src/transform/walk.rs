@@ -117,9 +117,14 @@ pub(super) fn transform_element(
     // chain the composer cannot resolve is treated the same way (fail safe: never
     // *add* a scaling the renderer did not ask for).
     //
-    // `patternTransform` is deliberately left verbatim: it is already relative to
-    // the tile, so it keeps working, and the corpus uses it nowhere (0 of 220
-    // fixtures). If it ever needs rewriting, it must be *accumulated*, not replaced.
+    // `patternTransform` is **not** tile relative: the renderer composes it in the
+    // user space of the referencing element, after the tile's own box mapping, so
+    // it has to be conjugated through the panel scale like every other coordinate
+    // (`dispatch::rewrite_paint_transform`, round-data/R55). The earlier comment
+    // here claimed the opposite and that a rewrite would have to *accumulate*;
+    // both are wrong — measured, nested patterns each need exactly their own
+    // single conjugation, and accumulating double-scales the inner one. The
+    // attribute is rewritten in `rewrite_primitive` before this branch runs.
     if element.name == "pattern" {
         if pattern_body_is_verbatim(element, context.patterns) {
             return Ok(());
@@ -202,8 +207,11 @@ pub(super) fn transform_element(
     }
 
     // A `<linearGradient>`/`<radialGradient>` has no body worth descending into:
-    // its `<stop>`s only carry `offset` (a fraction of the gradient vector), and a
-    // `gradientTransform` is deliberately left alone.
+    // its `<stop>`s only carry `offset` (a fraction of the gradient vector). The
+    // `gradientTransform` itself *is* a user-space length when
+    // `gradientUnits="userSpaceOnUse"` and has already been conjugated by
+    // `rewrite_primitive` (round-data/R55); under the `objectBoundingBox` default
+    // it is a box fraction and stays untouched.
     if element.name == "linearGradient" || element.name == "radialGradient" {
         return Ok(());
     }

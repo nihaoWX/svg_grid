@@ -267,7 +267,11 @@ def family_a():
     check('<rect x="1" y="2" width="2" height="3" fill="#000000"/>' in svg4,
           "A4 s=1：pattern body 原样（不缩放不平移）", svg4[:900])
 
-    # A5 patternTransform 已相对 tile，原样保留（要写就必须累积）。
+    # A5 **R55 修正**：`patternTransform` 写在面板的 user space 里，必须跟着面板
+    # 比例共轭（`T' = S·T·S⁻¹`），等向下 translate 乘 s、rotate 角度不变。R38 原来
+    # 这条断言「原样保留（要写就必须累积）」是错的：R55 用 d1render 逐像素实证
+    # `translate(6 8)` 才 xor 0，而嵌套 pattern 各自缩、不累积。见
+    # `docs/PITFALLS/round-data/R55/`。
     src5 = write_svg("a5_transform.svg", panel(100, 80) + (
         '<g data-scale="xy"><defs>'
         '<pattern id="t" patternUnits="userSpaceOnUse" patternTransform="translate(3 4) rotate(30)" '
@@ -276,8 +280,8 @@ def family_a():
         '<rect x="10" y="10" width="40" height="30" fill="url(#t)"/></g></svg>'))
     svg5 = compose(src5, "a5_transform_grid.svg", "--width", "200", "--height", "160", "--ncol", "1",
             "--plot-margin", "0")
-    check('patternTransform="translate(3 4) rotate(30)"' in svg5,
-          "A5 既有 patternTransform 原样保留（未被覆盖/二次累积）", svg5[:900])
+    check('patternTransform="translate(6, 8) rotate(30)"' in svg5,
+          "A5 既有 patternTransform 按面板比例共轭（translate 乘 2、rotate 不变）", svg5[:900])
 
     # 渲染对照：源图按 s 缩放后贴到面板原点，应与产物逐像素相同。
     if not RENDER.exists():

@@ -6,6 +6,7 @@ use svg_grid::{plot_grid, AlignMode, Margins, PlotGridSpec, SvgInput};
 
 use crate::common::*;
 
+mod paint;
 mod pattern;
 
 #[test]
