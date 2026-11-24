@@ -75,6 +75,7 @@ mod text;
 mod uses;
 mod walk;
 
+pub(crate) use uses::{use_target, MAX_USE_DEPTH};
 pub use walk::ink_bbox;
 pub(crate) use walk::{parse_number, style_prop, NON_RENDERED};
 

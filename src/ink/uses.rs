@@ -10,7 +10,7 @@ use super::walk::{number_attr, visit, Ctx};
 
 /// How deep a chain of `<use>` references is followed before we stop, so a
 /// self-referential definition can never recurse forever.
-const MAX_USE_DEPTH: u32 = 16;
+pub(crate) const MAX_USE_DEPTH: u32 = 16;
 
 /// What [`add_resolved_use`] did with a `<use>`'s reference.
 pub(super) enum UseInk {
@@ -105,7 +105,10 @@ fn index_subtree<'a>(element: &'a Element, ids: &mut HashMap<&'a str, &'a Elemen
 }
 
 /// Resolve a `<use>`'s `href` / `xlink:href` (`#id`) against the `<defs>` index.
-fn use_target<'a>(element: &Element, ids: &HashMap<&'a str, &'a Element>) -> Option<&'a Element> {
+pub(crate) fn use_target<'a>(
+    element: &Element,
+    ids: &HashMap<&'a str, &'a Element>,
+) -> Option<&'a Element> {
     let href = element
         .attr("href")
         .or_else(|| element.attr("xlink:href"))?;

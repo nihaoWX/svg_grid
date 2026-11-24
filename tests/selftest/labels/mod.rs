@@ -449,5 +449,8 @@ fn margin_zero_moves_every_letter_inside_the_canvas() {
 
 mod duplicates;
 mod messages;
+mod nested;
 mod recursive;
+mod text;
+mod uses;
 mod visibility;

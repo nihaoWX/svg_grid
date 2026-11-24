@@ -22,7 +22,7 @@
 use std::collections::HashMap;
 
 use crate::dom;
-use crate::ink::{parse_number, style_prop, NON_RENDERED};
+use crate::label_letters::collect_letters;
 use crate::plan::PreparedInput;
 use crate::warnings::LetterSite;
 use crate::{warnings, LabelSpec, Result, SvgGridError};
@@ -72,9 +72,7 @@ fn collisions(
             // for the blank cell is still drawn, and is collected below.
             continue;
         };
-        let mut found = Vec::new();
-        collect_letters(&item.root, &mut found);
-        for marker in found {
+        for marker in collect_letters(&item.root) {
             sites.push((
                 marker.letter,
                 LetterSite {
@@ -125,88 +123,9 @@ fn collisions(
         .collect()
 }
 
-/// One letter an input already carries: the marker's index and its rendered text.
-struct InheritedLetter {
-    marker: String,
-    letter: String,
-}
-
-/// Walk an input subtree and collect every `data-svg-grid-label` marker with its
-/// letter text. Nested composites may carry several inside a single input.
-fn collect_letters(element: &dom::Element, out: &mut Vec<InheritedLetter>) {
-    walk_letters(element, true, out);
-}
-
-/// Recursive half of [`collect_letters`]: `visible` is the effective
-/// `visibility` inherited from the ancestors.
-fn walk_letters(element: &dom::Element, inherited_visible: bool, out: &mut Vec<InheritedLetter>) {
-    let Some(visible) = enter(element, inherited_visible) else {
-        return;
-    };
-    if let Some(marker) = element.attr("data-svg-grid-label") {
-        let mut text = String::new();
-        collect_text(element, visible, &mut text);
-        let letter = crate::normalize_label(&text);
-        // An empty (or whitespace-only) marker is not an "empty letter": it
-        // draws nothing, so it must not take part in the collision check.
-        if !letter.is_empty() {
-            out.push(InheritedLetter {
-                marker: marker.to_string(),
-                letter,
-            });
-        }
-    }
-    for child in &element.children {
-        if let dom::Node::Element(child) = child {
-            walk_letters(child, visible, out);
-        }
-    }
-}
-
-/// Concatenate the text of a marker's subtree in document order, skipping
-/// subtrees that are not rendered. `<text>A<tspan>B</tspan></text>` and
-/// `<text><tspan>A</tspan><tspan>B</tspan></text>` both yield `AB`.
-fn collect_text(element: &dom::Element, visible: bool, out: &mut String) {
-    for child in &element.children {
-        match child {
-            dom::Node::Text(text) => {
-                if visible {
-                    out.push_str(text);
-                }
-            }
-            dom::Node::Element(child) => {
-                if let Some(child_visible) = enter(child, visible) {
-                    collect_text(child, child_visible, out);
-                }
-            }
-        }
-    }
-}
-
-/// Fold one element's own `display` / `opacity` / `visibility` onto the inherited
-/// visibility. `None` means the element and its whole subtree are not rendered:
-/// `display:none` and `opacity:0` cannot be undone by a descendant, while
-/// `visibility:hidden` can (`visibility="visible"` on a child wins).
-fn enter(element: &dom::Element, inherited_visible: bool) -> Option<bool> {
-    if NON_RENDERED.contains(&element.name.as_str()) {
-        return None;
-    }
-    if matches!(style_prop(element, "display").map(str::trim), Some("none")) {
-        return None;
-    }
-    if style_prop(element, "opacity")
-        .and_then(parse_number)
-        .is_some_and(|opacity| opacity <= 0.0)
-    {
-        return None;
-    }
-    Some(match style_prop(element, "visibility").map(str::trim) {
-        Some("hidden") | Some("collapse") => false,
-        Some("visible") => true,
-        _ => inherited_visible,
-    })
-}
-
+/// Walk one input and collect its rendered letters, in document order. The
+/// renderer semantics (nested markers, `<use>` instancing, paint) live in
+/// [`crate::label_letters`].
 /// Whether an input subtree already contains a `data-svg-grid-label` marker.
 fn contains_data_svg_grid_label(element: &dom::Element) -> bool {
     element.attr("data-svg-grid-label").is_some()

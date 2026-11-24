@@ -1,0 +1,113 @@
+id = "R51"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "A（阻断）嵌套 marker 被重复计数：`collect_text` 读外层 marker 的整棵子树 ⇒ 内层 marker 的 `<text>` 也被外层读一次，`walk_letters` 又递归收内层 ⇒ 一个字形两个 LetterSite。最小复现（单输入、单字形）`<g data-svg-grid-label=\"0\"><text data-svg-grid-label=\"1\" x=\"4\" y=\"14\" font-size=\"12\" font-family=\"Arial\">A</text></g>`：1b7ef3d rc=0（对），cdcc726 rc=2（误判 `#0 (cell 0)` / `#0 (cell 1)`），d1render 只画一个 A（ink 40）。",
+  "B（P2）`<defs>` + `<use>` 假阴性：`enter` 无条件跳 `NON_RENDERED`（`src/ink/walk.rs` 含 `defs`），但 defs 内容被 `<use>` 实例化时确实渲染。`<defs><text id=\"L\" data-svg-grid-label=\"0\">A</text></defs><use href=\"#L\"/>` + 另一个可见 A：1b7ef3d rc=2，cdcc726 rc=0（漏判）。d1render：defs 单独 ink 0、use 一次 ink 40、两次同位置仍 40、两次错开 x=30 ink 80 ⇒ 每个 `<use>` 算一次字母。",
+  "C（P3）`normalize_label` 用 `split_whitespace`，把 U+00A0 当空白 ⇒ `A` 与 `A&#160;` 判重号（cdcc726 rc=2，1b7ef3d rc=0），两者渲染 diff 0 ⇒ 误伤。镜像面：零宽字符 U+200B 未被删 ⇒ `A` 与 `A\\u200b` 都 rc=0（漏判），渲染 diff 0 ⇒ 应判为同一字母。",
+  "D（P3）`src/ink/walk.rs:style_prop` 不剥 `!important` ⇒ `style=\"display:none !important\"` 的 text 被计入（cdcc726 rc=2），d1render/cairosvg 均 ink 0 ⇒ 误伤。关键字大小写：`style=\"display:NONE\"`、`style=\"DISPLAY:none\"`、`display=\"NONE\"`、`visibility=\"HIDDEN\"` 在 d1render 中 ink 40（确实画出来）⇒ 保持 rc=2，不按 CSS 规范改成不敏感（见 wontfix finding R51-F9）。",
+  "E（P3）`<text data-svg-grid-label=\"0\" fill=\"none\">A</text>` 既无可见 fill 又无 stroke，d1render ink 0，却被计入（cdcc726 rc=2，1b7ef3d 也 rc=2）⇒ 误伤。`fill=\"none\" stroke=\"black\"` ink 61 ⇒ 仍应计入。",
+  "F 账本更正（append-only，不改历史）：R47-F7 把 `docs/PITFALLS/round-data/R47/test.py` 记成 `lines_after=1-413`，实际 `wc -l` = 442；R48 报告声称做了 10 条 `modify --by R48`，账本里 `[[modify]].by = R48` 实为 4 条（R31/R33/R34/R44）。",
+]
+
+closures = [
+  { finding = "R51-F1", tier = "代码" },
+  { finding = "R51-F2", tier = "代码" },
+  { finding = "R51-F3", tier = "代码" },
+  { finding = "R51-F4", tier = "代码" },
+  { finding = "R51-F5", tier = "代码" },
+  { finding = "R51-F6", tier = "检查" },
+  { finding = "R51-F7", tier = "检查" },
+  { finding = "R51-F8", tier = "代码" },
+  { finding = "R51-F9", tier = "代码" },
+]
+
+run_before = ["R50", "R49", "R48"]
+touched = ["R48", "R44"]
+
+note = """
+修法：
+  A `src/label_letters.rs:collect_text` 不再递归进自身带 `data-svg-grid-label` 的子元素（外层文本变空 ⇒
+    `letter.is_empty()` 跳过；内层由 `walk_letters` 计一次）。新模块 `src/label_letters.rs` 承载
+    `collect_letters`/`walk_letters`/`collect_text`/`enter`/`paint_prop`/`expand_use`；`src/label_conflicts.rs`
+    只留策略（不再有第二份收集逻辑）。
+  B 同一份 `collect_text`/`walk_letters` 通过 `expand_use` 在每个 `<use>` 处对被引用子树重走一遍；
+    `href`/`xlink:href` 用 `src/ink/uses.rs:use_target`（新增 `pub(crate)`，与 ink 共用一份解析）；
+    环（自引用 / 互引用）靠 `Ctx.ancestors` 的 `std::ptr::eq` 判定，已展开过的目标不再展开 ⇒ 环上只算一次；
+    `MAX_USE_DEPTH=16` 兜底；未被引用的 `<defs>` 仍按 `NON_RENDERED` 跳过（误伤面不扩大）。
+  C `src/lib.rs:normalize_label` 先删 U+200B/U+200C/U+200D/U+FEFF，再只按 ASCII 空白
+    （U+0020/U+0009/U+000A/U+000D）trim + 折叠，U+00A0 保持显著。
+  D `src/ink/walk.rs:style_prop` 对 style 声明先 `strip_important`（去尾部 `!important`，允许前后空白与任意
+    大小写）再比较属性名；`enter` 的 `display`/`visibility` 关键字保持大小写敏感（实测渲染器如此）。
+  E `label_letters.rs:Paint`（默认 fill=true、stroke=false）沿着树继承 fill/stroke/fill-opacity/stroke-opacity/
+    stroke-width；`collect_text` 只在 `visible && paint.any()` 时收字。
+
+三列数字（1b7ef3d = R48 前基线；cdcc726 = 本轮修前 HEAD；"修后" = 本轮；ink 为 d1render，cairosvg 见括号）：
+  用例                          1b7ef3d  cdcc726  修后   d1 ink
+  A1 嵌套 marker 单输入              0       2      0      40（cairo 45）
+  A2 外层 A + 内层 B（见证）          0       2      0      57（62）
+  A3 外层 A + 内层 A（真重号）        2       2      2      40（45）
+  A4 三层嵌套                       0       2      0      40（45）
+  A5 两个输入各一个嵌套 A             2       2      2      40（45）  sites 4 → 2
+  B1 defs+use vs marker1 A          2       0      2      40（45）  sites `#0 (cell 0)` + `#1 (cell 1)`
+  B2 defs+两次 use（单输入）          0       0      2      80（90）  `"A" 2 times inside #0 (cell 0)`
+  B3 未被引用的 defs vs marker1 A     2       0      0       0
+  C1 A vs A&#160;                   0       2      0      40（45）  两者渲染 xor 0
+  C2 A vs A\\u200b                   0       0      2      40（45）  两者渲染 xor 0
+  D1 四种 !important 写法            2       2      0       0
+  D2 style="display:NONE"           2       2      2      40（45）
+  D3 style="DISPLAY:none"           2       2      2      40（cairo 0）
+  D4 display="NONE"                 2       2      2      40（45）
+  D5 visibility="HIDDEN"            2       2      2      40（45）
+  E1 fill="none"                    2       2      0       0
+  E2 fill="none" stroke="black"     2       2      2      61（65）
+  E3 fill="none" stroke="none"      2       2      0       0
+  D3 的渲染器分歧：resvg 对 `style="DISPLAY:none"` 仍画（ink 40），cairosvg 不画（ink 0）——cairosvg 在
+  属性名上符合 CSS 规范、resvg 不符；按主参考 resvg 判并 fail-closed（宁可拒稿，不放过两个 A），见 R51-F9。
+
+变异（每条给出"改了哪一行 → 红了哪些测试"）：
+  M1 `collect_text` 去掉"不递归进内层 marker" ⇒ 6 红：label_letters::tests::a_nested_marker_is_collected_once_by_its_own_element、
+     an_outer_marker_keeps_its_own_text_next_to_a_nested_one；labels::nested::cli_counts_a_nested_marker_once、
+     cli_counts_only_the_innermost_marker_of_three_levels、cli_reads_the_outer_marker_text_next_to_a_nested_one、
+     cli_rejects_a_real_duplicate_between_an_outer_and_a_nested_marker（lib 278/2、selftest 174/4）。
+  M2 `if element.name == "use"` → `if false && …`（两处，等于回到无条件跳 defs）⇒ 5 红：
+     label_letters::tests::a_definition_counts_once_per_use、a_symbol_is_drawn_through_use；
+     labels::uses::cli_counts_a_definition_once_per_use、cli_counts_two_use_instantiations_separately、
+     cli_draws_a_symbol_only_through_use（lib 278/2、selftest 175/3）。
+  M3 `normalize_label` 换回 `split_whitespace` ⇒ 2 红：labels::text::cli_keeps_a_no_break_space_significant、
+     cli_strips_zero_width_characters_before_comparing（selftest 176/2）。
+  M4 `enter` 的 display/visibility 关键字改成小写比较 ⇒ 2 红：label_letters::tests::important_and_case_follow_the_renderer、
+     labels::visibility::important_is_stripped_and_uppercase_keywords_stay_visible（lib 279/1、selftest 177/1）。
+  M5 `src/ink/walk.rs:strip_important` 原样返回（不剥 !important）⇒ 同样 2 红（同上两条，lib 279/1、selftest 177/1）。
+  M6 `collect_text` 的 `if visible && paint.any()` 放宽成 `if visible` ⇒ 2 红：label_letters::tests::text_that_paints_nothing_is_not_a_letter、
+     labels::visibility::text_that_paints_nothing_is_not_a_letter（lib 279/1、selftest 177/1）。
+
+回归：`cargo test --offline` 517（280 lib + 59 main + 178 selftest；基线 496，+21，未删任何既有测试）；
+`cargo fmt --all --check` OK；`cargo clippy --offline --all-targets -- -D warnings` OK；
+`./install.sh` 后 `sha256sum ~/.local/bin/svg_grid target/release/svg_grid` 同为
+ec7b7eef8b41f48a73ae07fa7858fa9bba83c49942595c402b90979ca5ab06da；`svg_grid doctor` 57 pass / 0 fail / 1 skip。
+语料逐字节：220 个 `tests/**/*.svg` 的 `convert` 输出 + 58 个 `tests/fixtures/**/*.svg` 的
+`plot-grid --width 600 --ncol 1` 输出，与 base（/tmp/r46base/target/release/svg_grid @196da47）0 差异。
+旧证据 R3..R50 顶层跑 45/46 绿（仅 R19 既有失效、已 retire，不计入）。
+证据脚本 40 项全绿（含语料）；指向修前 HEAD（/tmp/r51head，cdcc726）时 16 项红（A1/A2/A4/B1/B2/B4/B5/C1/C2/
+D1 四种/E1/E3/E5）⇒ 有牙。
+
+单文件：src/label_letters.rs 12612 B、src/label_conflicts.rs 14681 B、src/lib.rs 19587 B、src/ink/walk.rs 6511 B；
+tests/selftest/labels/{nested.rs 5305, uses.rs 5602, text.rs 3075, visibility.rs 13012, mod.rs 15039}；
+docs/PITFALLS/round-data/R51/test.py 17005 B，均 ≤20000 B。
+
+不做（登记在报告与 PROGRESS 建议里，未实现）：`tspan x`/`dy` 重排（文档序 ≠ 视觉序）需要视觉序模型，本轮不动。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R51/test.py
+# 有牙：指向修复前的二进制，A/B/C/D/E 必须红
+SVG_GRID_BIN=/tmp/r51head/target/release/svg_grid python3 docs/PITFALLS/round-data/R51/test.py
+# 语料逐字节（可选，默认跳过）
+SVG_GRID_CORPUS=1 python3 docs/PITFALLS/round-data/R51/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R49/run_old_evidence.sh
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""

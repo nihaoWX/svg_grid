@@ -137,12 +137,29 @@ pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<&'a str
         for declaration in style.split(';') {
             if let Some((name, value)) = declaration.split_once(':') {
                 if name.trim() == prop {
-                    return Some(value.trim());
+                    return Some(strip_important(value));
                 }
             }
         }
     }
     element.attr(prop)
+}
+
+/// Drop a trailing CSS `!important`, which a declaration value may carry.
+/// The keyword is ASCII case-insensitive and may be separated from the `!` by
+/// whitespace (`display:none ! important`), as in CSS; both reference renderers
+/// honour all of these spellings (R51). A presentation attribute is not a CSS
+/// declaration, so no stripping happens on the attribute fallback.
+fn strip_important(value: &str) -> &str {
+    let value = value.trim();
+    let Some((head, tail)) = value.rsplit_once('!') else {
+        return value;
+    };
+    if tail.trim().eq_ignore_ascii_case("important") {
+        head.trim_end()
+    } else {
+        value
+    }
 }
 
 pub(super) fn number_attr(element: &Element, name: &str) -> Option<f64> {
