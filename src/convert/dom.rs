@@ -5,6 +5,9 @@ use quick_xml::events::{BytesEnd, BytesStart, BytesText, Event};
 use quick_xml::{Reader, Writer};
 
 use crate::convert::error::ConvertError;
+use crate::dom::{
+    codepoint_label, decode_reference, first_invalid_xml_char, invalid_reference_in_raw,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Node {
@@ -67,27 +70,36 @@ pub(crate) fn parse(svg: &str) -> Result<Element, ConvertError> {
             }
             Event::Text(text) => {
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(
-                        text.xml_content().map_err(ConvertError::xml)?.into_owned(),
-                    ));
+                    let text = text.xml_content().map_err(ConvertError::xml)?.into_owned();
+                    if let Some(c) = first_invalid_xml_char(&text) {
+                        return Err(ConvertError::Xml(format!(
+                            "text contains {}, which is not a legal XML 1.0 character",
+                            codepoint_label(c as u32)
+                        )));
+                    }
+                    parent.children.push(Node::Text(text));
                 }
             }
             Event::CData(cdata) => {
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(
-                        cdata.xml_content().map_err(ConvertError::xml)?.into_owned(),
-                    ));
+                    let text = cdata.xml_content().map_err(ConvertError::xml)?.into_owned();
+                    if let Some(c) = first_invalid_xml_char(&text) {
+                        return Err(ConvertError::Xml(format!(
+                            "CDATA section contains {}, which is not a legal XML 1.0 character",
+                            codepoint_label(c as u32)
+                        )));
+                    }
+                    parent.children.push(Node::Text(text));
                 }
             }
             Event::GeneralRef(reference) => {
                 if let Some(parent) = stack.last_mut() {
                     let reference = reference.xml_content().map_err(ConvertError::xml)?;
-                    // Same authority as `src/dom.rs`: `unescape` resolves both
-                    // character references and the five predefined entities, and
-                    // rejects undefined names (round-data/R47).
-                    let decoded = quick_xml::escape::unescape(&format!("&{reference};"))
-                        .map_err(ConvertError::xml)?
-                        .into_owned();
+                    // Same authority as `src/dom.rs`: `decode_reference` resolves
+                    // both character references and the five predefined entities,
+                    // rejects undefined names, and enforces the XML 1.0 `Char`
+                    // production (round-data/R47, R50).
+                    let decoded = decode_reference(&reference).map_err(ConvertError::Xml)?;
                     parent.children.push(Node::Text(decoded));
                 }
             }
@@ -119,10 +131,19 @@ fn element_from_start(
     for attr in start.attributes().with_checks(false) {
         let attr = attr.map_err(ConvertError::xml)?;
         let key = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+        if let Some(message) = invalid_reference_in_raw(attr.value.as_ref()) {
+            return Err(ConvertError::Xml(format!("attribute `{key}`: {message}")));
+        }
         let value = attr
             .decode_and_unescape_value(reader.decoder())
-            .map_err(ConvertError::xml)?
+            .map_err(|error| ConvertError::Xml(format!("attribute `{key}`: {error}")))?
             .into_owned();
+        if let Some(c) = first_invalid_xml_char(&value) {
+            return Err(ConvertError::Xml(format!(
+                "attribute `{key}` contains {}, which is not a legal XML 1.0 character",
+                codepoint_label(c as u32)
+            )));
+        }
         attrs.push((key, value));
     }
     Ok(Element {
@@ -228,6 +249,73 @@ mod tests {
             let error = decode(reference).unwrap_err().to_string();
             assert!(error.starts_with("XML error: "), "{reference} => {error}");
             assert!(error.contains(expected), "{reference} => {error}");
+        }
+    }
+
+    /// The legal surface R50 must not regress.
+    #[test]
+    fn legal_character_references_stay_accepted() {
+        for (reference, expected) in [
+            ("&#9;", "\t"),
+            ("&#10;", "\n"),
+            ("&#13;", "\r"),
+            ("&#32;", " "),
+            ("&#65;", "A"),
+            ("&#x1F600;", "😀"),
+            ("&#xFFFD;", "\u{FFFD}"),
+            ("&#x10FFFF;", "\u{10FFFF}"),
+            ("&#xE000;", "\u{E000}"),
+            ("&#xD7FF;", "\u{D7FF}"),
+        ] {
+            assert_eq!(decode(reference).unwrap(), expected, "{reference}");
+        }
+    }
+
+    /// The illegal surface R50 must reject, naming the reference and codepoint.
+    #[test]
+    fn illegal_character_references_name_the_reference_and_codepoint() {
+        for (reference, codepoint) in [
+            ("&#0;", "U+0000"),
+            ("&#x0;", "U+0000"),
+            ("&#1;", "U+0001"),
+            ("&#8;", "U+0008"),
+            ("&#11;", "U+000B"),
+            ("&#12;", "U+000C"),
+            ("&#31;", "U+001F"),
+            ("&#xFFFE;", "U+FFFE"),
+            ("&#xFFFF;", "U+FFFF"),
+            ("&#55296;", "U+D800"),
+            ("&#xDFFF;", "U+DFFF"),
+            ("&#x110000;", "U+110000"),
+        ] {
+            let error = decode(reference).unwrap_err().to_string();
+            assert!(error.starts_with("XML error: "), "{reference} => {error}");
+            assert!(error.contains(reference), "{reference} => {error}");
+            assert!(error.contains(codepoint), "{reference} => {error}");
+            assert!(!error.contains("at 1.."), "{reference} => {error}");
+        }
+    }
+
+    /// The attribute path uses the same predicate and names the attribute.
+    #[test]
+    fn illegal_character_references_in_attributes_name_the_attribute() {
+        for (reference, codepoint) in [
+            ("&#0;", "U+0000"),
+            ("&#1;", "U+0001"),
+            ("&#xFFFE;", "U+FFFE"),
+            ("&#55296;", "U+D800"),
+            ("&#x110000;", "U+110000"),
+        ] {
+            let svg = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg"><text data-x="a{reference}b">x</text></svg>"#
+            );
+            let error = parse(&svg).unwrap_err().to_string();
+            assert!(
+                error.contains("attribute `data-x`"),
+                "{reference} => {error}"
+            );
+            assert!(error.contains(reference), "{reference} => {error}");
+            assert!(error.contains(codepoint), "{reference} => {error}");
         }
     }
 }

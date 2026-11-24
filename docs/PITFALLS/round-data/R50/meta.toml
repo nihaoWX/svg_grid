@@ -1,0 +1,82 @@
+id = "R50"
+date = "2026-11-24"
+verdict = "缺陷"
+
+family = [
+  "文本路径：R47 用 `quick_xml::escape::unescape` 解码 `Event::GeneralRef`，只按引用语法判、不按 XML 1.0 `Char` 判；`&#1;`/`&#8;`/`&#11;`/`&#12;`/`&#31;`/`&#xFFFE;`/`&#xFFFF;` 被解码成裸控制字符/非字符写进产物，`convert` rc=0 但产物不良构（d1render rc=3 `non-XML character '\\u{1}'`）",
+  "属性路径（pre-existing，非 R47 引入）：`element_from_start` 的 `decode_and_unescape_value` 同样不检查 `Char`；`data-x=\"a&#1;b\"` ⇒ 产物 `data-x=\"a\\001b\"`、d1render rc=3。两条路径必须共用一份判据，否则又造出第二处口径差",
+]
+
+closures = [
+  { finding = "R50-F1", tier = "代码" },
+  { finding = "R50-F2", tier = "代码" },
+  { finding = "R50-F3", tier = "代码" },
+  { finding = "R50-F4", tier = "代码" },
+  { finding = "R50-F5", tier = "代码" },
+  { finding = "R50-F6", tier = "代码" },
+  { finding = "R50-F7", tier = "代码" },
+  { finding = "R50-F8", tier = "测试" },
+  { finding = "R50-F9", tier = "测试" },
+  { finding = "R50-F10", tier = "测试" },
+  { finding = "R50-F11", tier = "检查" },
+]
+
+run_before = ["R49", "R48", "R47"]
+touched = ["R47"]
+
+note = """
+根因（已证）：`quick_xml::escape::unescape` 与 `decode_and_unescape_value` 只做「引用语法」
+解码，不按 XML 1.0 `Char` 产生式（`#x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] |
+[#x10000-#x10FFFF]`）检查码位。`&#1;` 语法合法、码位非法，于是被解码成裸 `\\u{1}` 写进产物。
+R47 只改了文本路径的解码方式，属性路径的同一个洞在 R47 之前就存在。
+
+修法：`src/dom.rs` 新增唯一判据 `pub(crate) fn is_xml_char(c: char) -> bool`，`src/convert/dom.rs`
+用 `use crate::dom::{…}` 调用同一份。文本路径 `decode_reference` 在 `unescape` 成功后检查
+`first_invalid_xml_char`；`unescape` 自己拒绝的（`&#0;`、代理区、溢出）也补上引用原文与码位。
+属性路径 `element_from_start` 先扫原始值里的引用（`invalid_reference_in_raw`），再检查解码后的值，
+文案带属性名。`SvgGridError::Xml` 载荷从 `quick_xml::Error` 改为 `String` 以携带文案，`Display`
+前缀 `SVG XML error: ` 与 `ConvertError::Xml` 的 `XML error: ` 不变，rc 仍为 1。`Event::Text`/
+`Event::CData`/解码后的属性值也走同一判据，保证「产物可重新解析」对字面控制字符同样成立。
+
+合法面（rc=0、产物可重新解析）：`&#9;`、`&#10;`、`&#13;`、`&#32;`、`&#65;`、`&#x1F600;`、
+`&#xFFFD;`、`&#x10FFFF;`、`&#xE000;`、`&#xD7FF;`。非法面（rc=1、不写产物，文本与属性各一遍）：
+`&#0;`、`&#x0;`、`&#1;`、`&#8;`、`&#11;`、`&#12;`、`&#31;`、`&#xFFFE;`、`&#xFFFF;`、`&#55296;`、
+`&#xDFFF;`、`&#x110000;`。强不变量 `tests/selftest/textref/mod.rs::every_accepted_output_is_well_formed`
+对 13 个文本用例 + 12 个属性用例 × convert/plot-grid 逐个断言：rc=0 ⇒ 产物用 `quick_xml::Reader`
+全程 `read_event` 无 `Err` 且字节里无非法 XML 字符；rc≠0 ⇒ rc=1 且不写产物。
+
+修前/修后/参考：修前（e0c6033）7 个非法引用（`&#1;`/`&#8;`/`&#11;`/`&#12;`/`&#31;`/`&#xFFFE;`/
+`&#xFFFF;`）文本与属性均 rc=0、产物含 1 个非法字符、不良构、d1render rc=3、cairosvg rc=1；
+修后全部 rc=1、不写产物。`&#0;`/`&#x0;`/`&#55296;`/`&#xDFFF;`/`&#x110000;` 修前已 rc=1（unescape
+拒绝），修后仍 rc=1。参考渲染器对原图：10 个合法引用 d1=0/cairo=0；9 个非法引用 d1=3/cairo=1；
+`&#55296;`/`&#xDFFF;`/`&#x110000;` d1=0（resvg 宽松）但 cairo=1。按 XML 1.0，fail-closed 是正确的一边。
+
+变异（每条都记录红了哪些测试）：
+  M1 `is_xml_char` 恒 true（放行）⇒ lib 6 + selftest 5 红（4 条 reject 测试 + `every_accepted_output_is_well_formed`）；
+  M2 `is_xml_char` 恒 false（全拒）⇒ lib 181 / selftest 152 红，14 条 R50 新测试全红；
+  M3 只修文本路径、`element_from_start` 回退 ⇒ lib 3 + selftest 3 红（属性路径 reject 测试 + 不变量）。
+
+回归：`cargo test --offline` 496（272 lib + 59 main + 165 selftest；基线 482，+14，未删任何既有测试）；
+`cargo fmt --all --check` OK；`cargo clippy --offline --all-targets -- -D warnings` OK；
+`./install.sh` 后 `sha256sum ~/.local/bin/svg_grid target/release/svg_grid` 同为
+57cb41b01f804384d8b1de34b13e46bb95434fbe9d6cb54dfb7d9a8fb44314c0；`svg_grid doctor` 57 pass / 0 fail / 1 skip。
+语料逐字节：220 个 `tests/**/*.svg` 的 `convert` 输出 + 58 个 `tests/fixtures/**/*.svg` 的
+`plot-grid --width 600 --ncol 1` 输出，与 base（/tmp/r46base/target/release/svg_grid @196da47）
+0 差异（语料 0 个数字实体）。旧证据 R3..R49 顶层跑 44/45 绿，仅 R19 既有失效（已 retire，不计入）。
+
+单文件：src/dom.rs 16969 B、src/convert/dom.rs 11821 B、tests/selftest/textref/mod.rs 15828 B、
+src/error.rs 4221 B，均 ≤20000 B。
+
+账本更正（R47）：R47-F7 `1-413` → `1-442`；R47-F1 `80-96` → `174-186`；R47-F2 `82-93` → `95-105`；
+R47-F4 `178-245` → `280-459`；R47-F5 `186-233` → `207-321`。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --offline
+python3 docs/PITFALLS/round-data/R50/test.py
+# 有牙（fail-closed）：指向修复前的二进制，B 族必须红
+SVG_GRID_BIN=/tmp/r50base/target/release/svg_grid python3 docs/PITFALLS/round-data/R50/test.py
+# 旧证据逐轮顶层跑（严格 shim：嵌套调用只认 ran.txt 里的 OK，否则 exit 1）
+bash docs/PITFALLS/round-data/R49/run_old_evidence.sh
+# 依赖：/tmp/d1_eval/render/target/release/d1render（resvg 0.47.0，可用 SVG_GRID_RENDER_BIN 覆盖）
+"""

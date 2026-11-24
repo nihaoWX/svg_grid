@@ -15,7 +15,10 @@ pub enum SvgGridError {
         path: Option<PathBuf>,
         source: std::io::Error,
     },
-    Xml(quick_xml::Error),
+    /// A malformed or non-well-formed SVG document. The payload is the message
+    /// (not a `quick_xml::Error`) so the DOM can report the offending reference
+    /// and codepoint itself, e.g. `character reference &#1; decodes to U+0001`.
+    Xml(String),
     Raster(String),
     InvalidInput(String),
     /// The font library is missing / empty although this run needs glyphs
@@ -67,7 +70,7 @@ impl std::error::Error for SvgGridError {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self {
             SvgGridError::Io { source, .. } => Some(source),
-            SvgGridError::Xml(error) => Some(error),
+            SvgGridError::Xml(_) => None,
             SvgGridError::Raster(_) => None,
             SvgGridError::InvalidInput(_) => None,
             SvgGridError::Fonts(_) => None,
@@ -85,7 +88,7 @@ impl From<std::io::Error> for SvgGridError {
 
 impl From<quick_xml::Error> for SvgGridError {
     fn from(error: quick_xml::Error) -> Self {
-        SvgGridError::Xml(error)
+        SvgGridError::Xml(error.to_string())
     }
 }
 

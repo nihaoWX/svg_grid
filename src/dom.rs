@@ -45,6 +45,89 @@ impl Element {
     }
 }
 
+/// XML 1.0 `Char` production:
+/// `#x9 | #xA | #xD | [#x20-#xD7FF] | [#xE000-#xFFFD] | [#x10000-#x10FFFF]`.
+///
+/// `#xFFFE`/`#xFFFF` are **not** legal (the upper bound is `#xFFFD`), and neither
+/// are the surrogate range or `#x0`. A Rust `char` cannot hold a surrogate, so the
+/// two BMP ranges below already exclude `#xD800-#xDFFF`.
+pub(crate) fn is_xml_char(c: char) -> bool {
+    matches!(c, '\u{9}' | '\u{A}' | '\u{D}')
+        || ('\u{20}'..='\u{D7FF}').contains(&c)
+        || ('\u{E000}'..='\u{FFFD}').contains(&c)
+        || ('\u{10000}'..='\u{10FFFF}').contains(&c)
+}
+
+/// The first character in `value` that XML 1.0 forbids, if any.
+pub(crate) fn first_invalid_xml_char(value: &str) -> Option<char> {
+    value.chars().find(|c| !is_xml_char(*c))
+}
+
+/// `U+0001`-style label for a codepoint (four hex digits minimum).
+pub(crate) fn codepoint_label(code: u32) -> String {
+    format!("U+{code:04X}")
+}
+
+/// Decode one reference (`reference` is the text between `&` and `;`) and reject
+/// anything that is not a legal XML 1.0 character.
+///
+/// `quick_xml::escape::unescape` stays the authority for the reference syntax: it
+/// rejects `0`, the surrogate range, `+`/`-`, an empty body and undefined names
+/// (round-data/R47). This wrapper adds the XML 1.0 `Char` check that `unescape`
+/// does not perform (`&#1;`, `&#xFFFE;`, …), so both DOMs share one predicate.
+pub(crate) fn decode_reference(reference: &str) -> std::result::Result<String, String> {
+    let literal = format!("&{reference};");
+    match quick_xml::escape::unescape(&literal) {
+        Ok(decoded) => match first_invalid_xml_char(&decoded) {
+            Some(c) => Err(format!(
+                "character reference {literal} decodes to {}, which is not a legal XML 1.0 character",
+                codepoint_label(c as u32)
+            )),
+            None => Ok(decoded.into_owned()),
+        },
+        Err(error) => Err(match numeric_reference_codepoint(reference) {
+            Some(code) => format!(
+                "character reference {literal} ({}) is not a legal XML 1.0 character: {error}",
+                codepoint_label(code)
+            ),
+            None => format!("reference {literal} cannot be resolved: {error}"),
+        }),
+    }
+}
+
+/// The codepoint a numeric reference names, when it is syntactically one. Used
+/// only to make the error message name `U+…`; validation stays in `unescape`.
+fn numeric_reference_codepoint(reference: &str) -> Option<u32> {
+    let digits = reference.strip_prefix('#')?;
+    let (radix, digits) = match digits.strip_prefix('x') {
+        Some(hex) => (16, hex),
+        None => (10, digits),
+    };
+    if digits.is_empty() || !digits.chars().all(|c| c.is_digit(radix)) {
+        return None;
+    }
+    u32::from_str_radix(digits, radix).ok()
+}
+
+/// The first reference in a raw attribute value that must be rejected, if any.
+///
+/// `raw` is the value as written (still escaped), so the message can quote the
+/// reference exactly as the source spells it (`&#x1;` stays `&#x1;`).
+pub(crate) fn invalid_reference_in_raw(raw: &[u8]) -> Option<String> {
+    let mut rest = raw;
+    while let Some(amp) = rest.iter().position(|byte| *byte == b'&') {
+        let after = &rest[amp + 1..];
+        let end = after.iter().position(|byte| *byte == b';')?;
+        if let Ok(reference) = std::str::from_utf8(&after[..end]) {
+            if let Err(message) = decode_reference(reference) {
+                return Some(message);
+            }
+        }
+        rest = &after[end + 1..];
+    }
+    None
+}
+
 pub fn parse(svg: &str) -> Result<Element> {
     let mut reader = Reader::from_str(svg);
     reader.config_mut().trim_text(false);
@@ -60,21 +143,32 @@ pub fn parse(svg: &str) -> Result<Element> {
             }
             Event::Text(text) => {
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(
-                        text.xml_content()
-                            .map_err(quick_xml::Error::from)?
-                            .into_owned(),
-                    ));
+                    let text = text
+                        .xml_content()
+                        .map_err(quick_xml::Error::from)?
+                        .into_owned();
+                    if let Some(c) = first_invalid_xml_char(&text) {
+                        return Err(SvgGridError::Xml(format!(
+                            "text contains {}, which is not a legal XML 1.0 character",
+                            codepoint_label(c as u32)
+                        )));
+                    }
+                    parent.children.push(Node::Text(text));
                 }
             }
             Event::CData(cdata) => {
                 if let Some(parent) = stack.last_mut() {
-                    parent.children.push(Node::Text(
-                        cdata
-                            .xml_content()
-                            .map_err(quick_xml::Error::from)?
-                            .into_owned(),
-                    ));
+                    let text = cdata
+                        .xml_content()
+                        .map_err(quick_xml::Error::from)?
+                        .into_owned();
+                    if let Some(c) = first_invalid_xml_char(&text) {
+                        return Err(SvgGridError::Xml(format!(
+                            "CDATA section contains {}, which is not a legal XML 1.0 character",
+                            codepoint_label(c as u32)
+                        )));
+                    }
+                    parent.children.push(Node::Text(text));
                 }
             }
             Event::GeneralRef(reference) => {
@@ -84,13 +178,9 @@ pub fn parse(svg: &str) -> Result<Element> {
                         .map_err(quick_xml::Error::from)?
                         .into_owned();
                     // `quick_xml` hands the reference over without its `&`/`;`.
-                    // `unescape` is the authority for both character references
-                    // (`&#176;`, `&#x42;`) and the five predefined entities; a
-                    // hand-written number parser would miss `0`, the surrogate
-                    // range and `+`/`-` (round-data/R47).
-                    let decoded = quick_xml::escape::unescape(&format!("&{reference};"))
-                        .map_err(quick_xml::Error::from)?
-                        .into_owned();
+                    // `decode_reference` keeps `unescape` as the syntax authority
+                    // and adds the XML 1.0 `Char` check (round-data/R50).
+                    let decoded = decode_reference(&reference).map_err(SvgGridError::Xml)?;
                     parent.children.push(Node::Text(decoded));
                 }
             }
@@ -130,9 +220,21 @@ fn element_from_start(reader: &Reader<&[u8]>, start: &BytesStart<'_>) -> Result<
     for attr in start.attributes().with_checks(false) {
         let attr = attr.map_err(quick_xml::Error::from)?;
         let attr_name = String::from_utf8_lossy(attr.key.as_ref()).into_owned();
+        if let Some(message) = invalid_reference_in_raw(attr.value.as_ref()) {
+            return Err(SvgGridError::Xml(format!(
+                "attribute `{attr_name}`: {message}"
+            )));
+        }
         let attr_value = attr
-            .decode_and_unescape_value(reader.decoder())?
+            .decode_and_unescape_value(reader.decoder())
+            .map_err(|error| SvgGridError::Xml(format!("attribute `{attr_name}`: {error}")))?
             .into_owned();
+        if let Some(c) = first_invalid_xml_char(&attr_value) {
+            return Err(SvgGridError::Xml(format!(
+                "attribute `{attr_name}` contains {}, which is not a legal XML 1.0 character",
+                codepoint_label(c as u32)
+            )));
+        }
         attrs.push((attr_name, attr_value));
     }
     Ok(Element {
@@ -241,5 +343,117 @@ mod tests {
             let error = decode(reference).unwrap_err().to_string();
             assert!(error.contains(expected), "{reference} => {error}");
         }
+    }
+
+    /// The XML 1.0 `Char` production, boundary by boundary.
+    #[test]
+    fn the_xml_char_predicate_matches_the_xml_1_0_production() {
+        for c in [
+            '\u{9}',
+            '\u{A}',
+            '\u{D}',
+            '\u{20}',
+            '\u{D7FF}',
+            '\u{E000}',
+            '\u{FFFD}',
+            '\u{10000}',
+            '\u{10FFFF}',
+        ] {
+            assert!(is_xml_char(c), "{c:?} must be legal");
+        }
+        for c in [
+            '\u{0}', '\u{8}', '\u{B}', '\u{C}', '\u{1F}', '\u{FFFE}', '\u{FFFF}',
+        ] {
+            assert!(!is_xml_char(c), "{c:?} must be illegal");
+        }
+    }
+
+    /// The legal surface R50 must not regress: every reference stays accepted and
+    /// decodes to the character it names.
+    #[test]
+    fn legal_character_references_stay_accepted() {
+        for (reference, expected) in [
+            ("&#9;", "\t"),
+            ("&#10;", "\n"),
+            ("&#13;", "\r"),
+            ("&#32;", " "),
+            ("&#65;", "A"),
+            ("&#x1F600;", "😀"),
+            ("&#xFFFD;", "\u{FFFD}"),
+            ("&#x10FFFF;", "\u{10FFFF}"),
+            ("&#xE000;", "\u{E000}"),
+            ("&#xD7FF;", "\u{D7FF}"),
+        ] {
+            assert_eq!(decode(reference).unwrap(), expected, "{reference}");
+        }
+    }
+
+    /// The illegal surface R50 must reject: the message names the reference as
+    /// written and the codepoint, never a range relative to a synthesized string.
+    #[test]
+    fn illegal_character_references_name_the_reference_and_codepoint() {
+        for (reference, codepoint) in [
+            ("&#0;", "U+0000"),
+            ("&#x0;", "U+0000"),
+            ("&#1;", "U+0001"),
+            ("&#8;", "U+0008"),
+            ("&#11;", "U+000B"),
+            ("&#12;", "U+000C"),
+            ("&#31;", "U+001F"),
+            ("&#xFFFE;", "U+FFFE"),
+            ("&#xFFFF;", "U+FFFF"),
+            ("&#55296;", "U+D800"),
+            ("&#xDFFF;", "U+DFFF"),
+            ("&#x110000;", "U+110000"),
+        ] {
+            let error = decode(reference).unwrap_err().to_string();
+            assert!(
+                error.starts_with("SVG XML error: "),
+                "{reference} => {error}"
+            );
+            assert!(error.contains(reference), "{reference} => {error}");
+            assert!(error.contains(codepoint), "{reference} => {error}");
+            assert!(!error.contains("at 1.."), "{reference} => {error}");
+        }
+    }
+
+    /// The attribute path uses the same predicate and names the attribute.
+    #[test]
+    fn illegal_character_references_in_attributes_name_the_attribute() {
+        for (reference, codepoint) in [
+            ("&#0;", "U+0000"),
+            ("&#1;", "U+0001"),
+            ("&#xFFFE;", "U+FFFE"),
+            ("&#55296;", "U+D800"),
+            ("&#x110000;", "U+110000"),
+        ] {
+            let svg = format!(
+                r#"<svg xmlns="http://www.w3.org/2000/svg"><text data-x="a{reference}b">x</text></svg>"#
+            );
+            let error = parse(&svg).unwrap_err().to_string();
+            assert!(
+                error.contains("attribute `data-x`"),
+                "{reference} => {error}"
+            );
+            assert!(error.contains(reference), "{reference} => {error}");
+            assert!(error.contains(codepoint), "{reference} => {error}");
+        }
+    }
+
+    /// A literal (not referenced) control character is the same defect class and
+    /// must not reach the serializer either.
+    #[test]
+    fn literal_control_characters_are_rejected_in_text_and_attributes() {
+        let text = "<svg xmlns=\"http://www.w3.org/2000/svg\"><text>a\u{1}b</text></svg>";
+        let error = parse(text).unwrap_err().to_string();
+        assert!(error.contains("text contains U+0001"), "{error}");
+
+        let attr =
+            "<svg xmlns=\"http://www.w3.org/2000/svg\"><text data-x=\"a\u{1}b\">x</text></svg>";
+        let error = parse(attr).unwrap_err().to_string();
+        assert!(
+            error.contains("attribute `data-x` contains U+0001"),
+            "{error}"
+        );
     }
 }
