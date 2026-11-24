@@ -1,0 +1,43 @@
+id = "R54"
+date = "2026-11-24"
+verdict = "复发"
+
+family = [
+  "组合图字母查重：url() 引用/继承透明度/继承 stroke-width 判错，ink=0 仍判重",
+  "内联 style 级联：不剥 CSS 注释、首声明胜、!important 不参与优先级",
+  "symbol 上的 marker 经 use 实例化后被丢掉（漏判），嵌套 marker 的字母口径与渲染器不符",
+]
+
+closures = [
+  { finding = "R54-F1", tier = "代码" },
+  { finding = "R54-F2", tier = "代码" },
+  { finding = "R54-F3", tier = "代码" },
+  { finding = "R54-F4", tier = "代码" },
+  { finding = "R54-F5", tier = "代码" },
+  { finding = "R54-F6", tier = "代码" },
+  { finding = "R54-F7", tier = "代码" },
+  { finding = "R54-F8", tier = "代码" },
+  { finding = "R54-F9", tier = "检查" },
+  { finding = "R54-F10", tier = "检查" },
+]
+
+run_before = ["R51", "R48", "R44", "R53"]
+touched = []
+
+note = """
+为什么认定同类：R51-F1/F2/F5 已把"递归收集 + 跳过不渲染子树"落过账，本轮是同一位置同一原因的剩余变体
+（R51 只做了 display/visibility/opacity 与"不递归进带 marker 的子元素"，没做 url()/继承透明度/symbol/style 级联）。
+根因与修法（已证，两台参考渲染器逐例实测）：新增 `src/label_paint.rs` 把 Paint 扩成 fill/fill-opacity/stroke/
+stroke-opacity/stroke-width 五字段并解析 url()/gradient/pattern；`src/ink/walk.rs::style_prop` 改为剥注释 +
+后声明胜 + !important 优先（返回 Cow）；`expand_use` 只对 symbol 放行实例化；`subtree` 收整棵子树文本并在
+"外层无自有字符"时丢弃外层；`text_context` 只认 text/tspan/textPath/a 的文本上下文（`<g>` 里的裸字符不渲染）。
+怎么修才不弄坏前面：跑 R51（嵌套口径，fixture 里内层也带 marker，实测不用改）与 R48/R44；旧证据 47/47 绿。
+"""
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R54/test.py
+# 有牙：指向修前二进制（03b2d59），A/B/C/D 的"修后 rc"断言必须红
+SVG_GRID_BIN=/tmp/r54bin/svg_grid_before python3 docs/PITFALLS/round-data/R54/test.py
+# 渲染器缺失必须红（除非 --allow-skip）
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R54/test.py
+"""

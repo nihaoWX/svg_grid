@@ -6,13 +6,21 @@
 //!
 //! * a subtree that is not rendered (`<defs>`, `display:none`, …) carries no
 //!   letter;
-//! * a nested marker owns its own text, so the outer marker must not read it
-//!   (R51 A: one glyph used to be counted at two sites);
-//! * a definition counts once per `<use>` instantiation, and a `<use>` that
-//!   points at its own ancestor is a circular reference that draws nothing
-//!   (R51 B);
+//! * a marker's letter is the text its **whole subtree** draws, nested markers
+//!   included, because that is what the renderer paints (R54 D);
+//! * when a marker contributes no characters of its own — its subtree text is
+//!   exactly the concatenation of its nested markers' letters — the outer marker
+//!   is dropped and only the inner ones count, so one glyph is never counted at
+//!   two sites (R51 A, R54 D);
+//! * character data only draws inside a text-content element (`<text>`,
+//!   `<tspan>`, `<textPath>`, `<a>`); bare text inside a `<g>` is not rendered by
+//!   either reference renderer (R54 D);
+//! * a definition counts once per `<use>` instantiation, a `<symbol>` marker is
+//!   drawn through its `<use>` (R54 C), and a `<use>` that points at its own
+//!   ancestor is a circular reference that draws nothing (R51 B);
 //! * text that paints neither a fill nor a stroke leaves no ink, so a
-//!   `fill="none"` glyph is not a letter (R51 E).
+//!   `fill="none"` glyph, a `url(#missing)` fill or a zero opacity is not a
+//!   letter (R51 E, R54 A).
 //!
 //! The duplicate policy lives in [`crate::label_conflicts`]; this module only
 //! answers "which letters does this subtree render, and at which marker".
@@ -21,6 +29,7 @@ use std::collections::HashMap;
 
 use crate::dom::{Element, Node};
 use crate::ink::{parse_number, style_prop, use_target, MAX_USE_DEPTH, NON_RENDERED};
+use crate::label_paint::Paint;
 
 /// Trim a panel letter and collapse internal whitespace runs to one space.
 ///
@@ -59,9 +68,9 @@ pub(crate) fn collect_letters(root: &Element) -> Vec<InheritedLetter> {
         ancestors: Vec::new(),
         depth: 0,
     };
-    let mut out = Vec::new();
-    walk_letters(&mut ctx, root, true, Paint::DEFAULT, &mut out);
-    out
+    let in_text = text_context(&root.name, false);
+    let (letters, _) = subtree(&mut ctx, root, true, Paint::DEFAULT, in_text, false);
+    letters
 }
 
 /// Walk state shared by the marker walk and the text walk: the `id` index that
@@ -93,147 +102,117 @@ fn index_ids<'a>(element: &'a Element, ids: &mut HashMap<&'a str, &'a Element>) 
     }
 }
 
-/// Whether a text run would leave visible ink: `fill` defaults to black,
-/// `stroke` to `none`, and both inherit. `none` / `transparent` and a zero
-/// opacity paint nothing; the keywords are case-sensitive, because both reference
-/// renderers draw `fill="NONE"` as black (R51 D).
-#[derive(Clone, Copy)]
-struct Paint {
-    fill: bool,
-    stroke: bool,
-}
-
-impl Paint {
-    const DEFAULT: Paint = Paint {
-        fill: true,
-        stroke: false,
-    };
-
-    fn any(self) -> bool {
-        self.fill || self.stroke
-    }
-
-    fn inherit(self, element: &Element) -> Paint {
-        Paint {
-            fill: paint_prop(element, "fill", "fill-opacity").unwrap_or(self.fill),
-            stroke: paint_prop(element, "stroke", "stroke-opacity").unwrap_or(self.stroke),
-        }
+/// Does character data directly inside `name` draw? Only a text-content element
+/// renders its own character data; `<g>A</g>` draws nothing in either reference
+/// renderer, and a `<g>` inside a `<text>` breaks the text run (R54 D).
+fn text_context(name: &str, parent_in_text: bool) -> bool {
+    match name {
+        "text" => true,
+        "tspan" | "textPath" | "a" => parent_in_text,
+        _ => false,
     }
 }
 
-fn paint_prop(element: &Element, prop: &str, opacity_prop: &str) -> Option<bool> {
-    let value = style_prop(element, prop)?.trim();
-    let painted = !matches!(value, "none" | "transparent");
-    let opacity = style_prop(element, opacity_prop)
-        .and_then(parse_number)
-        .unwrap_or(1.0);
-    let width = if prop == "stroke" {
-        style_prop(element, "stroke-width")
-            .and_then(parse_number)
-            .unwrap_or(1.0)
-    } else {
-        1.0
-    };
-    Some(painted && opacity > 0.0 && width > 0.0)
-}
-
-/// Recursive half of [`collect_letters`]: `visible` is the effective inherited
-/// `visibility`, `inherited` the inherited paint.
-fn walk_letters<'a>(
+/// Read one subtree: the letters it renders (its own marker first, then the
+/// nested markers' in document order) and the text it draws.
+///
+/// A marker's letter is the text its **whole** subtree draws, nested markers
+/// included, because that is what the renderer paints. When that text is exactly
+/// the concatenation of the nested markers' letters the marker contributed no
+/// characters of its own, so it is dropped and only the nested ones count (R54 D:
+/// `<g label="0"><text label="1">A</text></g>` is one letter, not two, while
+/// `<g label="0"><text>A</text><text label="1">B</text></g>` is "AB" plus "B").
+fn subtree<'a>(
     ctx: &mut Ctx<'a>,
     element: &'a Element,
     inherited_visible: bool,
     inherited: Paint,
-    out: &mut Vec<InheritedLetter>,
-) {
-    let Some(visible) = enter(element, inherited_visible) else {
-        return;
+    in_text: bool,
+    as_instance: bool,
+) -> (Vec<InheritedLetter>, String) {
+    let Some(visible) = enter(element, inherited_visible, as_instance) else {
+        return (Vec::new(), String::new());
     };
-    let paint = inherited.inherit(element);
+    let paint = inherited.inherit(element, &ctx.ids);
     ctx.ancestors.push(element);
-    if let Some(marker) = element.attr("data-svg-grid-label") {
-        let mut text = String::new();
-        collect_text(ctx, element, visible, paint, &mut text);
-        let letter = crate::normalize_label(&text);
-        // An empty (or whitespace-only) marker is not an "empty letter": it
-        // draws nothing, so it must not take part in the collision check.
-        if !letter.is_empty() {
-            out.push(InheritedLetter {
-                marker: marker.to_string(),
-                letter,
-            });
+    let mut letters = Vec::new();
+    let mut full = String::new();
+    if in_text && visible && paint.any() {
+        for child in &element.children {
+            if let Node::Text(text) = child {
+                full.push_str(text);
+            }
         }
     }
-    if element.name == "use" {
-        expand_use(ctx, element, visible, false, |ctx, target, visible| {
-            walk_letters(ctx, target, visible, paint, out);
-        });
-    }
     for child in &element.children {
-        if let Node::Element(child) = child {
-            walk_letters(ctx, child, visible, paint, out);
+        let Node::Element(child) = child else {
+            continue;
+        };
+        // A `<use>` draws its target in the use's own place, so it keeps the
+        // surrounding text context; any other element starts a fresh one.
+        let child_text = if child.name == "use" {
+            in_text
+        } else {
+            text_context(&child.name, in_text)
+        };
+        let (inner, text) = subtree(ctx, child, visible, paint, child_text, false);
+        letters.extend(inner);
+        full.push_str(&text);
+    }
+    if element.name == "use" {
+        expand_use(
+            ctx,
+            element,
+            visible,
+            |ctx, target, visible, as_instance| {
+                // The instanced element brings its own text context: a `<use>` of a
+                // `<text>` draws text even when the `<use>` sits in a `<g>`.
+                let target_text = text_context(&target.name, in_text);
+                let (inner, text) = subtree(ctx, target, visible, paint, target_text, as_instance);
+                letters.extend(inner);
+                full.push_str(&text);
+            },
+        );
+    }
+    if let Some(marker) = element.attr("data-svg-grid-label") {
+        let own = crate::normalize_label(&full);
+        if !own.is_empty() {
+            let nested: String = letters
+                .iter()
+                .map(|letter| letter.letter.as_str())
+                .collect();
+            if own != nested {
+                letters.insert(
+                    0,
+                    InheritedLetter {
+                        marker: marker.to_string(),
+                        letter: own,
+                    },
+                );
+            }
         }
     }
     ctx.ancestors.pop();
+    (letters, full)
 }
 
-/// Concatenate the text a marker renders, in document order, skipping subtrees
-/// that are not drawn and nested markers (they are letters of their own).
-fn collect_text<'a>(
-    ctx: &mut Ctx<'a>,
-    element: &'a Element,
-    visible: bool,
-    paint: Paint,
-    out: &mut String,
-) {
-    if element.name == "use" {
-        // The instanced text is drawn where the `<use>` sits.
-        expand_use(ctx, element, visible, true, |ctx, target, visible| {
-            collect_text(ctx, target, visible, paint, out);
-        });
-        return;
-    }
-    for child in &element.children {
-        match child {
-            Node::Text(text) => {
-                if visible && paint.any() {
-                    out.push_str(text);
-                }
-            }
-            Node::Element(child) => {
-                // A nested marker is its own letter; letting the outer marker
-                // read its text counts one glyph at two sites (R51 A).
-                if child.attr("data-svg-grid-label").is_some() {
-                    continue;
-                }
-                if let Some(child_visible) = enter(child, visible) {
-                    collect_text(ctx, child, child_visible, paint.inherit(child), out);
-                }
-            }
-        }
-    }
-}
-
-/// Follow a `<use>`'s reference once. `visit` receives the instanced subtree
-/// root (or, for a `<symbol>` wrapper, each child — the wrapper itself is not
-/// drawn). A target already on the ancestor chain is a circular reference: the
-/// renderer draws nothing for it, so it is not expanded again.
-fn expand_use<'a, F>(
-    ctx: &mut Ctx<'a>,
-    element: &'a Element,
-    visible: bool,
-    skip_marked: bool,
-    mut visit: F,
-) where
-    F: FnMut(&mut Ctx<'a>, &'a Element, bool),
+/// Follow a `<use>`'s reference once. `visit` receives the instanced subtree root
+/// and whether it is an instance root (a `<symbol>` is not drawn where it sits but
+/// is drawn through the `<use>`). A target already on the ancestor chain is a
+/// circular reference: the renderer draws nothing for it, so it is not expanded
+/// again.
+fn expand_use<'a, F>(ctx: &mut Ctx<'a>, element: &'a Element, visible: bool, mut visit: F)
+where
+    F: FnMut(&mut Ctx<'a>, &'a Element, bool, bool),
 {
     let Some(target) = use_target(element, &ctx.ids) else {
         return;
     };
-    // Reading text out of an instanced *marker* would count that glyph once as
-    // the outer letter's text and once as the inner marker's own letter; the
-    // inner marker owns it (R51 A).
-    if skip_marked && target.attr("data-svg-grid-label").is_some() {
+    // Among the non-rendered containers only a `<symbol>` is drawn through a
+    // `<use>`; `<defs>`, `<clipPath>`, `<marker>` and `<pattern>` draw nothing
+    // (measured ink 0 in both reference renderers, R54 C).
+    let as_instance = NON_RENDERED.contains(&target.name.as_str());
+    if as_instance && target.name != "symbol" {
         return;
     }
     if ctx.depth >= MAX_USE_DEPTH
@@ -246,15 +225,7 @@ fn expand_use<'a, F>(
     }
     ctx.ancestors.push(target);
     ctx.depth += 1;
-    if NON_RENDERED.contains(&target.name.as_str()) {
-        for child in &target.children {
-            if let Node::Element(child) = child {
-                visit(ctx, child, visible);
-            }
-        }
-    } else {
-        visit(ctx, target, visible);
-    }
+    visit(ctx, target, visible, as_instance);
     ctx.depth -= 1;
     ctx.ancestors.pop();
 }
@@ -263,24 +234,30 @@ fn expand_use<'a, F>(
 /// visibility. `None` means the element and its whole subtree are not rendered:
 /// `display:none` and `opacity:0` cannot be undone by a descendant, while
 /// `visibility:hidden` can (`visibility="visible"` on a child wins).
-fn enter(element: &Element, inherited_visible: bool) -> Option<bool> {
-    if NON_RENDERED.contains(&element.name.as_str()) {
+fn enter(element: &Element, inherited_visible: bool, as_instance: bool) -> Option<bool> {
+    if !as_instance && NON_RENDERED.contains(&element.name.as_str()) {
         return None;
     }
-    if matches!(style_prop(element, "display").map(str::trim), Some("none")) {
+    if matches!(
+        style_prop(element, "display").as_deref().map(str::trim),
+        Some("none")
+    ) {
         return None;
     }
     if style_prop(element, "opacity")
+        .as_deref()
         .and_then(parse_number)
         .is_some_and(|opacity| opacity <= 0.0)
     {
         return None;
     }
-    Some(match style_prop(element, "visibility").map(str::trim) {
-        Some("hidden") | Some("collapse") => false,
-        Some("visible") => true,
-        _ => inherited_visible,
-    })
+    Some(
+        match style_prop(element, "visibility").as_deref().map(str::trim) {
+            Some("hidden") | Some("collapse") => false,
+            Some("visible") => true,
+            _ => inherited_visible,
+        },
+    )
 }
 
 #[cfg(test)]
@@ -295,37 +272,56 @@ mod tests {
             .collect()
     }
 
+    fn one(marker: &str, letter: &str) -> (String, String) {
+        (marker.to_string(), letter.to_string())
+    }
+
     #[test]
     fn a_nested_marker_is_collected_once_by_its_own_element() {
         let found = letters(
             "<g data-svg-grid-label=\"0\">\
              <text data-svg-grid-label=\"1\">A</text></g>",
         );
-        assert_eq!(found, vec![("1".to_string(), "A".to_string())]);
+        assert_eq!(found, vec![one("1", "A")]);
     }
 
     #[test]
-    fn an_outer_marker_keeps_its_own_text_next_to_a_nested_one() {
+    fn an_outer_marker_reads_the_text_its_subtree_draws() {
+        // The renderer draws "AB" once, so the outer marker's letter is "AB" and
+        // the nested marker keeps its own "B" (R54 D).
         let found = letters(
             "<g data-svg-grid-label=\"0\"><text>A</text>\
              <text data-svg-grid-label=\"1\">B</text></g>",
         );
-        assert_eq!(
-            found,
-            vec![
-                ("0".to_string(), "A".to_string()),
-                ("1".to_string(), "B".to_string())
-            ]
+        assert_eq!(found, vec![one("0", "AB"), one("1", "B")]);
+    }
+
+    #[test]
+    fn bare_text_inside_a_group_is_not_drawn() {
+        // `<g>A<text>B</text>C</g>` renders only "B" (measured: pixel-identical
+        // to `<text>B</text>`), so the outer marker contributes nothing and is
+        // dropped.
+        let found = letters(
+            "<g data-svg-grid-label=\"0\">A\
+             <text data-svg-grid-label=\"1\">B</text>C</g>",
         );
+        assert_eq!(found, vec![one("1", "B")]);
+    }
+
+    #[test]
+    fn a_group_inside_text_breaks_the_run() {
+        // `<text>A<g>B</g>C</text>` draws "AC" only (measured ink 82 = "AC").
+        let found = letters("<text data-svg-grid-label=\"0\">A<g>B</g>C</text>");
+        assert_eq!(found, vec![one("0", "AC")]);
     }
 
     #[test]
     fn a_definition_counts_once_per_use() {
-        let one = letters(
+        let one_use = letters(
             "<g><defs><text id=\"L\" data-svg-grid-label=\"0\">A</text></defs>\
              <use href=\"#L\"/></g>",
         );
-        assert_eq!(one, vec![("0".to_string(), "A".to_string())]);
+        assert_eq!(one_use, vec![one("0", "A")]);
         let two = letters(
             "<g><defs><text id=\"L\" data-svg-grid-label=\"0\">A</text></defs>\
              <use href=\"#L\"/><use href=\"#L\"/></g>",
@@ -346,7 +342,7 @@ mod tests {
             "<g id=\"L\" data-svg-grid-label=\"0\"><text>A</text>\
              <use href=\"#L\" x=\"30\"/></g>",
         );
-        assert_eq!(found, vec![("0".to_string(), "A".to_string())]);
+        assert_eq!(found, vec![one("0", "A")]);
     }
 
     #[test]
@@ -356,7 +352,37 @@ mod tests {
              <text data-svg-grid-label=\"0\">A</text></symbol></defs>\
              <use href=\"#S\"/></g>",
         );
-        assert_eq!(found, vec![("0".to_string(), "A".to_string())]);
+        assert_eq!(found, vec![one("0", "A")]);
+    }
+
+    #[test]
+    fn a_marker_on_a_symbol_is_drawn_through_use() {
+        // R54 C: the marker sits on the `<symbol>` itself, which is only drawn
+        // through the `<use>`; the instanced A is a letter.
+        let found = letters(
+            "<g><defs><symbol id=\"S\" data-svg-grid-label=\"0\">\
+             <text>A</text></symbol></defs><use href=\"#S\"/></g>",
+        );
+        assert_eq!(found, vec![one("0", "A")]);
+        // Unreferenced, the symbol draws nothing.
+        let unused = letters(
+            "<g><defs><symbol id=\"S\" data-svg-grid-label=\"0\">\
+             <text>A</text></symbol></defs></g>",
+        );
+        assert!(unused.is_empty(), "{unused:?}");
+    }
+
+    #[test]
+    fn a_use_of_a_non_rendered_container_draws_nothing() {
+        // Only a `<symbol>` is instanced; `<defs>` / `<clipPath>` / `<pattern>`
+        // draw nothing through a `<use>` (measured ink 0).
+        for name in ["defs", "clipPath", "pattern", "marker"] {
+            let markup = format!(
+                "<g><{name} id=\"T\" data-svg-grid-label=\"0\">\
+                 <text>A</text></{name}><use href=\"#T\"/></g>"
+            );
+            assert!(letters(&markup).is_empty(), "{name} draws nothing");
+        }
     }
 
     #[test]
@@ -367,11 +393,84 @@ mod tests {
         );
         assert_eq!(
             letters("<g fill=\"none\"><text data-svg-grid-label=\"0\" fill=\"black\">A</text></g>"),
-            vec![("0".to_string(), "A".to_string())]
+            vec![one("0", "A")]
         );
         assert_eq!(
             letters("<text data-svg-grid-label=\"0\" fill=\"none\" stroke=\"black\">A</text>"),
-            vec![("0".to_string(), "A".to_string())]
+            vec![one("0", "A")]
+        );
+    }
+
+    #[test]
+    fn an_unresolved_paint_reference_is_not_a_letter() {
+        // R54 A: both renderers leave ink 0 for these, so they are not letters.
+        for attrs in [
+            "fill=\"url(#missing)\"",
+            "style=\"fill:url(#missing)\"",
+            "fill=\"none\" stroke=\"url(#missing)\"",
+            "fill-opacity=\"0\"",
+        ] {
+            let markup = format!("<text data-svg-grid-label=\"0\" {attrs}>A</text>");
+            assert!(letters(&markup).is_empty(), "{attrs} paints nothing");
+        }
+        // A fill-side wrapper leaves a default-fill glyph unpainted; a
+        // stroke-side wrapper needs a stroked glyph to show that it is the
+        // wrapper, not the absence of paint, that removes the ink.
+        for (wrapper, body) in [
+            (
+                "<g fill=\"url(#missing)\">",
+                "<text data-svg-grid-label=\"0\">A</text>",
+            ),
+            (
+                "<g fill-opacity=\"0\">",
+                "<text data-svg-grid-label=\"0\">A</text>",
+            ),
+            (
+                "<g stroke-opacity=\"0\">",
+                "<text data-svg-grid-label=\"0\" fill=\"none\" stroke=\"black\">A</text>",
+            ),
+            (
+                "<g stroke-width=\"0\">",
+                "<text data-svg-grid-label=\"0\" fill=\"none\" stroke=\"black\">A</text>",
+            ),
+        ] {
+            let markup = format!("{wrapper}{body}</g>");
+            assert!(letters(&markup).is_empty(), "{wrapper} paints nothing");
+        }
+        // A resolvable gradient paints, and so does a fallback colour.
+        let gradient = "<defs><linearGradient id=\"g\"><stop offset=\"0\" \
+                        stop-color=\"black\"/></linearGradient></defs>";
+        assert_eq!(
+            letters(&format!(
+                "<svg>{gradient}<text data-svg-grid-label=\"0\" fill=\"url(#g)\">A</text></svg>"
+            )),
+            vec![one("0", "A")]
+        );
+        assert_eq!(
+            letters("<text data-svg-grid-label=\"0\" fill=\"url(#missing) black\">A</text>"),
+            vec![one("0", "A")]
+        );
+    }
+
+    #[test]
+    fn a_child_can_restore_an_inherited_paint_property() {
+        assert_eq!(
+            letters(
+                "<g fill-opacity=\"0\"><text data-svg-grid-label=\"0\" \
+                 fill-opacity=\"1\">A</text></g>"
+            ),
+            vec![one("0", "A")]
+        );
+        assert_eq!(
+            letters(
+                "<g stroke-width=\"0\"><text data-svg-grid-label=\"0\" stroke-width=\"1\" \
+                 fill=\"none\" stroke=\"black\">A</text></g>"
+            ),
+            vec![one("0", "A")]
+        );
+        assert_eq!(
+            letters("<g fill-opacity=\"0.5\"><text data-svg-grid-label=\"0\">A</text></g>"),
+            vec![one("0", "A")]
         );
     }
 

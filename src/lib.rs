@@ -7,6 +7,7 @@ mod ink;
 mod input;
 mod label_conflicts;
 mod label_letters;
+mod label_paint;
 mod labels;
 mod layout;
 mod normalize;

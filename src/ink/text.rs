@@ -68,7 +68,7 @@ fn gather_text(element: &Element, out: &mut String) {
 }
 
 fn text_anchor(element: &Element) -> TextAnchor {
-    match style_prop(element, "text-anchor") {
+    match style_prop(element, "text-anchor").as_deref() {
         Some("middle") => TextAnchor::Middle,
         Some("end") => TextAnchor::End,
         _ => TextAnchor::Start,
@@ -76,7 +76,7 @@ fn text_anchor(element: &Element) -> TextAnchor {
 }
 
 fn baseline(element: &Element) -> Baseline {
-    match style_prop(element, "dominant-baseline") {
+    match style_prop(element, "dominant-baseline").as_deref() {
         Some("middle" | "central") => Baseline::Middle,
         Some("hanging" | "text-before-edge" | "before-edge") => Baseline::Hanging,
         Some("text-after-edge" | "after-edge") => Baseline::AfterEdge,

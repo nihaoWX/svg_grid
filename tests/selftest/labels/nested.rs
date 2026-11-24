@@ -1,8 +1,9 @@
-// R51 A: a marker nested inside another marker used to be counted twice — the
-// outer marker read the inner marker's text as part of its own letter, and the
-// inner marker was collected as well, so one glyph produced two sites and a
-// false duplicate (rc=2 on a figure with a single A; base `1b7ef3d` was rc=0).
-// The outer marker now stops at a nested marker: the inner one owns its text.
+// R51 A + R54 D: a marker owns every glyph its subtree draws, including the
+// glyph of a nested marker, because that is what the renderer paints. The
+// outer marker is dropped only when its whole subtree contributes no character
+// of its own (it is just a wrapper around the nested marker), so a bare
+// wrapper still yields one site while `<g label="0">A<text label="1">B</text>C`
+// yields "ABC" for the outer and "B" for the inner.
 
 use std::fs;
 use std::path::PathBuf;
@@ -56,10 +57,10 @@ fn cli_counts_a_nested_marker_once() {
 }
 
 #[test]
-fn cli_reads_the_outer_marker_text_next_to_a_nested_one() {
-    // The outer marker carries "A" of its own and the nested marker "B". A
-    // second input is labelled "AB": if the outer marker still swallowed the
-    // nested text it would collide with "AB" and fail.
+fn cli_reads_the_whole_subtree_into_the_outer_marker() {
+    // The outer marker draws "A" and the nested marker draws "B", so the
+    // renderer paints "AB" for the outer site. A second panel labelled "AB"
+    // is therefore a real duplicate, not a false positive.
     let body = format!(
         r#"<g data-svg-grid-label="0"><text x="4" y="14" font-size="12" font-family="Arial">A</text>{}</g>"#,
         letter("B", "1")
@@ -70,28 +71,46 @@ fn cli_reads_the_outer_marker_text_next_to_a_nested_one() {
     let err = stderr(&result);
     assert_eq!(
         result.status.code(),
-        Some(0),
-        "the outer marker reads only its own \"A\": {err}"
+        Some(2),
+        "the outer marker paints \"AB\" and collides with an AB panel: {err}"
     );
-    assert!(out.exists(), "rc=0 must write the output: {err}");
+    assert!(err.contains(r#"duplicate panel letters: "AB""#), "{err}");
+    assert!(err.contains("#0 (cell 0)"), "{err}");
+    assert!(err.contains("#1 (cell 0)"), "{err}");
+    assert!(!out.exists(), "rc=2 must not write the output: {err}");
     cleanup(&[nested, ab, out]);
 }
 
 #[test]
-fn cli_rejects_a_real_duplicate_between_an_outer_and_a_nested_marker() {
-    let body = format!(
-        r#"<g data-svg-grid-label="0"><text x="4" y="14" font-size="12" font-family="Arial">A</text>{}</g>"#,
-        letter("A", "1")
-    );
+fn cli_counts_a_nested_glyph_once_inside_a_covering_outer_marker() {
+    // The outer marker contributes no character of its own, so it is dropped:
+    // one panel holds a single letter "A" and is not a duplicate by itself.
+    let body = format!(r#"<g data-svg-grid-label="0">{}</g>"#, letter("A", "1"));
     let input = panel("r51_outer_inner_a.svg", &body);
     let (result, out) = compose("r51_outer_inner_a_out.svg", std::slice::from_ref(&input));
     let err = stderr(&result);
+    assert_eq!(
+        result.status.code(),
+        Some(0),
+        "the covering outer marker adds no letter of its own: {err}"
+    );
+    assert!(!err.contains("duplicate panel letters"), "{err}");
+    assert!(out.exists(), "rc=0 must write the output: {err}");
+
+    // Two panels that both draw that one "A" are a real duplicate, reported at
+    // the nested marker (cell 1), not at the covering outer marker.
+    let second = panel("r51_outer_inner_a2.svg", &body);
+    let (result, out) = compose(
+        "r51_outer_inner_a_dup.svg",
+        &[input.clone(), second.clone()],
+    );
+    let err = stderr(&result);
     assert_eq!(result.status.code(), Some(2), "{err}");
     assert!(err.contains(r#"duplicate panel letters: "A""#), "{err}");
-    assert!(err.contains("#0 (cell 0)"), "{err}");
     assert!(err.contains("#0 (cell 1)"), "{err}");
+    assert!(err.contains("#1 (cell 1)"), "{err}");
     assert!(!out.exists(), "rc=2 must not write the output: {err}");
-    cleanup(&[input, out]);
+    cleanup(&[input, second, out]);
 }
 
 #[test]

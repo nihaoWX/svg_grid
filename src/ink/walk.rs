@@ -1,6 +1,7 @@
 //! Tree traversal, the inherited presentation context, and the shared attribute
 //! helpers — the entry point [`ink_bbox`].
 
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 use crate::dom::{Element, Node};
@@ -114,54 +115,95 @@ pub(super) fn visit(
 fn inherit_ctx(element: &Element, ctx: &Ctx) -> Ctx {
     let mut next = *ctx;
     if let Some(stroke) = style_prop(element, "stroke") {
-        next.stroke_painted = !matches!(stroke, "none" | "transparent");
+        next.stroke_painted = !matches!(stroke.as_ref(), "none" | "transparent");
     }
-    if let Some(width) = style_prop(element, "stroke-width").and_then(parse_number) {
+    if let Some(width) = style_prop(element, "stroke-width").and_then(|v| parse_number(&v)) {
         next.stroke_width = width;
     }
-    if let Some(size) = style_prop(element, "font-size").and_then(parse_number) {
+    if let Some(size) = style_prop(element, "font-size").and_then(|v| parse_number(&v)) {
         next.font_size = size;
     }
     next
 }
 
 fn is_display_none(element: &Element) -> bool {
-    matches!(style_prop(element, "display"), Some("none"))
+    matches!(style_prop(element, "display").as_deref(), Some("none"))
 }
 
 /// Read a presentation property, honouring the inline `style="..."` declaration
 /// list first (it outranks a same-named presentation attribute) and falling back
 /// to the attribute itself.
-pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<&'a str> {
+///
+/// The inline list is a real cascade (R54): `/* … */` comments are stripped, when
+/// the same property is declared twice the later declaration wins, and a
+/// declaration carrying `!important` outranks one without it (among equal
+/// `!important` flags the later one still wins). Both reference renderers agree
+/// on the last two rules; they only disagree on whether a `display:none /* c */`
+/// comment is stripped (resvg says yes, cairosvg keeps the literal value) and
+/// this follows resvg, as R51 did for keyword case.
+pub(crate) fn style_prop<'a>(element: &'a Element, prop: &str) -> Option<Cow<'a, str>> {
     if let Some(style) = element.attr("style") {
+        let style = strip_comments(style);
+        let mut plain: Option<&str> = None;
+        let mut important: Option<&str> = None;
         for declaration in style.split(';') {
-            if let Some((name, value)) = declaration.split_once(':') {
-                if name.trim() == prop {
-                    return Some(strip_important(value));
-                }
+            let Some((name, value)) = declaration.split_once(':') else {
+                continue;
+            };
+            if name.trim() != prop {
+                continue;
+            }
+            match split_important(value) {
+                (value, true) => important = Some(value),
+                (value, false) => plain = Some(value),
             }
         }
+        let winner = important.or(plain);
+        if let Some(value) = winner {
+            return Some(Cow::Owned(value.to_string()));
+        }
     }
-    element.attr(prop)
+    element.attr(prop).map(Cow::Borrowed)
 }
 
-/// Drop a trailing CSS `!important`, which a declaration value may carry.
-/// The keyword is ASCII case-insensitive and may be separated from the `!` by
-/// whitespace (`display:none ! important`), as in CSS; both reference renderers
-/// honour all of these spellings (R51). A presentation attribute is not a CSS
-/// declaration, so no stripping happens on the attribute fallback.
-fn strip_important(value: &str) -> &str {
+/// Drop `/* … */` comments from a declaration list, leaving a single space behind
+/// so two tokens never fuse.
+fn strip_comments(style: &str) -> Cow<'_, str> {
+    if !style.contains("/*") {
+        return Cow::Borrowed(style);
+    }
+    let mut out = String::with_capacity(style.len());
+    let mut rest = style;
+    loop {
+        let Some(start) = rest.find("/*") else {
+            out.push_str(rest);
+            return Cow::Owned(out);
+        };
+        out.push_str(&rest[..start]);
+        out.push(' ');
+        let after = &rest[start + 2..];
+        match after.find("*/") {
+            Some(end) => rest = &after[end + 2..],
+            None => return Cow::Owned(out),
+        }
+    }
+}
+
+/// Split a trailing `!important` from a declaration value.
+fn split_important(value: &str) -> (&str, bool) {
     let value = value.trim();
     let Some((head, tail)) = value.rsplit_once('!') else {
-        return value;
+        return (value, false);
     };
     if tail.trim().eq_ignore_ascii_case("important") {
-        head.trim_end()
+        (head.trim_end(), true)
     } else {
-        value
+        (value, false)
     }
 }
 
+/// Drop a trailing CSS `!important`… (see [`split_important`], which also reports
+/// whether the flag was present; the cascade above needs both facts).
 pub(super) fn number_attr(element: &Element, name: &str) -> Option<f64> {
     element.attr(name).and_then(parse_number)
 }
