@@ -140,3 +140,58 @@ fn a_href_chain_is_transitive() {
         "the user-space copy keeps the user-space link: {text}"
     );
 }
+
+/// The gradient sibling of the transitive case, three layers deep: `h3` is an
+/// `objectBoundingBox` gradient, so **its own body** is mapped even when the
+/// composer instantiates the `h3` copy in panel user space. Its first `href`
+/// edge therefore already points at `h2`'s verbatim copy, and that copy's edge
+/// at `g`'s. R62's first cut (cc66d4b) decided the edge from the referrer's
+/// **slot** (`h3` is user space here), so it left `h3 → h2` scaled — the R62
+/// review found the three-layer assertion had been reduced to one layer.
+#[test]
+fn a_three_layer_gradient_href_chain_switches_every_copy() {
+    let text = run_text(&panel(
+        "xy",
+        r##"<linearGradient id="g" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0">
+              <stop offset="0" stop-color="red"/><stop offset="1" stop-color="blue"/>
+            </linearGradient>
+            <linearGradient id="h2" gradientUnits="userSpaceOnUse" href="#g" x1="2"/>
+            <linearGradient id="h3" gradientUnits="objectBoundingBox" href="#h2"/>
+            <pattern id="pv" patternUnits="userSpaceOnUse" width="20" height="20"
+                     viewBox="0 0 10 10"><rect width="10" height="10" fill="url(#h3)"/></pattern>"##,
+        r##"<rect width="30" height="80" fill="url(#h3)"/>
+            <rect x="30" width="30" height="80" fill="url(#h2)"/>
+            <rect x="60" width="40" height="80" fill="url(#pv)"/>"##,
+    ));
+    // The panel-side copy of h3 is still drawn in bounding-box units, so its
+    // first edge is an edge of a mapped body and must switch to the verbatim
+    // copy of h2 (this is the assertion cc66d4b fails).
+    assert!(
+        text.contains(
+            r##"id="h3" gradientUnits="objectBoundingBox" href="#h2--svg-grid-verbatim""##
+        ),
+        "the bbox gradient must inherit h2's verbatim copy: {text}"
+    );
+    assert!(
+        text.contains(
+            r##"id="h3--svg-grid-verbatim" gradientUnits="objectBoundingBox" href="#h2--svg-grid-verbatim""##
+        ),
+        "its verbatim copy must inherit the same: {text}"
+    );
+    assert!(
+        text.contains(
+            r##"id="h2--svg-grid-verbatim" gradientUnits="userSpaceOnUse" href="#g--svg-grid-verbatim""##
+        ),
+        "the second edge must end in g's verbatim copy: {text}"
+    );
+    assert!(
+        text.contains(r##"id="h2" gradientUnits="userSpaceOnUse" href="#g""##),
+        "the user-space copy keeps the user-space link: {text}"
+    );
+    assert!(
+        text.contains(
+            r##"id="g--svg-grid-verbatim" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="10" y2="0""##
+        ),
+        "the verbatim gradient keeps its numbers: {text}"
+    );
+}

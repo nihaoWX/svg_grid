@@ -1,0 +1,56 @@
+id = "R63"
+date = "2026-11-24"
+verdict = "新领土"
+
+family = [
+  "W7（值被原样保留、产物里的数字与几何不一致）在非 --verbose 下完全静默：convert --check 说 compatible、rc=0、stderr 0 字节，组图产物静默画错",
+  "R62 评审的测试缺口：椭圆 ry 轴变异体存活（407 条 lib 测试全绿）；三层 gradient href 断言被削成一层",
+]
+
+closures = [
+  { finding = "R63-F1", tier = "代码" },
+  { finding = "R63-F2", tier = "文档" },
+  { finding = "R63-F3", tier = "代码" },
+  { finding = "R63-F4", tier = "代码" },
+  { finding = "R63-F5", tier = "证据" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61", "R62", "R62b",
+]
+
+touched = [
+  { round = "R19", why = "测试总数 699→701（BASELINE 与 COUNTS.lib 407→409；R63 加椭圆各向异性与三层 gradient href 链 2 条 lib 测试）" },
+  { round = "R57", why = "第 6/200 行写死的总数 699→701（701 = 409 + 59 + 233）" },
+]
+
+note = """
+为什么同类：R31 定的是“默认静音”，但 W7 不是提示而是“产物数字与几何不一致”的事实；
+R61 评审已记 W7 默认不可见的前提，本轮把它变成规则（W7 例外）而不是新行为。
+根因（已证）：emit(verbose) 在 !verbose 时整函数 return，W7 行与 footer 一起被吞；
+修法是用现成的 classify 逐行取真实码，只放行含 "W7" 的行，note 仍只在 --verbose。
+怎么不弄坏前面：R31 的 diagnostics_are_silent_by_default_and_verbose_restores_them 仍绿；
+214 个 tracked tests/**/*.svg + 58 fixtures 的 stderr 无任何 warning 行、rc=0 的运行为 0 字节，
+且 rc 与产物字节与 /tmp/r50base @e0c6033 逐字节相同。
+两条新测试都承重：ry 轴换成 x 因子 ⇒ an_ellipse_scales_each_radius_with_its_own_axis 红；
+body_is_verbatim 恒真 ⇒ a_three_layer_gradient_href_chain_switches_every_copy 红；
+后者在 cc66d4b worktree 上也已实测红（h3 的 href 停在 #h2）。
+"""
+
+how_to_run = """
+cd <repo> && cargo build --release --offline
+python3 docs/PITFALLS/round-data/R63/test.py
+# 默认全绿（31 checks）；有牙：可见性用例必须转红
+SVG_GRID_PIN_BIN=/tmp/r63_before_bin python3 docs/PITFALLS/round-data/R63/test.py
+# 修前 build = 552eeef 的 release（sha256 57ff16d1760deb527c87f673d130fa48c5c0297d0ea379788b0cc82abd97933e）
+# 也可以自建：
+#   git worktree add --detach /tmp/r63_pin 552eeef
+#   (cd /tmp/r63_pin && CARGO_TARGET_DIR=/tmp/r63_pin_target cargo build --release --offline)
+#   cp /tmp/r63_pin_target/release/svg_grid /tmp/r63_before_bin
+# 对照基线（rc/字节）默认 /tmp/r50base/target/release/svg_grid @e0c6033，可用 SVG_GRID_PRE_BIN 覆盖。
+"""

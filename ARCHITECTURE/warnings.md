@@ -12,13 +12,18 @@
    （`src/warnings/mod.rs` 的模块文档把这条写成显式契约）。
 2. **一次调用聚合一条**：同类 offender 合并成一条消息，按 `(输入, 元素, 属性, 细节)` **去重**，
    超过 `MAX_LISTED = 6` 折叠成 `+N more`（五十个同样畸形的 path 也只出一行）。
-3. **默认静音**（2026-11-22 R31 起）：非致命告警只写 stderr，**退出码不变、产物字节不变**（有测试锁定）；
-   **不加 `--verbose` 时一行都不打印**，`--verbose` 才展开（`src/warnings/mod.rs` 的 `emit(verbose)`）。末尾另打一行固定的收尾句：
+3. **默认静音，但 W7 例外**（2026-11-22 R31 起；2026-11-24 R63 起 W7 默认出声）：非致命告警只写 stderr，
+   **退出码不变、产物字节不变**（有测试锁定）；不加 `--verbose` 时默认一行都不打印，`--verbose` 才展开
+   （`src/warnings/mod.rs` 的 `emit(verbose)`）。**唯一的例外是 W7**（`… could not be rewritten, kept
+   verbatim`）：这类告警意味着**产物里的数字与几何不一致**（该缩放的数字被原样留下），属"必要信息"，
+   所以非 `--verbose` 也打；判定走 `classify` 的真实码（`src/warnings/codes.rs`），不另立前缀表。
+   其余 W1/W2/W4a/W4b/W5/W6/W9 仍只在 `--verbose` 下打印。只要有行被打出，末尾另打一行固定的收尾句：
    `non-fatal warning(s) — the exit code and the output file are unchanged`。**这一行不带条数**
    （R25 起；条数就是上面的行数，`1 non-fatal warning(s)` 这种写法不再出现，见 §1.5 规则 3）。
+   `doctor` 内部传 `--verbose` 自行判 W7/W9，因此不受这个例外影响。
 4. **一律英文**（前缀 `svg_grid: warning:` / 原因前缀 `svg_grid: note:`）——本工具将来开源。
-5. **只在真触发时出声**：正常路径**零字节 stderr**（无 `--verbose` 时更严格——任何告警都不打印；
-   `compose_s22.py` 全流程 stderr = 0 字节是回归项）。
+5. **只在真触发时出声**：正常路径**零字节 stderr**（无 `--verbose` 时更严格——除 W7 外任何告警都不打印；
+   `compose_s22.py` 全流程 stderr = 0 字节是回归项；214 个 `convert` + 58 个 `plot-grid` 的 0 字节由 R63 锁定）。
 
 ## 1.5 文案规则（2026-11-06 R25 定，实测见 `round-data/R25/`）
 
@@ -28,7 +33,8 @@
 2. **公共原因只打一次**：同因多条的告警把"为什么"抽成**每次运行最多一行** `svg_grid: note: …`
    （`NOTE_FONT_SIZE` / `NOTE_CANVAS_INK` / `NOTE_INK_DUST` / `NOTE_PASSTHROUGH` /
    `NOTE_FONT_FALLBACK` / `NOTE_LABEL_CLIP` / `NOTE_DANGLING`），各条只留"是什么 + 哪个输入 + 怎么修"。
-   **没有告警时 note 一行都不出现**（成功路径仍是 0 字节 stderr）；`doctor` 的 `classify` 只数
+   **没有告警时 note 一行都不出现**（成功路径仍是 0 字节 stderr）；**note 仍只在 `--verbose` 下打印**——
+   R63 的 W7 例外只出声告警行，不带 note；`doctor` 的 `classify` 只数
    `svg_grid: warning:` 行，所以 note 既不进 `warnings=N`、也不参与告警码判定。
 3. **`N = 1` 不打计数**：`1 input` / `1 cell` / `1 attribute`，不写 `1 input(s)`；收尾句也不带条数。
    唯一例外是 **W9 的 `N reference(s) point at an id that …`**：`round-data/R16` 逐字断言

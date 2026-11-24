@@ -6,19 +6,21 @@
 //! ratio, or receives inconsistent labels, the run still succeeds (exit code 0)
 //! and the output file is still written byte-for-byte as before; with
 //! `--verbose`, a warning is printed to stderr so an agent driving the tool can
-//! notice and fix the invocation. Without that flag the diagnostics are
-//! suppressed entirely: stderr is reserved for errors (a usage error, re-lettering
-//! an already-lettered composite, a mismatched label list, a missing font), so a
-//! successful run is byte-for-byte silent even when the layout had something to
-//! report.
+//! notice and fix the invocation. Without that flag the *hints* are suppressed:
+//! stderr is reserved for errors (a usage error, re-lettering an already-lettered
+//! composite, a mismatched label list, a missing font) and for **W7**, whose
+//! "kept verbatim" means the output's numbers no longer match its geometry — a
+//! silently wrong figure, so that one family prints even on a non-verbose run.
+//! A successful run with no W7 offender stays byte-for-byte silent.
 //!
 //! Every message answers three questions: *what happened*, *why it matters*, and
 //! *what to do about it* — but the *why* is never repeated from line to line. A
 //! cause that several messages share is lifted into one `svg_grid: note:` line,
 //! printed at most once per run (see [`NOTE_FONT_SIZE`] and friends); each
 //! warning then carries only *what happened*, *which input*, and the `Fix:`.
-//! A run with no warnings (or a non-verbose run) prints neither a warning nor a
-//! note (zero bytes of stderr — that is a regression item).
+//! A run with no warnings prints neither a warning nor a note (zero bytes of
+//! stderr — that is a regression item), and a non-verbose run prints only the
+//! W7 lines (see [`Warnings::emit`]).
 //!
 //! The presentation rules live in `ARCHITECTURE/warnings.md` §1:
 //!
@@ -196,22 +198,36 @@ impl Warnings {
     /// printed — successful runs keep stderr for errors only. The exit code is
     /// never affected and no output byte changes either way.
     ///
+    /// W7 is the one exception to the flag: "could not be rewritten, kept
+    /// verbatim" means the output carries a number that did not follow the
+    /// geometry, so those lines print even without `--verbose`; every other code
+    /// stays behind the flag. The classification uses the same [`classify`] the
+    /// tests and `--check` use, so a line is selected by its real code, not by a
+    /// second prefix table.
+    ///
     /// The footer carries no count: the number of warnings is the number of lines
     /// above, and a one-warning run must not print `1 non-fatal warning(s)`
     /// (`ARCHITECTURE/warnings.md` §1 rule 3).
     pub fn emit(&self, verbose: bool) {
-        if !verbose || self.messages.is_empty() {
-            return;
-        }
+        let mut printed = false;
         for message in &self.messages {
-            eprintln!("{WARNING_PREFIX}{message}");
+            let line = format!("{WARNING_PREFIX}{message}");
+            let (codes, _) = classify(&line);
+            if verbose || codes.contains(&"W7") {
+                eprintln!("{line}");
+                printed = true;
+            }
         }
-        for note in &self.notes {
-            eprintln!("{NOTE_PREFIX}{note}");
+        if verbose {
+            for note in &self.notes {
+                eprintln!("{NOTE_PREFIX}{note}");
+            }
         }
-        eprintln!(
-            "{WARNING_PREFIX}non-fatal warning(s) — the exit code and the output file are unchanged"
-        );
+        if printed {
+            eprintln!(
+                "{WARNING_PREFIX}non-fatal warning(s) — the exit code and the output file are unchanged"
+            );
+        }
     }
 }
 

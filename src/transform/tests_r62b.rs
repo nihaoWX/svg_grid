@@ -32,6 +32,15 @@ const BIG: Rect = Rect {
     height: 640.0,
 };
 
+/// Anisotropic: `sx = 2`, `sy = 3`. With `sx == sy` a mutant that swaps the two
+/// axes is invisible (the R62 review's `ry` mutant survived every `BIG` case).
+const ANISO: Rect = Rect {
+    x: 0.0,
+    y: 0.0,
+    width: 200.0,
+    height: 240.0,
+};
+
 fn doc(policy: &str, body: &str) -> String {
     format!(
         r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
@@ -95,6 +104,48 @@ fn an_ellipse_scales_its_centre_and_both_radii() {
     assert_eq!(attr_by_name(&out, "ellipse", "cy").as_deref(), Some("160"));
     assert_eq!(attr_by_name(&out, "ellipse", "rx").as_deref(), Some("80"));
     assert_eq!(attr_by_name(&out, "ellipse", "ry").as_deref(), Some("40"));
+}
+
+#[test]
+fn an_ellipse_scales_each_radius_with_its_own_axis() {
+    let svg = doc(
+        "xy",
+        r#"<ellipse cx="20" cy="20" rx="10" ry="5" fill="red"/>"#,
+    );
+    let out = run_in(&svg, ANISO);
+    assert_eq!(attr_by_name(&out, "ellipse", "cx").as_deref(), Some("40"));
+    assert_eq!(attr_by_name(&out, "ellipse", "cy").as_deref(), Some("60"));
+    assert_eq!(
+        attr_by_name(&out, "ellipse", "rx").as_deref(),
+        Some("20"),
+        "rx follows x (sx = 2): {out}"
+    );
+    assert_eq!(
+        attr_by_name(&out, "ellipse", "ry").as_deref(),
+        Some("15"),
+        "ry follows y (sy = 3): {out}"
+    );
+
+    // Only `rx` is spelled: the renderer's implicit ry is the *source* rx and
+    // must be materialised on the y axis (10 * 3), not the x axis.
+    let svg = doc("xy", r#"<ellipse cx="20" cy="20" rx="10" fill="red"/>"#);
+    let out = run_in(&svg, ANISO);
+    assert_eq!(attr_by_name(&out, "ellipse", "rx").as_deref(), Some("20"));
+    assert_eq!(
+        attr_by_name(&out, "ellipse", "ry").as_deref(),
+        Some("30"),
+        "the implied ry is filled by its own axis (10 * 3): {out}"
+    );
+
+    // Only `ry` is spelled: the implicit rx is 10 * 2, not 10 * 3.
+    let svg = doc("xy", r#"<ellipse cx="20" cy="20" ry="10" fill="red"/>"#);
+    let out = run_in(&svg, ANISO);
+    assert_eq!(
+        attr_by_name(&out, "ellipse", "rx").as_deref(),
+        Some("20"),
+        "the implied rx is filled by its own axis (10 * 2): {out}"
+    );
+    assert_eq!(attr_by_name(&out, "ellipse", "ry").as_deref(), Some("30"));
 }
 
 #[test]
