@@ -1,8 +1,8 @@
 //! Nested definitions that are also referenced from outside their enclosing
 //! definition are moved to the top level before the copies are made.
 //!
-//! `defs::split` copies a definition once per policy and repoints every reference
-//! at the copy for its own policy. A definition nested inside another one is
+//! `defs::split` copies a definition once per slot and repoints every reference
+//! at the copy for its own slot. A definition nested inside another one is
 //! instantiated inside each outer copy, so it cannot be split independently: if
 //! an outside reference also points at it, the outside reference needs a copy at
 //! the top level, and leaving it nested would either duplicate its id (one copy
@@ -15,12 +15,12 @@
 use std::collections::{BTreeSet, HashMap};
 
 use super::defs::is_definition;
-use super::ScalePolicy;
+use super::domains::Slot;
 use crate::dom::{Element, Node};
 
 /// Move every nested definition that is also referenced from outside its
 /// enclosing definition to the top level.
-pub(super) fn hoist_outside(root: &mut Element, refs: &HashMap<String, BTreeSet<ScalePolicy>>) {
+pub(super) fn hoist_outside(root: &mut Element, refs: &HashMap<String, BTreeSet<Slot>>) {
     loop {
         let mut moved = Vec::new();
         take_outside(root, refs, None, &mut moved);
@@ -33,7 +33,7 @@ pub(super) fn hoist_outside(root: &mut Element, refs: &HashMap<String, BTreeSet<
 
 fn take_outside(
     parent: &mut Element,
-    refs: &HashMap<String, BTreeSet<ScalePolicy>>,
+    refs: &HashMap<String, BTreeSet<Slot>>,
     enclosing: Option<&str>,
     moved: &mut Vec<Element>,
 ) {
@@ -61,8 +61,8 @@ fn take_outside(
     }
 }
 
-/// Whether `id` is referenced under a policy its enclosing definition is not.
-fn refers_outside(refs: &HashMap<String, BTreeSet<ScalePolicy>>, id: &str, owner: &str) -> bool {
+/// Whether `id` is referenced in a slot its enclosing definition is not.
+fn refers_outside(refs: &HashMap<String, BTreeSet<Slot>>, id: &str, owner: &str) -> bool {
     let Some(own) = refs.get(id) else {
         return false;
     };

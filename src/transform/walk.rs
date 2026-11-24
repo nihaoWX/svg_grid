@@ -6,10 +6,11 @@
 
 use super::defs::{self, DefsPlan};
 use super::dispatch::rewrite_primitive;
+use super::domains::{marker_body_is_verbatim, Slot};
 use super::filters;
 use super::lengths::{rewrite_scaled_length, LengthAxis};
 use super::links::IdIndex;
-use super::patterns::{self, pattern_body_is_verbatim, PatternIndex};
+use super::patterns::{pattern_body_is_verbatim, PatternIndex};
 use super::primitives::rewrite_marker_box;
 use super::units::{marker_units_are_user_space, units_of, Units};
 use super::ScalePolicy;
@@ -89,12 +90,25 @@ pub(super) fn transform_element(
     // A definition does not inherit the policy of the `<defs>` block it is written
     // in: it inherits the policy of the elements that point at it, which is what
     // `defs` resolved (round-data/R46).
-    let policy = context.defs.policy_of(element).unwrap_or_else(|| {
-        element
+    //
+    // A definition can also be instantiated **verbatim**: when every reference comes
+    // from inside a body the renderer already maps (a pattern with a `viewBox` or
+    // `patternContentUnits="objectBoundingBox"`, a marker with a `viewBox`), its
+    // numbers are that body's units and scaling them again doubles the motif
+    // (round-data/R62). Then the whole subtree is left alone — tile, coordinates,
+    // body and `stroke-width` alike; the referenced definitions were resolved to
+    // this slot too, so they are skipped on their own visit.
+    let slot = context.defs.slot_of(element);
+    if slot.is_some_and(Slot::is_verbatim) {
+        return Ok(());
+    }
+    let policy = match slot {
+        Some(Slot::UserSpace(policy)) => policy,
+        _ => element
             .attr("data-scale")
             .map(parse_policy)
-            .unwrap_or(inherited)
-    });
+            .unwrap_or(inherited),
+    };
 
     rewrite_primitive(element, policy, context, passthroughs)?;
 
@@ -286,13 +300,6 @@ pub(super) fn transform_element(
     }
 
     Ok(())
-}
-
-/// Whether a `<marker>`'s body is already expanded to its viewport by the renderer.
-fn marker_body_is_verbatim(element: &Element) -> bool {
-    element
-        .attr("viewBox")
-        .is_some_and(patterns::valid_view_box)
 }
 
 pub(crate) fn parse_policy(value: &str) -> ScalePolicy {

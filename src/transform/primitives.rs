@@ -7,8 +7,8 @@ use crate::geom::{parse_f32, Rect};
 use crate::warnings::Passthroughs;
 
 use super::lengths::{
-    length_factor, map_point, note_non_finite, note_overflow, rewrite_scaled_length, scaled_finite,
-    LengthAxis,
+    length_factor, length_scale_factor, map_point, note_non_finite, note_overflow,
+    rewrite_scaled_length, scaled_finite, LengthAxis,
 };
 use super::ScalePolicy;
 
@@ -60,6 +60,175 @@ pub(super) fn rewrite_pair(
     element.set_attr(x_attr, crate::format_number(x));
     element.set_attr(y_attr, crate::format_number(y));
 
+    Ok(())
+}
+
+/// `<ellipse>`: the centre is a coordinate pair, `rx` follows the x axis and `ry`
+/// the y axis, exactly like `<circle>`'s `cx/cy/r` split across two radii.
+///
+/// One SVG rule makes this more than three rewrites: when only one radius is
+/// given, the other is **equal to it**. Writing back only the spelled radius would
+/// therefore leave the implicit one at the old value — an ellipse of the wrong
+/// shape as soon as the axes scale differently (measured at s=8 on `rx` alone:
+/// 修前 xor 20656/255 with both radii at 10, 修后 `rx="80"` `ry="80"` xor 0 —
+/// round-data/R62). The missing radius is materialised whenever the policy scales
+/// *any* axis: with the
+/// factor of the axis it belongs to, or factor 1 when that axis is not scaled
+/// (`data-scale="x"`: `rx` grows, `ry` keeps the source value, which is exactly
+/// "equal to the *old* rx"). A policy that scales nothing (`position`/`none`)
+/// leaves the pair alone so untouched input keeps its bytes.
+///
+/// A radius spelled only in inline `style` cannot be materialised safely: the
+/// renderer derives the missing radius from the style value, so writing an
+/// attribute would invent geometry the source does not show (measured: d1render
+/// draws neither spelling, xor 0/0 before and after — round-data/R62 registers the
+/// case). Both radii therefore stay verbatim.
+#[allow(clippy::too_many_arguments)]
+pub(super) fn rewrite_ellipse(
+    element: &mut Element,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
+    let (radius_x, radius_y) = radii(element);
+    rewrite_pair(
+        element,
+        "cx",
+        "cy",
+        policy,
+        source,
+        target,
+        index,
+        passthroughs,
+    )?;
+    // Exactly one radius, spelled in `style`: leave both verbatim rather than
+    // materialise geometry the source's own renderer does not show (see above).
+    let style_only = match (&radius_x, &radius_y) {
+        (Some(radius), None) | (None, Some(radius)) => radius.style,
+        _ => false,
+    };
+    if style_only {
+        return Ok(());
+    }
+    rewrite_scaled_length(
+        element,
+        "rx",
+        policy,
+        source,
+        target,
+        LengthAxis::X,
+        index,
+        passthroughs,
+    )?;
+    rewrite_scaled_length(
+        element,
+        "ry",
+        policy,
+        source,
+        target,
+        LengthAxis::Y,
+        index,
+        passthroughs,
+    )?;
+    let Some((radius, missing, axis)) = implied_radius(&radius_x, &radius_y) else {
+        return Ok(());
+    };
+    write_implied_radius(
+        element,
+        radius,
+        missing,
+        axis,
+        policy,
+        source,
+        target,
+        index,
+        passthroughs,
+    )
+}
+
+/// One radius as it is spelled, and in which channel.
+struct Radius {
+    raw: String,
+    style: bool,
+}
+
+/// The `rx`/`ry` the renderer will use: the inline `style` wins over the
+/// presentation attribute for the same property, so the style is asked first.
+fn radii(element: &Element) -> (Option<Radius>, Option<Radius>) {
+    let style = element.attr("style").unwrap_or_default();
+    let from_style =
+        |property: &str| style_length(style, property).map(|raw| Radius { raw, style: true });
+    let from_attribute = |property: &str| {
+        element.attr(property).map(|raw| Radius {
+            raw: raw.to_string(),
+            style: false,
+        })
+    };
+    (
+        from_style("rx").or_else(|| from_attribute("rx")),
+        from_style("ry").or_else(|| from_attribute("ry")),
+    )
+}
+
+/// The value of `property` in an inline `style`, if declared.
+fn style_length(style: &str, property: &str) -> Option<String> {
+    style.split(';').find_map(|declaration| {
+        let (name, value) = declaration.split_once(':')?;
+        (name.trim() == property).then(|| value.trim().to_string())
+    })
+}
+
+/// The one radius whose value the other inherits, with the attribute to write and
+/// the axis that attribute belongs to.
+fn implied_radius<'a>(
+    radius_x: &'a Option<Radius>,
+    radius_y: &'a Option<Radius>,
+) -> Option<(&'a Radius, &'static str, LengthAxis)> {
+    match (radius_x, radius_y) {
+        (Some(radius), None) => Some((radius, "ry", LengthAxis::Y)),
+        (None, Some(radius)) => Some((radius, "rx", LengthAxis::X)),
+        _ => None,
+    }
+}
+
+/// `rx` and `ry` are an equal pair when one of them is absent; copy the present
+/// value onto the missing axis, scaled by that axis's factor.
+#[allow(clippy::too_many_arguments)]
+fn write_implied_radius(
+    element: &mut Element,
+    radius: &Radius,
+    missing: &str,
+    axis: LengthAxis,
+    policy: ScalePolicy,
+    source: Rect,
+    target: Rect,
+    index: usize,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
+    let factor = length_scale_factor(policy, source, target, axis);
+    let other = match axis {
+        LengthAxis::Y => LengthAxis::X,
+        _ => LengthAxis::Y,
+    };
+    // A policy that scales neither axis keeps the implicit pair correct as is.
+    if factor.is_none() && length_scale_factor(policy, source, target, other).is_none() {
+        return Ok(());
+    }
+    let factor = factor.unwrap_or(1.0);
+    let spelled = if missing == "ry" { "rx" } else { "ry" };
+    let value = parse_f32(&radius.raw, spelled)?;
+    if !value.is_finite() {
+        note_non_finite(passthroughs, index, element, missing, &radius.raw, value);
+        return Ok(());
+    }
+    match scaled_finite(value, factor) {
+        Some(scaled) => {
+            element.set_attr(missing, crate::format_number(scaled));
+        }
+        None => note_overflow(passthroughs, index, element, missing, &radius.raw, factor),
+    }
     Ok(())
 }
 

@@ -7,6 +7,8 @@ family = [
   "修法：所有计算写回点统一走 scaled_finite（因子与乘积都有限才写），否则逐字节保留原文 + W7；写回分组原子（rect/image 四边、cx/cy、points、d、filter 1-2 数字）；因子本身非有限时 W7 点名 input #0，rc 仍 0、产物良构可渲染。",
   "P3 口径更正：spot light z 三位小数 45.277 实测 5 像素（maxdiff 1）、point light 1 像素、精确值 0 像素；原文“11 像素 / 精确值仍留 4 像素”作废。",
   "P3 证据空转：R60 F5-xy 的字符串替换在 data URI 插值之后（恒 128、只测属性）⇒ 改为插值前注入并补真实像素位移断言；R58 A9 fixture 两种取值 xor 都为 0（不可判别）⇒ 注释指路，可判别用例进 R61；rotate 非有限守卫端到端不可达 ⇒ 改单测。style= 路径与属性路径统一报 W7（D）。",
+  "R62 口径更正（报告已按流程删除，数字以本文件为准）：M2 证据的红名计数是 A1/A2/A9 共 13 条、整轮 15 条，不是 12 条；语料是 214 个（含 tests/user_tests/ 的 6 个）、排除后 208 个，不是“214 减去 user_tests”；F1 的 lines_after=57-151 覆盖了本轮新增的 helper，符号本身在第 88 行 ⇒ 应读作“含 helper”；W7 只在 --verbose 下可见（PROGRESS.md:16 早已写明默认静默），所以“值保留”场景的默认 stderr 本来就是空的，不能用它证明 W7 缺席。",
+  "R62 未做（可选 P3，已证价值不足）：非有限 points 的双 W7 需要把“整组保留”拆成逐属性 offender 才能正确归属，会改动 W7 文案与大量证据的期望字符串；A3 的“1 attribute / 保留 2 个”同理；R61 test.py 失败时只打印 err[-160:] 属诊断便利，不影响结论。三条都登记在 R62 的 blocker 报告“未做清单”里。",
 ]
 
 closures = [
@@ -50,7 +52,8 @@ rm -rf /tmp/r61before && mkdir -p /tmp/r61before
 git archive cd5875d | tar -x -C /tmp/r61before
 cp -r fontlib /tmp/r61before/
 (cd /tmp/r61before && cargo build --release --offline)
-# 本脚本默认 BEFORE=/tmp/r60_eval/pin/target/release/svg_grid，可用 SVG_GRID_BEFORE 覆盖。
+# 本脚本默认 BEFORE=/tmp/r60_eval/pin/target/release/svg_grid，可用 SVG_GRID_BEFORE_BIN 覆盖
+# （test.py:43 读的就是 SVG_GRID_BEFORE_BIN；旧稿写 SVG_GRID_BEFORE 是错的）。
 
 # 全绿（85 checks）
 python3 docs/PITFALLS/round-data/R61/test.py

@@ -21,8 +21,13 @@
 
 ## 2. 主库受支持的构造
 
-`circle` / `text` / `tspan` / `use` / `line` / `rect` / `image` / `polyline` / `polygon` /
-**`path`**（2026-09-28 R5 起），外加 `stroke-width` 与 `rotate(angle, x, y)`。
+`circle` / **`ellipse`** / `text` / `tspan` / `use` / `line` / `rect` / `image` / `polyline` /
+`polygon` / **`path`**（2026-09-28 R5 起），外加 `stroke-width` 与 `rotate(angle, x, y)`。
+
+- `<ellipse>` 的 `cx/cy` 是坐标对（x/y 各按自己的轴重映射），`rx` 按 x 轴、`ry` 按 y 轴缩放；
+  只写了一个半径时，SVG 规定另一个**与它相等**，所以缺失的半径会按自己的轴因子补写成属性
+  （`data-scale="x"` 时补写值 = 源值，因为 y 不缩放）；`position`/`none` 下两半径都不动。
+  R62 起支持，之前完全未重写（`convert --check` 也不报，见 round-data/R62）。
 
 - `<image>` 与 `<rect>` 同款处理 `x/y/width/height`；
 - `<tspan>` 的 `x`/`y` 是**绝对坐标**（覆盖父 `<text>` 的当前位置），按轴独立重写、与 `<text>` 一起搬运

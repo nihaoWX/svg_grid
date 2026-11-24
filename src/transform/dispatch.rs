@@ -11,7 +11,7 @@ use super::patterns::{
     pattern_body_is_verbatim, pattern_units_is_user_space, rewrite_pattern_tile,
 };
 use super::primitives::{
-    rewrite_axes, rewrite_pair, rewrite_points, rewrite_rect, rewrite_region,
+    rewrite_axes, rewrite_ellipse, rewrite_pair, rewrite_points, rewrite_rect, rewrite_region,
     rewrite_rotate_transform,
 };
 use super::transforms::rewrite_paint_transform;
@@ -55,6 +55,9 @@ pub(super) fn rewrite_primitive(
                 index,
                 passthroughs,
             )?;
+        }
+        "ellipse" => {
+            rewrite_ellipse(element, policy, source, target, index, passthroughs)?;
         }
         "text" => {
             rewrite_pair(

@@ -15,6 +15,7 @@
 
 mod defs;
 mod dispatch;
+mod domains;
 mod filters;
 mod hoist;
 mod lengths;
@@ -91,3 +92,7 @@ mod tests_r59;
 mod tests_r60;
 #[cfg(test)]
 mod tests_r61;
+#[cfg(test)]
+mod tests_r62;
+#[cfg(test)]
+mod tests_r62b;

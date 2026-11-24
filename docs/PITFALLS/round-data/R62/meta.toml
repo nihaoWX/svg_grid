@@ -1,0 +1,80 @@
+id = "R62"
+date = "2026-11-24"
+verdict = "修复"
+
+family = [
+  "P2（R61 评审）：定义的内容域没有第二条轴。R46 只按“谁引用它、引用者什么 data-scale”给定义分策略，于是 pattern 带 viewBox / patternContentUnits=objectBoundingBox、marker 带 viewBox 这类“body 已被渲染器映射”的定义，把自己的出边也按面板策略缩放：内层 pattern tile 与 body、userSpace 梯度坐标全被重写（8 个用例修前 xor 12160..32000、md 51..255）。修法：新增 Slot::{UserSpace(policy), Verbatim}，referrers 的 fixpoint 在“owner 的 body 是 verbatim”处把传给 target 的 slot 换成 Verbatim；按 slot 克隆（含经引用图的传递闭包），单域不克隆。",
+  "P2（R61 评审）：<ellipse> 从未被重写（dispatch.rs 只有 circle 分支），cx/cy/rx/ry 一律原样留在 100×80 坐标里；convert --check 还报 compatible。修法：cx/cy 坐标对、rx 走 x、ry 走 y；只写一个半径时 SVG 规定另一个与之相等，缺失半径按自己的轴因子补写（data-scale=x 时补写值=源值），position/none 保持原字节；scan.rs 的 non_numeric_geometry 加 ellipse（fail-closed），tag-protocol.md 支持列表补 ellipse。",
+  "口径：R61 评审遗留四处更正证书写进 R61/meta.toml（M2 红名计数 13/15、语料 214 含 user_tests 6 个、SVG_GRID_BEFORE_BIN、F1 的 lines_after 含 helper）+ W7 仅 --verbose 可见的前提；三条可选 P3 本轮不做（双 W7 归属与 A3 计数会改 W7 文案与证据期望，失败打印属诊断便利）。",
+  "登记不改：obb clipPath 引用 pattern 修前修后都 16000/255（把 tile 缩到 8 也仍是 16000/255，没有正确写法）；obb mask 引用 pattern 的 0/0 在两种拼写下都成立（无判别力）；线/径向梯度单坐标、pattern tile 的 x/y 与 width/height、filter/mask 区域各自独立——只登记数字，不补对。",
+  "实测（四列表在 test.py 末尾）：修前 = abc0d22 的 target/release/svg_grid，修后 = 本轮提交；oracle 是源图按 s 用 d1render 直接渲染。A 组 8 个用例修后 xor 0、md 0，两个对照产物与修前逐字节相同；B 组 b1-b4 xor 0、b5 从 rc=0+写出产物变成 rc=2 且 convert --check rc=1。",
+]
+
+closures = [
+  { finding = "R62-F1", tier = "代码" },
+  { finding = "R62-F2", tier = "代码" },
+  { finding = "R62-F3", tier = "代码" },
+  { finding = "R62-F4", tier = "文档" },
+  { finding = "R62-F5", tier = "登记" },
+  { finding = "R62-F6", tier = "登记" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61",
+]
+touched = [
+  { round = "R19", why = "测试总数 674→695（BASELINE 与 COUNTS.lib 403；defs.rs 的 5 条 R46 断言搬进 tests_r62/tests_r62b，另加 21 条）" },
+  { round = "R57", why = "第 6/200 行写死的总数 674→695（695 = 403 + 59 + 233）" },
+  { round = "R61", why = "meta.toml 四处口径更正 + 环境变量名 SVG_GRID_BEFORE_BIN + 三条可选 P3 未做的理由" },
+]
+
+note = """
+每条先 d1render 实测再写码（四列的表在 test.py 末尾；oracle 与 R58/R59/R61 相同：
+等向 = 源图按 s 渲染，oracle PNG 由 d1render 直接渲染源图得到）。
+本轮修前 = R61 HEAD abc0d22；修后 = 本轮提交的 target/release/svg_grid。
+
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline
+
+# 修前二进制：R61 的 HEAD（= 本轮 code_before abc0d22 的构建）
+cp target/release/svg_grid /tmp/r62_before_bin     # 在动手改码之前做
+# 也可以自建：
+rm -rf /tmp/r62before && mkdir -p /tmp/r62before
+git archive abc0d22 | tar -x -C /tmp/r62before
+cp -r fontlib /tmp/r62before/
+(cd /tmp/r62before && cargo build --release --offline)
+# 本脚本默认 BEFORE=/tmp/r62_before_bin，可用 SVG_GRID_BEFORE_BIN 覆盖。
+
+# 全绿（41 checks）
+python3 docs/PITFALLS/round-data/R62/test.py
+# 有牙：把被测二进制指回 R61 ⇒ A/B 两组必须红（rc=1）
+SVG_GRID_BIN=/tmp/r62_before_bin python3 docs/PITFALLS/round-data/R62/test.py
+# 缺二进制/渲染器必须 rc=1（--allow-skip 才允许 skip）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R62/test.py
+
+口径：
+  1) 内容域只区分两种：UserSpace(policy) 与 Verbatim。单域定义永不克隆（否则 220 个
+     语料产物会被无意义改写）；克隆是传递的：A 的 body 是 verbatim 时，A 引用的 B
+     也收 Verbatim，B 再引用的 C 亦然。
+  2) marker 的 verbatim 判据只有 viewBox（markerWidth/Height 仍按面板策略缩，见 m1/n3）。
+  3) ellipse 只写一个半径时补写另一个：SVG 规定两者相等，只改一个会得到错误形状
+     （命中用例 b2/b3：修前 xor 20656/255，修后 0/0）。半径只写在 inline style 里时
+     整对保留（d1render 两种拼写都不画，写属性等于凭空造几何，见 b6 的注册）。
+  4) 非数字几何（rx="abc"）在 plot-grid 里 fail-closed（rc=2、不写产物），
+     convert --check 也报同一句；此前 ellipse 完全不过这道闸。
+  5) 登记不改：obb clipPath 引用 pattern 仍 16000/255；obb mask 引用 pattern 两种拼写
+     都 0/0（无判别力）；单坐标梯度、tile 的 x/y 与 width/height、filter-mask 区域
+     各自独立——这些是“只重写它写了的东西”的契约，不是缺陷。
+  6) 三条可选 P3（非有限 points 双 W7、A3 “1 attribute 保留 2 个”、R61 失败只打印
+     err 尾巴）本轮不做：前两条要改 W7 的 offender 模型与文案，会牵动大量证据期望，
+     换来的只是诊断措辞；第三条只影响失败时的可读性。均已在 R61/meta.toml 登记。
+
+旧证据说明：本轮按目录逐个跑 R3..R61 的 test.py（每个都是纯黑盒、指向本轮二进制），
+结果见提交说明；R19 与 R57 的计数门禁已在本轮同步改成 695=403+59+233。
+"""

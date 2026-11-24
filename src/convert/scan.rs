@@ -223,6 +223,7 @@ fn walk_scan(
 fn non_numeric_geometry(element: &Element) -> Vec<String> {
     let geometry: &[&str] = match element.name.as_str() {
         "circle" => &["cx", "cy", "r"],
+        "ellipse" => &["cx", "cy", "rx", "ry"],
         "text" => &["x", "y"],
         "use" => &["x", "y", "width", "height"],
         "line" => &["x1", "y1", "x2", "y2"],
@@ -284,6 +285,20 @@ mod tests {
             }
             other => panic!("expected Incompatible, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn a_non_numeric_ellipse_radius_is_rejected() {
+        let findings = incompatible(
+            r#"<svg width='100' height='80' viewBox='0 0 100 80' xmlns='http://www.w3.org/2000/svg'>
+<ellipse cx='20' cy='20' rx='abc' ry='5'/></svg>"#,
+        );
+        assert!(
+            findings
+                .iter()
+                .any(|f| f.tag == "ellipse" && f.reason.contains("rx")),
+            "{findings:?}"
+        );
     }
 
     #[test]
