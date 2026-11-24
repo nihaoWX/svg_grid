@@ -13,6 +13,16 @@ pub(super) enum LengthAxis {
     X,
     Y,
     Uniform,
+    /// A light source's `z`/`pointsAtZ`. The renderer measures the distance in
+    /// filter space with the **RMS** of the two axis factors,
+    /// `sqrt((sx² + sy²) / 2)` (`resvg-0.47.0/src/filter/mod.rs`,
+    /// `transform_light_source`), not the geometric mean a plain length uses:
+    /// an anisotropic panel needs a different factor for z (round-data/R60).
+    LightZ,
+    /// `feDisplacementMap scale`. The renderer squares the number
+    /// (`offset = (c - 0.5) · scale² · axis`), so the attribute takes the
+    /// **square root** of the axis factor to displace by the axis factor.
+    Displacement,
 }
 
 /// Note a well-formed but **non-finite** number (`nan`/`inf`) as kept verbatim
@@ -64,8 +74,13 @@ pub(super) fn rewrite_scaled_length(
             // written exactly as before.
             Some(factor) => {
                 let value = parse_f32(&raw, attr)?;
-                note_non_finite(passthroughs, index, element, attr, &raw, value);
-                element.set_attr(attr, crate::format_number(value * factor));
+                if value.is_finite() {
+                    element.set_attr(attr, crate::format_number(value * factor));
+                } else {
+                    // Never write `inf`/`NaN` back: the warning says the value is
+                    // kept verbatim, and `inf` is not even a legal SVG number.
+                    note_non_finite(passthroughs, index, element, attr, &raw, value);
+                }
             }
             // The policy leaves the length untouched, so the value is already
             // verbatim — but a non-finite one (`r="nan"`, `stroke-width="inf"`)
@@ -107,39 +122,69 @@ pub(super) fn length_scale_factor(
         target.height / source.height
     };
 
+    let (ax, ay) = (sx.abs(), sy.abs());
     match policy {
         ScalePolicy::X => match axis {
-            LengthAxis::X | LengthAxis::Uniform => Some(sx.abs()),
+            LengthAxis::X | LengthAxis::Uniform => Some(ax),
             LengthAxis::Y => None,
+            LengthAxis::LightZ => Some(rms(ax, 1.0)),
+            LengthAxis::Displacement => Some(ax.sqrt()),
         },
         ScalePolicy::Y => match axis {
             LengthAxis::X => None,
-            LengthAxis::Y | LengthAxis::Uniform => Some(sy.abs()),
+            LengthAxis::Y | LengthAxis::Uniform => Some(ay),
+            LengthAxis::LightZ => Some(rms(1.0, ay)),
+            LengthAxis::Displacement => Some(ay.sqrt()),
         },
         ScalePolicy::Xy => match axis {
-            LengthAxis::X => Some(sx.abs()),
-            LengthAxis::Y => Some(sy.abs()),
-            LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
+            LengthAxis::X => Some(ax),
+            LengthAxis::Y => Some(ay),
+            LengthAxis::Uniform => Some((ax * ay).sqrt()),
+            LengthAxis::LightZ => Some(rms(ax, ay)),
+            // One number for two axes: no single value is exact, and the value the
+            // renderer squares is the geometric mean of the two exact values
+            // (`super::filters` has the measurements).
+            LengthAxis::Displacement => Some((ax * ay).sqrt().sqrt()),
         },
         // A pattern/marker body scales with the panel but keeps its own origin.
         ScalePolicy::Scale => match axis {
-            LengthAxis::X => Some(sx.abs()),
-            LengthAxis::Y => Some(sy.abs()),
-            LengthAxis::Uniform => Some((sx.abs() * sy.abs()).sqrt()),
+            LengthAxis::X => Some(ax),
+            LengthAxis::Y => Some(ay),
+            LengthAxis::Uniform | LengthAxis::LightZ => Some(if axis == LengthAxis::LightZ {
+                rms(ax, ay)
+            } else {
+                (ax * ay).sqrt()
+            }),
+            LengthAxis::Displacement => Some((ax * ay).sqrt().sqrt()),
         },
         // The same, on one axis only: a body referenced from a `data-scale="x"`
         // group scales its x lengths and leaves its y lengths alone, or a square
         // motif becomes an oblong one (round-data/R46).
         ScalePolicy::ScaleX => match axis {
-            LengthAxis::X | LengthAxis::Uniform => Some(sx.abs()),
+            LengthAxis::X | LengthAxis::Uniform => Some(ax),
             LengthAxis::Y => None,
+            LengthAxis::LightZ => Some(rms(ax, 1.0)),
+            LengthAxis::Displacement => Some(ax.sqrt()),
         },
         ScalePolicy::ScaleY => match axis {
             LengthAxis::X => None,
-            LengthAxis::Y | LengthAxis::Uniform => Some(sy.abs()),
+            LengthAxis::Y | LengthAxis::Uniform => Some(ay),
+            LengthAxis::LightZ => Some(rms(1.0, ay)),
+            LengthAxis::Displacement => Some(ay.sqrt()),
         },
         ScalePolicy::Position | ScalePolicy::None => None,
     }
+}
+
+/// The factor the renderer applies along z: the **root mean square** of the two
+/// axis factors, `sqrt((sx² + sy²) / 2)`.
+///
+/// Spelled exactly as `resvg-0.47.0/src/filter/mod.rs::transform_light_source`
+/// spells it (`(sx*sx + sy*sy).sqrt() / SQRT_2`) so the factor is bit-identical to
+/// the one the oracle's `scale(...)` transform produces: the shading is sensitive
+/// enough that three decimals in `z` already flip a handful of pixels.
+fn rms(sx: f32, sy: f32) -> f32 {
+    (sx * sx + sy * sy).sqrt() / std::f32::consts::SQRT_2
 }
 
 pub(super) fn map_point(

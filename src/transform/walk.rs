@@ -241,10 +241,13 @@ pub(super) fn transform_element(
     // So the primitives get their own rewrite pass instead of the generic descent:
     // the generic one would look at a `<path>`/`<rect>` that happens to sit inside
     // a primitive as if it were panel geometry (`super::filters`).
+    //
+    // The pass runs for every filter, not only the user-space ones: the light
+    // sources are user-space positions whatever `primitiveUnits` says, and the
+    // `objectBoundingBox` case is handled per attribute inside
+    // `filters::rewrite_primitives` (round-data/R60).
     if element.name == "filter" {
-        if filters::primitive_units_are_user_space(element, context) {
-            filters::rewrite_primitives(element, policy, context, passthroughs)?;
-        }
+        filters::rewrite_primitives(element, policy, context, passthroughs)?;
         return Ok(());
     }
 

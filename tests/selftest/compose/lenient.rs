@@ -59,8 +59,9 @@ fn malformed_path_d_does_not_suppress_w6_for_other_overflowing_geometry() {
 
 #[test]
 fn non_finite_numeric_attribute_warns_but_keeps_the_existing_bytes() {
-    // `<circle cx="nan">` used to write `cx="NaN"` *silently*; now it says so —
-    // and the bytes it writes stay exactly the same (exit code stays 0).
+    // `<circle cx="nan">` used to write `cx="NaN"` *silently* — which changed the
+    // bytes; R60 also stopped rewriting non-finite numbers at all, so the author's
+    // text survives and the run only says so (exit code stays 0).
     let (result, input, out) = compose_one(
         "circle_nan",
         r##"<circle cx="nan" cy="10" r="5" fill="#000000"/>"##,
@@ -77,8 +78,8 @@ fn non_finite_numeric_attribute_warns_but_keeps_the_existing_bytes() {
     let svg = fs::read_to_string(&out).unwrap();
     assert_eq!(
         attr_value(&svg, "cx"),
-        "NaN",
-        "the bytes are unchanged: {svg}"
+        "nan",
+        "the author's bytes are kept: {svg}"
     );
 
     let _ = fs::remove_file(input);

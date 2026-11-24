@@ -300,21 +300,23 @@ def family_e1():
         check(spot.get(name) == want, "E1 iso: feSpotLight@%s == %s" % (name, want),
               spot.get(name))
 
-    # Anisotropy: x/y/pointsAtX/Y per axis, z/pointsAtZ by the geometric mean
-    # (10*sqrt(20)=44.721).  The residual is the lighting normal, not a length.
+    # Anisotropy: x/y/pointsAtX/Y per axis, z/pointsAtZ by the RMS factor the renderer
+    # itself uses (10*sqrt((4^2+5^2)/2)=45.276928, not the geometric mean 44.721 which
+    # R59 shipped and which cost 37011/206 pixels).  Full precision matters: the renderer
+    # consumes the f32, and rounding to 45.277 flips 11 pixels.
     rc, err, svg, xors, _ = pixels("E1-spot-aniso", SPOT, (400, 400), SPOT, 4, 5)
     if check(rc == 0, "E1 aniso: both binaries compose") and check(svg is not None, "E1 aniso: output"):
         check(xors["before"][0] > 50000, "E1 aniso: the before binary is wrong (teeth)",
               pair(xors["before"]))
         spot = element(svg, "feSpotLight") or {}
-        for name, want in (("x", "80"), ("y", "100"), ("z", "44.721"),
+        for name, want in (("x", "80"), ("y", "100"), ("z", "45.276928"),
                            ("pointsAtX", "200"), ("pointsAtY", "200"), ("pointsAtZ", "0"),
                            ("limitingConeAngle", "30")):
             check(spot.get(name) == want, "E1 aniso: feSpotLight@%s == %s" % (name, want),
                   spot.get(name))
-        check(xors["after"][1] <= 210,
-              "E1 aniso: residual is the lighting normal, named not hidden",
-              "%s (expected ~37011/206; R58 N8 family)" % pair(xors["after"]))
+        check(xors["after"][1] <= 5,
+              "E1 aniso: the RMS factor lands on the oracle (no normal residual left)",
+              "%s (expected 0/0; 37011/206 was the R59 geometric-mean bug)" % pair(xors["after"]))
 
     # The point light was fixed in R58; keep it in the same table.
     point = ('<defs><filter id="f" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="80">'

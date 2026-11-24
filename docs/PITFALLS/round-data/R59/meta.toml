@@ -31,9 +31,12 @@ note = """
 
 E1（P1，R59-F1，挂 R58-F2/F3）：feSpotLight 的 x/y/pointsAtX/pointsAtY 按各自轴缩，z/pointsAtZ 是长度，
 用 LengthAxis::Uniform（几何平均，10→44.721 @4x5）；specularExponent/limitingConeAngle 不动。修前等向
-s=2 xor 18003/205（墨 31392 vs oracle 28950），修后 0/0；各向异性修前 100170/242，修后 37011/206，
-残余是法线本身随非等比缩放改变（与 R58 N8 同族，不是长度漏缩），故只点名不声称 0。feDistantLight 的
-azimuth/elevation 是角度，保持 45/20 且 xor 0/0；fePointLight 仍 0/0。
+s=2 xor 18003/205（墨 31392 vs oracle 28950），修后 0/0。
+【R60 更正】各向异性修前 100170/242，R59 的 37011/206 并不是“内在残余”：渲染器对 z 用的是 RMS
+sqrt((sx²+sy²)/2) 而不是几何平均，写 45.276928 后就是 0/0（R60 已修，见 round-data/R60 的 F1）。
+本条原先把 37011/206 登记成“法线随非等比缩放变化、无法用长度改写消掉”，该说法被 d1render 实测证伪。
+feDistantLight 的 azimuth/elevation 是角度，保持 45/20 且 xor 0/0；fePointLight 的 z 是同一个 bug
+（95008/2 → 0/0），R60 一并修。
 E2（P1，R59-F2，挂 R58-F2/F3）：单轴策略下缺的因子按 1.0，标量必须写成双值：x 策略 stdDeviation 2→"8 2"、
 y 策略 2→"2 10"；双值源按轴取（x "3 4"→"12 4"，y→"3 20"）；radius 同；baseFrequency 是除法
 （x 0.05→"0.0125 0.05"）。修前像素 x blur 6024/81、y 9244/87、x 双值 9804/75、y 双值 18856/80、
@@ -58,7 +61,9 @@ E6（P3，R59-F6，仅口径）：
 登记（只登记、本轮不修）：
   - obb clipPath 的坐标缩放是 pre-existing 缺陷（0.05/0.7 被当 user-space 数缩放成 0.1/1.4），本轮只门控
     font-size，坐标不动；它会让评审 fixture 的 clip 清空（墨量 0），因此 E4 没有像素 oracle。
-  - lighting 各向异性残余 37011/206：非等比缩放下表面法线变化，无法用长度改写消掉；与 R58 N8 同族。
+  - （R60 更正，原登记作废）lighting 各向异性残余 37011/206 曾被记成“非等比缩放下表面法线变化、无法用
+    长度改写消掉”。实测证明那是 z/pointsAtZ 的 RMS 因子没实现：写 45.276928 即 xor 0/0（R60-F1 已修）。
+    这条现在改记为“已修缺陷”，不再是内在残余。
   - feImage 各向异性（preserveAspectRatio 在变换前适配）与 feDisplacementMap 噪声残余沿用 R58 登记。
 
 测试计数：新增 10 条 lib 测试（src/transform/tests_r59.rs），并把 tests_r58.rs 里写错的 spot 测试改写为

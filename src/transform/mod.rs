@@ -18,6 +18,7 @@ mod dispatch;
 mod filters;
 mod hoist;
 mod lengths;
+mod lights;
 mod links;
 mod paths;
 mod patterns;
@@ -85,3 +86,5 @@ mod tests;
 mod tests_r58;
 #[cfg(test)]
 mod tests_r59;
+#[cfg(test)]
+mod tests_r60;

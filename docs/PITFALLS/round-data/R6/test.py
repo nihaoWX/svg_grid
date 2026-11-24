@@ -68,9 +68,14 @@ def main():
               f"rc={p.returncode} d={d!r} stderr={p.stderr[:300]!r}")
 
         p, out = run(tmp, "nan_cx", '<circle cx="nan" cy="50" r="5" fill="#000"/>')
-        ok = p.returncode == 0 and "non-finite" in p.stderr and out and 'cx="NaN"' in out.read_text()
-        check(ok, "宽松化 非有限数值（cx=nan）⇒ rc=0 + W7 出声 + 产物仍是 NaN（只加声音）",
-              f"rc={p.returncode} stderr={p.stderr[:300]!r}")
+        text = out.read_text() if out else ""
+        # round-data/R60: the author's bytes are kept verbatim (`nan`, not `NaN`).
+        # Writing `NaN` changed the attribute while the warning claimed it had been
+        # kept; a non-finite number is not a legal SVG value, so it is never written.
+        ok = (p.returncode == 0 and "non-finite" in p.stderr
+              and 'cx="nan"' in text and "NaN" not in text)
+        check(ok, "宽松化 非有限数值（cx=nan）⇒ rc=0 + W7 出声 + 产物逐字节原样（nan，不写 NaN）",
+              f"rc={p.returncode} stderr={p.stderr[:300]!r} text={text[:200]!r}")
 
         # ── 2. 负向对照：口径**没有**被放宽到"属性串不成形"
         p, _ = run(tmp, "abc_rect", '<rect x="abc" y="0" width="10" height="10" fill="#000"/>')

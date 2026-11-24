@@ -124,8 +124,21 @@ fn scale_token(token: &str, factor: f32) -> Option<String> {
             best?
         }
     };
-    let scaled = crate::format_number(value * factor);
-    Some(format!("{scaled}{}", &token[number_end..]))
+    if !value.is_finite() {
+        // A non-finite value is kept verbatim rather than rewritten to `inf`
+        // (round-data/R60): the warning promises the original text, and `inf` is not
+        // a legal SVG length.
+        return None;
+    }
+    let scaled = value * factor;
+    if !scaled.is_finite() {
+        return None;
+    }
+    Some(format!(
+        "{}{}",
+        crate::format_number(scaled),
+        &token[number_end..]
+    ))
 }
 
 #[cfg(test)]

@@ -316,7 +316,11 @@ CASES = [
          body=f('<feTurbulence type="turbulence" baseFrequency="0.05" numOctaves="1" seed="3" '
                 'result="t"/><feDisplacementMap in="SourceGraphic" in2="t" scale="10" '
                 'xChannelSelector="R" yChannelSelector="G"/>'),
-         attrs=[("feDisplacementMap", None, {"scale": "20"}),
+         # round-data/R60: the renderer applies `scale` quadratically
+         # (offset = (c-0.5) * scale^2 * axis), so a uniform 2x cell takes
+         # 10 * sqrt(2) = 14.142, not the linear 20 (measured: xor 0 either way
+         # here, but the displacement is 2x too far with 20 on a solid map).
+         attrs=[("feDisplacementMap", None, {"scale": "14.142"}),
                 ("feTurbulence", None, {"baseFrequency": "0.025"})],
          pixel=("within", 200, 255), note="residual: the composed doc samples the noise at 1x"),
     dict(name="A10 convolve stays", kind="u", teeth=0,
@@ -369,9 +373,11 @@ CASES = [
     dict(name="N8 diffuse + light (residual)", kind="a", teeth=20000,
          body=f('<feDiffuseLighting surfaceScale="2" diffuseConstant="1" lighting-color="white">'
                 '<fePointLight x="30" y="20" z="10"/></feDiffuseLighting>'),
-         attrs=[("fePointLight", None, {"x": "120", "y": "100", "z": 44.72})],
+         # round-data/R60: z is the RMS of the axis factors, not the geometric
+         # mean (44.72 was the old, wrong factor; 45.276928 is xor 0).
+         attrs=[("fePointLight", None, {"x": "120", "y": "100", "z": 45.276928})],
          pixel=("within", 60000, 255),
-         note="residual: light normals are not preserved by a non-uniform scale"),
+         note="residual: the shading ramp still moves a little under 4x5"),
     # ---- B: definition-body font-size --------------------------------------
     dict(name="B1 pattern text", kind="u", teeth=200,
          body='<defs><pattern id="p" patternUnits="userSpaceOnUse" width="40" height="20">'

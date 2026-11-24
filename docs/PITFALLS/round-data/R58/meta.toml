@@ -42,7 +42,9 @@ C：href-only filter 修前墨量 0、删掉凭空写入的 0 尺寸后墨量 95
 （只有定义体里的 text/tspan 才缩 font-size，普通面板文本不动——tag-protocol 契约）。跑 R38/R41/R43/R46/R55
 与全量 R3..R57；语料 214 文件 convert/--report + 58 fixture plot-grid/--plan 与 r50base 逐字节 0 差异。
 
-已知残余（只登记不声称修好）：lighting 各向异性（法线随非等比缩放变，45934/2）；feImage 各向异性
+已知残余（只登记不声称修好）：feImage 各向异性
+（注：原登记里的“lighting 各向异性（法线随非等比缩放变）”已被 R60 证伪——那是 z 的 RMS 因子缺失，
+R60-F1 已修成 xor 0/0；本行保留原文，结论以 round-data/R60 为准）；feImage 各向异性
 （preserveAspectRatio 在变换前适配，640/127，拒绝加 none）；feDisplacementMap（噪声按 1× 设备分辨率采样，
 127/255）；定义体 font-size 各向异性（几何平均让墨量 5328 vs 5352，逐像素不可能一致，要精确需给该 text 追加
 transform="scale(1 k)"，本轮不做）。

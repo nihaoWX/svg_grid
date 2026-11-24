@@ -41,14 +41,50 @@
 //! `radius`, `baseFrequency`) gets two values whenever the two axis factors differ —
 //! measured (source 100×80 → cell 400×400, sx=4/sy=5): `stdDeviation` as `8 10` is
 //! xor 0, as `8` xor 24644, as `10` xor 22936, as `8.944` (geometric mean) xor
-//! 69016, i.e. the mean is the *worst* of the three. A single-number attribute
-//! (`feDisplacementMap scale`) has no per-axis spelling and falls back to the
-//! geometric mean. The lighting primitives cannot be made exact anisotropically
-//! (the surface normal itself changes under a non-uniform scale; every candidate
-//! measured xor ≈1.5e5), so they only scale uniformly and the residual is
-//! registered instead of claimed fixed.
+//! 69016, i.e. the mean is the *worst* of the three.
+//!
+//! An attribute that accepts only **one** number cannot say two things at once, and
+//! the renderer does not even use it linearly:
+//!
+//! * `feDisplacementMap scale` is applied **quadratically** — the offset is
+//!   `(channel - 0.5) · scale² · axis` (`resvg-0.47.0/src/filter/mod.rs`
+//!   `apply_displacement_map` together with `displacement_map.rs`) — so the
+//!   rewritten value is the original times the **square root** of the axis factor.
+//!   Measured (`data-scale="x"`, sx=4, source `scale="10"`): `20` reproduces the
+//!   oracle exactly (xor 0), while the linear `40` displaces four times too far
+//!   (xor 6061 / maxdiff 255). Two different axis factors have no exact one-number
+//!   answer; the fallback is the geometric mean of the two exact values,
+//!   `scale · (sx·sy)^(1/4)` — for 4×5 that is `21.147` (the old `44.721`
+//!   displaced 4.5× too far).
+//! * A light's `z`/`pointsAtZ` is measured with the **RMS** of the two axis
+//!   factors, `sqrt((sx² + sy²) / 2)` (`resvg-0.47.0/src/filter/mod.rs`
+//!   `transform_light_source`), *not* the geometric mean a plain length uses.
+//!   Measured on an anisotropic cell (source 100×80 → 400×400, sx=4/sy=5): the
+//!   geometric mean writes `44.721` and leaves xor 37011 / maxdiff 206, the RMS
+//!   writes `45.276928` and is xor 0 / maxdiff 0 (three decimals, `45.277`, would
+//!   still leave 11 pixels). R59 registered that residual as
+//!   intrinsic ("the normal changes under a non-uniform scale"); it was this
+//!   missing factor.
+//!
+//! The lights are also **positions in user space**, independent of
+//! `primitiveUnits`: usvg keeps `fePointLight`/`feSpotLight`'s six numbers as plain
+//! `f32` (`usvg-0.47.0/src/parser/filter.rs::convert_light_source`) and resvg maps
+//! them through the filter transform. So `x`/`y`/`pointsAtX`/`pointsAtY`
+//! **translate** with the panel — a two-cell figure puts the same light in the
+//! second cell's coordinates (measured xor 5277 / maxdiff 238 before, 0 after) —
+//! and they are rewritten even when `primitiveUnits="objectBoundingBox"` (measured
+//! xor 100170 / maxdiff 242 before, 2 after). Only the genuinely box-relative
+//! lengths (`stdDeviation`, `radius`, `dx`, `dy`, `baseFrequency`, `scale`) stay
+//! untouched under `objectBoundingBox`.
+//!
+//! A primitive's own subregion (`x`/`y`/`width`/`height`, user lengths under
+//! `userSpaceOnUse` — `usvg-0.47.0/src/parser/filter.rs:382`
+//! `resolve_primitive_region`) is rewritten too: leaving it alone clipped the
+//! primitive to the unscaled panel's box (measured: `stdDeviation="2" x="10"
+//! y="10" width="80" height="60"` xor 16984 / maxdiff 255).
 
 use super::lengths::{length_scale_factor, note_non_finite, LengthAxis};
+use super::lights::{is_light_source, is_lighting};
 use super::links::resolved_units;
 use super::primitives::rewrite_axes;
 use super::units::Units;
@@ -75,19 +111,22 @@ pub(super) fn primitive_units_are_user_space(element: &Element, context: &Contex
 
 /// Rewrite the lengths of every primitive inside a `<filter>`.
 ///
-/// Called from the walk only when [`primitive_units_are_user_space`] says the
-/// numbers are user units. `policy` is the filter's own policy, i.e. the policy of
-/// the element that references it (definition policy), so a filter used from inside
-/// a pattern body scales like that body.
+/// Called from the walk for **every** `<filter>`, because one family of numbers
+/// inside it is user space regardless of `primitiveUnits` (the light sources, see
+/// the module doc); the gate itself moved into [`rewrite_one`], where the two kinds
+/// are told apart. `policy` is the filter's own policy, i.e. the policy of the
+/// element that references it (definition policy), so a filter used from inside a
+/// pattern body scales like that body.
 pub(super) fn rewrite_primitives(
     element: &mut Element,
     policy: ScalePolicy,
     context: &Context<'_>,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
+    let user_space = primitive_units_are_user_space(element, context);
     for child in &mut element.children {
         if let Node::Element(child) = child {
-            rewrite_one(child, policy, context, passthroughs)?;
+            rewrite_one(child, user_space, policy, context, passthroughs)?;
         }
     }
     Ok(())
@@ -95,10 +134,19 @@ pub(super) fn rewrite_primitives(
 
 fn rewrite_one(
     element: &mut Element,
+    user_space: bool,
     policy: ScalePolicy,
     context: &Context<'_>,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
+    let light = is_light_source(&element.name);
+    // Under `objectBoundingBox` the primitive lengths are fractions of the filtered
+    // box, which already follows the panel. The lights are the exception (they are
+    // user-space positions whatever `primitiveUnits` says) — and so are the two
+    // lighting primitives, which only exist to carry them.
+    if !user_space && !light && !is_lighting(&element.name) {
+        return Ok(());
+    }
     match element.name.as_str() {
         "feGaussianBlur" => scale_pair(
             element,
@@ -154,103 +202,58 @@ fn rewrite_one(
         "feDiffuseLighting" | "feSpecularLighting" => {
             for child in &mut element.children {
                 if let Node::Element(child) = child {
-                    rewrite_one(child, policy, context, passthroughs)?;
+                    rewrite_one(child, user_space, policy, context, passthroughs)?;
                 }
             }
         }
-        "fePointLight" => {
-            scale_axis(element, "x", LengthAxis::X, policy, context, passthroughs)?;
-            scale_axis(element, "y", LengthAxis::Y, policy, context, passthroughs)?;
-            scale_axis(
-                element,
-                "z",
-                LengthAxis::Uniform,
-                policy,
-                context,
-                passthroughs,
-            )?;
+        // The lights are user-space positions whatever `primitiveUnits` says, and
+        // their z is the RMS of the axis factors: `super::lights` owns the details.
+        "fePointLight" | "feSpotLight" => {
+            let name = element.name.clone();
+            super::lights::rewrite_light(element, &name, policy, context, passthroughs)?;
         }
-        // `feSpotLight` is a light *placed* in user space: `x`/`y`/`pointsAtX`/
-        // `pointsAtY` are lengths along their own axis, `z`/`pointsAtZ` along z
-        // (uniform, like `fePointLight`'s `z`). Only `specularExponent` and
-        // `limitingConeAngle` are dimensionless; they are deliberately not listed.
-        // R58 skipped the whole element as "angles", which left the light at the
-        // unscaled panel's position (measured at s=2: xor 18003 / maxdiff 205).
-        "feSpotLight" => {
-            scale_axis(element, "x", LengthAxis::X, policy, context, passthroughs)?;
-            scale_axis(element, "y", LengthAxis::Y, policy, context, passthroughs)?;
-            scale_axis(
-                element,
-                "z",
-                LengthAxis::Uniform,
-                policy,
-                context,
-                passthroughs,
-            )?;
-            scale_axis(
-                element,
-                "pointsAtX",
-                LengthAxis::X,
-                policy,
-                context,
-                passthroughs,
-            )?;
-            scale_axis(
-                element,
-                "pointsAtY",
-                LengthAxis::Y,
-                policy,
-                context,
-                passthroughs,
-            )?;
-            scale_axis(
-                element,
-                "pointsAtZ",
-                LengthAxis::Uniform,
-                policy,
-                context,
-                passthroughs,
-            )?;
-        }
-        // `x`/`y` place the referenced image in user space (they move with the
-        // panel, like a `<rect>`'s position), `width`/`height` are sizes.
-        "feImage" => {
-            rewrite_axes(
-                element,
-                &[("x", false), ("y", true)],
-                policy,
-                context.source,
-                context.target,
-                context.index,
-                passthroughs,
-            )?;
-            scale_axis(
-                element,
-                "width",
-                LengthAxis::X,
-                policy,
-                context,
-                passthroughs,
-            )?;
-            scale_axis(
-                element,
-                "height",
-                LengthAxis::Y,
-                policy,
-                context,
-                passthroughs,
-            )?;
-        }
-        // One number for both axes: the geometric mean is the only spelling.
+        // One number, applied quadratically by the renderer: the attribute takes the
+        // square root of the axis factor (see the module doc).
         "feDisplacementMap" => scale_axis(
             element,
             "scale",
-            LengthAxis::Uniform,
+            LengthAxis::Displacement,
             policy,
             context,
             passthroughs,
         )?,
         _ => {}
+    }
+    // Every primitive's own subregion is a user length under `userSpaceOnUse`
+    // (`usvg-0.47.0/src/parser/filter.rs:382`): `x`/`y` place it (so they
+    // translate), `width`/`height` size it. This also covers `feImage`, whose four
+    // numbers are exactly this subregion.
+    if user_space && !light {
+        rewrite_axes(
+            element,
+            &[("x", false), ("y", true)],
+            policy,
+            context.source,
+            context.target,
+            context.index,
+            passthroughs,
+        )?;
+        scale_axis(
+            element,
+            "width",
+            LengthAxis::X,
+            policy,
+            context,
+            passthroughs,
+        )?;
+        scale_axis(
+            element,
+            "height",
+            LengthAxis::Y,
+            policy,
+            context,
+            passthroughs,
+        )?;
     }
     Ok(())
 }
@@ -264,6 +267,36 @@ fn scale_axis(
     context: &Context<'_>,
     passthroughs: &mut Passthroughs,
 ) -> Result<()> {
+    scale_axis_with(element, attr, axis, false, policy, context, passthroughs)
+}
+
+/// The same, written with the shortest round-trip digits.
+///
+/// A light's `z` is the one length where the project's three decimals are too
+/// coarse: measured on the anisotropic cell (sx=4/sy=5, `z="10"`), `45.277` leaves
+/// 11 pixels differing where the exact RMS factor `45.276928` leaves 4, because the
+/// shading is a smooth ramp near black and a 1e-4 change is enough to flip the
+/// rounding of a pixel. Like `feTurbulence baseFrequency`, this keeps full digits.
+pub(super) fn scale_axis_precise(
+    element: &mut Element,
+    attr: &str,
+    axis: LengthAxis,
+    policy: ScalePolicy,
+    context: &Context<'_>,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
+    scale_axis_with(element, attr, axis, true, policy, context, passthroughs)
+}
+
+fn scale_axis_with(
+    element: &mut Element,
+    attr: &str,
+    axis: LengthAxis,
+    precise: bool,
+    policy: ScalePolicy,
+    context: &Context<'_>,
+    passthroughs: &mut Passthroughs,
+) -> Result<()> {
     let Some(raw) = element.attr(attr).map(str::to_string) else {
         return Ok(());
     };
@@ -273,7 +306,7 @@ fn scale_axis(
     let Some(value) = parsed_or_kept(element, attr, &raw, context, passthroughs) else {
         return Ok(());
     };
-    element.set_attr(attr, crate::format_number(value * factor));
+    element.set_attr(attr, format_length(value * factor, precise));
     Ok(())
 }
 
@@ -292,9 +325,13 @@ fn parsed_or_kept(
     passthroughs: &mut Passthroughs,
 ) -> Option<f32> {
     match parse_f32(raw, attr) {
+        // A non-finite number is *kept verbatim*, like an unparsable one: writing
+        // `inf`/`NaN` back would both contradict the warning's "kept verbatim" and
+        // emit a string that is not a legal SVG number (round-data/R60).
+        Ok(value) if value.is_finite() => Some(value),
         Ok(value) => {
             note_non_finite(passthroughs, context.index, element, attr, raw, value);
-            Some(value)
+            None
         }
         Err(error) => {
             passthroughs.record(
@@ -330,6 +367,16 @@ fn scale_pair(
         .filter(|token| !token.is_empty())
         .collect();
     if tokens.is_empty() || tokens.len() > 2 {
+        // `<number-optional-number>` is one or two numbers. usvg's
+        // `convert_std_dev_attr` takes *nothing* from any other spelling and the
+        // filter is applied with a zero deviation, so keeping the text verbatim
+        // reproduces the renderer — but silently, which is why it is reported.
+        passthroughs.record(
+            context.index,
+            &element.name,
+            attr,
+            format!("{raw:?}: expected one or two numbers"),
+        );
         return Ok(());
     }
     // A single-axis policy (`data-scale="x"` / `"y"`) scales one side and leaves

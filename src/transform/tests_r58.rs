@@ -230,16 +230,6 @@ fn image_region_scales_all_four_attributes() {
 }
 
 #[test]
-fn displacement_scale_falls_back_to_the_geometric_mean() {
-    // One number for both axes: sqrt(4*5) * 10 = 44.721…
-    let out = scaled("", r##"<feDisplacementMap scale="10"/>"##, STRETCHED);
-    assert_eq!(
-        attr(&out, "feDisplacementMap", "scale"),
-        Some("44.721".into())
-    );
-}
-
-#[test]
 fn point_light_scales_all_three_axes() {
     let out = scaled(
         "",

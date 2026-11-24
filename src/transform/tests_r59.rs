@@ -127,7 +127,9 @@ fn spot_light_positions_scale_isotropically() {
 #[test]
 fn spot_light_positions_take_one_factor_per_axis() {
     // sx=4/sy=5: x/y/pointsAtX/pointsAtY follow their own axis, z/pointsAtZ the
-    // geometric mean (10 * sqrt(20) = 44.721).
+    // RMS of the two axis factors (10 * sqrt((16+25)/2) = 45.276928), not the
+    // geometric mean (44.721, round-data/R60). The full precision matters: the
+    // renderer applies the number as a float, and 45.277 alone is 11 pixels off.
     let out = scaled(
         "xy",
         r##"<feSpecularLighting surfaceScale="2" specularConstant="1" specularExponent="20">
@@ -137,7 +139,7 @@ fn spot_light_positions_take_one_factor_per_axis() {
     );
     assert_eq!(attr(&out, "feSpotLight", "x"), Some("80".into()));
     assert_eq!(attr(&out, "feSpotLight", "y"), Some("100".into()));
-    assert_eq!(attr(&out, "feSpotLight", "z"), Some("44.721".into()));
+    assert_eq!(attr(&out, "feSpotLight", "z"), Some("45.276928".into()));
     assert_eq!(attr(&out, "feSpotLight", "pointsAtX"), Some("200".into()));
     assert_eq!(attr(&out, "feSpotLight", "pointsAtY"), Some("200".into()));
     assert_eq!(attr(&out, "feSpotLight", "pointsAtZ"), Some("0".into()));

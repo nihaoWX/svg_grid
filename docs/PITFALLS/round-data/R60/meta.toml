@@ -1,0 +1,144 @@
+id = "R60"
+date = "2026-11-24"
+verdict = "修复"
+
+family = [
+  "R59 对抗评审的三条 P1：光源 z/pointsAtZ 用几何平均（sqrt(sx*sy)）而不是渲染器实际用的 RMS（sqrt((sx²+sy²)/2)）；光源 x/y/pointsAtX/pointsAtY 只乘因子、不平移进第二个 cell；primitiveUnits=objectBoundingBox 时整块 lighting 改写被跳过。",
+  "P2 择要修：feDisplacementMap 单值 scale 被渲染器平方（旧值过位移 4×）；图元子区域 x/y/width/height 未改写；非有限数值被写回 inf/NaN（产物污染，stroke-width 从 R50 起就如此）；畸形 number-optional-number 静默无 W7。",
+  "口径更正：R59 的“lighting 各向异性残余是内在的法线效应”被证伪（那是 RMS 因子缺失），R59 的证据与 meta 同步改。",
+]
+
+closures = [
+  { finding = "R60-F1", tier = "代码" },
+  { finding = "R60-F2", tier = "代码" },
+  { finding = "R60-F3", tier = "代码" },
+  { finding = "R60-F4", tier = "代码" },
+  { finding = "R60-F5", tier = "代码" },
+  { finding = "R60-F6", tier = "代码" },
+  { finding = "R60-F7", tier = "证据/口径" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+]
+touched = [
+  { round = "R59", why = "E1 的 z 断言 44.721→45.276928、maxdiff 210→5、注释去‘几何平均’（原先冻住的是错的因子）" },
+  { round = "R6", why = "非有限数值的期望字节 NaN→原文 nan（P2-4：W7 说 kept verbatim，就真的一个字节都不改）" },
+  { round = "R19", why = "测试总数 643→658（BASELINE 与 COUNTS.lib）" },
+  { round = "R57", why = "第 6/200 行写死的总数 643→658" },
+  { round = "R58", why = "A9 位移 scale 20→14.142（渲染器二次方）、N8 光源 z 44.72→45.276928（RMS）" },
+]
+
+note = """
+每条先 d1render 实测再写码（表在 test.py 末尾；oracle 与 R58/R59 相同：等向 = 源图按 s 渲染，
+各向异性 = 源图内容包进 <g transform="scale(sx sy)"> 在 400x400 画布上渲染）。四列：
+修前 xor/md（/tmp/r59_eval/pin = R59 修后）、修后 xor/md（本轮）、oracle、d1 ±cairo。
+
+F1-spot-rms（P1-1，R60-F1，挂 R59-F1/R58-F2）：4x5 下 feSpotLight z/pointsAtZ 是 RMS
+sqrt((sx²+sy²)/2) = 43.0116 * 10 / 10 = 45.276928（resvg-0.47.0/src/filter/mod.rs::transform_light_source
+的 sz = (sx²+sy²).sqrt()/SQRT_2），不是 Uniform 的几何平均 44.721。修前 37011/206（属性 z=44.721），
+修后 0/0（x=80 y=100 z=45.276928 pointsAtX=200 pointsAtY=200）。全精度必要：写成 45.277 会翻 11 像素
+（渲染器直接消费 f32），故 LengthAxis::LightZ 用 resvg 同一个算式而不是再四舍五入。
+F1-point-rms：fePointLight 的 z 是 R58 继承的同一个 bug，修前 95008/2，修后 0/0。
+F2-spot-paz：pointsAtZ=5 同走 LightZ（5*RMS=22.638464），修前 35728/193，修后 0/0。
+F3-two-cell（P1-2，R60-F2）：两个 100x80 面板 --width 200 --height 80 --ncol 2 --plot-margin 0，
+filter 区域已改写成 0..100/100..200 但光源两格都是 x=20；第二个 cell 修前 5277/238（spot）/7563/248
+（point，实测由 R60 的 F3 归并到 spot 一条），修后 0/0，属性 x=120 y=20 pointsAtX=150 pointsAtY=40
+（z/pointsAtZ 只缩放不平移）。position 走 map_point（平移+缩放），与 feImage 的 x/y 同一机制；
+缺省的光源位置（没有 x= 属性）也按 (target.x-source.x) 补写，否则缺省 0 会留在原处。
+F4-obb（P1-3，R60-F3）：primitiveUnits="objectBoundingBox" 下光源仍是 user-space f32
+（usvg-0.47.0/src/parser/filter.rs::convert_light_source 不读 primitiveUnits），修前整块改写被跳过
+⇒ 100170/242，修后 0/0，属性与 userSpace 完全相同（x=80 y=100 z=45.276928 pointsAtX/Y=200）；
+同一个 filter 里的 feGaussianBlur stdDeviation="2" 仍是分数、保持 "2"（真 obb 属性继续门控）。
+F5-x-bbox（P2-1，R60-F4）：渲染器把单值 scale 平方（offset=(c-0.5)·scale²·axis），所以重写值取轴因子
+的平方根：data-scale="x"、sx=4、原 scale="1" ⇒ 2（黑块左边缘 40→42 精确）；旧代码写 sx*s=4 ⇒ 48
+（过位移 4×，xor 5472/255）。两轴无精确解（x 要 sqrt(8)、y 要 sqrt(10)），回退为两个精确值的几何平均
+(4*5)^(1/4)=2.115（旧 Uniform 写 4.472，过位移 4.5×）；单轴 y 是 sqrt(5)=2.236。
+<b>注意</b>：位移不能用 <g transform> 包源图作 oracle——resvg 在局部分辨率栅格化滤镜再放大，
+0.5px 位移被舍掉，参照图不动（假残余 1352）；故 F5 用黑块左边缘（几何已知：10*4=40）作 oracle。
+F6-subregion（P2-2，R60-F5）：除光源外每个图元的 x/y/width/height 是 primitiveUnits 长度
+（usvg filter.rs::resolve_primitive_region 的 userSpace 分支），修前 stdDeviation 2→4 但盒子不动
+⇒ 16984/255；修后 stdDeviation=4 x=20 y=20 width=160 height=120，0/0。
+F7-blur/F7-stroke（P2-4，R60-F6）：stdDeviation="1e999" 修前被写成 "inf"（非法 SVG 数值，且 W7 文案说
+kept verbatim 而字节变了）；stroke-width="1e999" 从 R50 起同样写成 "inf"（rewrite_scaled_length 同一条路）。
+修后一律保原文 + W7，输出里没有 inf/NaN/-inf。
+F8（P2-4 第二半）：stdDeviation="" / " " / "2 3 4" 修前静默保留（无 W7）；usvg 的
+convert_std_dev_attr 对这几种输入把整个属性忽略（模糊为 0），保原文是对的，但必须报 W7，文案含
+"expected one or two numbers"。W7 单条 200 字符上限：detail 里带原因时 "2 3 4" 只剩 172 字，
+故文案不再重复 "3 numbers"（那是被截掉的部分）。
+
+变异（每条实跑，红后还原复绿；脚本 /tmp/r60_mutate.sh；拆分出 lights.rs 之后整套重跑过）：
+  M1 LightZ 改回几何平均 → 8 红：F1 spot: feSpotLight@z == 45.276928 (44.72136)、F1 spot: xor 0/md 0
+     (36986/206)、F1 point: fePointLight@z (44.72136)、F1 point: xor 0/md 0 (94939/2)、F2: z/pointsAtZ
+     (44.72136 / 22.36068)、F2: xor 0/md 0 (35705/193)、F4: obb light scaled like user space、F4: xor
+     0/md 0 (36986/206) ⇒ 67 passed / 8 failed。
+  M2 光源只缩不平移 → 2 红：F3 after: second cell light at x=120/pointsAtX=150（实际 x=20/50）、
+     F3: xor 0 / md 0 against the translated oracle (5277/238) ⇒ 73 passed / 2 failed。
+  M3 给光源加回 obb 门控 → 2 红：F4: obb light scaled like user space（x=20, z=10）、F4: xor 0/md 0
+     (100170/242) ⇒ 73 passed / 2 failed。
+  M4 非有限值改回写 inf → 2 红：F7-blur: stdDeviation kept byte for byte（实际 inf）、F7-blur: no
+     inf/NaN in the output ⇒ 73 passed / 2 failed。
+  M5 位移 scale 改回轴因子 → 4 红：F5 x after: scale == 2 (sqrt(4))（实际 4）、F5 x after: the rect moves
+     +2 px（实际 48）、F5 xy: scale == 2.115（实际 4.472）、F5 y: scale == 2.236（实际 5）⇒ 71 passed /
+     4 failed。
+  每条还原后都回到 75 passed / 0 failed（脚本末尾自动重跑）。
+
+旧证据随之改口径（全部是 modify 事件，已写进 touched 并落账）：
+  R59/test.py  E1 的 z 断言 44.721→45.276928、maxdiff 210→5；
+  R58/test.py  A9 的 displacement scale 20→14.142（渲染器平方）、N8 的 fePointLight z 44.72→45.276928；
+  R6/test.py   非有限数值的期望字节 NaN→原文 nan；
+  R19/R57      测试总数 643→658。
+  R59/meta.toml 与 R58/meta.toml 里“lighting 残余是内在的法线效应”已加更正注（P1-4）。
+
+结构（硬要求 7，单文件 ≤ 20000 B）：本轮 filters.rs 一度涨到 22065 B，撞破 R8 的“所有源文件 ≤ 20000 B”
+检查（R7/R9/R13..R19 全部级联红）。故把光源代码整块搬到新文件 src/transform/lights.rs（4502 B：
+is_light_source / is_lighting / rewrite_light / rewrite_positions），filters.rs 只留
+"fePointLight" | "feSpotLight" => super::lights::rewrite_light(...) 一个 arm；filters.rs 现 18883 B。
+scale_axis_precise 改 pub(super) 供 lights.rs 复用；模块 doc 里光源语义的细节写在 lights.rs 顶部。
+
+口径连带（P2-4 的第二处旧快照）：docs/PITFALLS/round-data/R6/test.py:70-72 原本断言 cx="nan"
+被改写成 'cx="NaN"'（即旧的“字节被改而 W7 说 kept verbatim”），本轮改成断言产物逐字节原样
+cx="nan" 且文本里没有 NaN，并保留 rc=0 + W7 断言；这是 modify 事件，已随 R6 的期望值一起记进账本。
+
+测试计数：新增 16 条（src/transform/tests_r60.rs），删除 1 条（tests_r58.rs 的
+displacement_scale_falls_back_to_the_geometric_mean，语义已由 tests_r60 的三条取代），
+改写 3 条既有断言（tests_r59.rs 的 spot z 44.721→45.276928；tests/selftest/compose/lenient.rs 的
+非有限期望 NaN→原文；R59/test.py 的 E1 断言）。总数 658 = 366 + 59 + 233（旧 643 = 351 + 59 + 233），
+净增 15；新增 16、删除 1、改名 0。已同轮更新 docs/PITFALLS/round-data/R19/test.py 的
+BASELINE/COUNTS 与 R57/test.py 第 6/200 行写死的总数（改快照就是签名）。
+
+登记（只登记、本轮不修）：
+  - R49 之前的旧证据里形如 x="inf" 的输入仍然保原文（本轮之后工具不再重写它们，输出字节不变）。
+  - 光源 z 的残余：若上游 resvg 改动 z 的公式，LightZ 必须同步（test.py 的 F1 会红）。
+
+验收：cargo test --offline 658 全绿；cargo fmt --check、clippy -D warnings 干净；install.sh 后两侧
+sha256 一致；doctor 57 pass/0 fail/1 skip；214 个 tests/**/*.svg 的 convert + --report、58 fixture 的
+plot-grid --width 600 --ncol 1 + --plan 对 /tmp/r50base（@e0c6033, sha 75def0b8…）逐字节 0 差异；
+R3..R60 旧证据顶层全绿（R49/shim/ran.txt 追加 R60 OK）。
+"""
+
+how_to_run = """
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline
+
+# 修前二进制：R59 的 HEAD（= 本轮 code_before 3f1de81 的构建，评审也用它）
+# 评审已经构建好：/tmp/r59_eval/pin/target/release/svg_grid
+# 也可以自建：
+rm -rf /tmp/r60before && mkdir -p /tmp/r60before
+git archive 3f1de81 | tar -x -C /tmp/r60before
+cp -r fontlib /tmp/r60before/
+(cd /tmp/r60before && cargo build --release --offline)
+# 本脚本默认 BEFORE=/tmp/r59_eval/pin/target/release/svg_grid，可用 SVG_GRID_BEFORE 覆盖。
+
+# 全绿（75 checks）
+python3 docs/PITFALLS/round-data/R60/test.py
+# 有牙：把被测二进制指回 R59 ⇒ 修复前必须有红（rc=1）
+SVG_GRID_BIN=/tmp/r59_eval/pin/target/release/svg_grid python3 docs/PITFALLS/round-data/R60/test.py
+# 缺二进制/渲染器必须 rc=1（--allow-skip 才允许 skip）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R60/test.py
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R60/test.py
+"""

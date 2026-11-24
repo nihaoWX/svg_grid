@@ -30,6 +30,11 @@ pub(super) fn rewrite_pair(
     let y = parse_f32(&y_raw, y_attr)?;
     note_non_finite(passthroughs, index, element, x_attr, &x_raw, x);
     note_non_finite(passthroughs, index, element, y_attr, &y_raw, y);
+    // A non-finite coordinate is kept verbatim: the pair is written together or not
+    // at all, and `inf`/`NaN` are not legal lengths (round-data/R60).
+    if !x.is_finite() || !y.is_finite() {
+        return Ok(());
+    }
     let (x, y) = map_point(x, y, policy, source, target);
     element.set_attr(x_attr, crate::format_number(x));
     element.set_attr(y_attr, crate::format_number(y));
@@ -66,6 +71,10 @@ pub(super) fn rewrite_axes(
         };
         let value = parse_f32(&raw, attr)?;
         note_non_finite(passthroughs, index, element, attr, &raw, value);
+        if !value.is_finite() {
+            // Kept verbatim, as in `super::lengths::rewrite_scaled_length`.
+            continue;
+        }
         let mapped = if *is_y {
             map_point(0.0, value, policy, source, target).1
         } else {
@@ -97,6 +106,12 @@ pub(super) fn rewrite_rect(
     note_non_finite(passthroughs, index, element, "y", &y_raw, y);
     note_non_finite(passthroughs, index, element, "width", &width_raw, width);
     note_non_finite(passthroughs, index, element, "height", &height_raw, height);
+    // A box with one non-finite side is kept as written: mapping the other three
+    // would move geometry the renderer cannot draw anyway, and the original text is
+    // what the warning promises.
+    if ![x, y, width, height].iter().all(|value| value.is_finite()) {
+        return Ok(());
+    }
 
     let (x0, y0) = map_point(x, y, policy, source, target);
     let (x1, y1) = match policy {
@@ -219,6 +234,7 @@ pub(super) fn rewrite_points(
     };
     let points = points.to_string();
     let mut out = Vec::new();
+    let mut finite = true;
 
     for pair in points.split_whitespace() {
         let Some((x_raw, y_raw)) = pair.split_once(',') else {
@@ -228,6 +244,7 @@ pub(super) fn rewrite_points(
         let y = parse_f32(y_raw, "points.y")?;
         note_non_finite(passthroughs, index, element, "points", x_raw, x);
         note_non_finite(passthroughs, index, element, "points", y_raw, y);
+        finite &= x.is_finite() && y.is_finite();
         let (x, y) = map_point(x, y, policy, source, target);
         out.push(format!(
             "{},{}",
@@ -236,6 +253,10 @@ pub(super) fn rewrite_points(
         ));
     }
 
+    // One non-finite vertex invalidates the whole list; keep it verbatim.
+    if !finite {
+        return Ok(());
+    }
     element.set_attr("points", out.join(" "));
 
     Ok(())
@@ -285,6 +306,10 @@ pub(super) fn rewrite_rotate_transform(
         parts[2],
         y,
     );
+    if !x.is_finite() || !y.is_finite() {
+        // Kept verbatim; a rotation centre of `inf` is not a length we may write back.
+        return Ok(());
+    }
     let (x, y) = map_point(x, y, policy, source, target);
     element.set_attr(
         "transform",
