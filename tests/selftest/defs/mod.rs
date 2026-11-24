@@ -188,7 +188,9 @@ fn a_user_space_filter_box_follows_the_geometry() {
     );
     // Corrected by R58: primitive lengths are gated by `primitiveUnits` (default
     // userSpaceOnUse), not by `filterUnits`; the old expectation froze the bug.
-    // Measured through d1render at s=2: radius 2 => xor 840, radius 4 => xor 0.
+    // This fixture's filter region equals the rect, so radius 2 and radius 4 both
+    // render 0/0 here (the dilation is clipped away); the assertion is about the
+    // rewritten attribute, not about a pixel difference.
     assert!(
         svg.contains("<feMorphology operator=\"dilate\" radius=\"4\"/>"),
         "primitiveUnits=userSpaceOnUse makes primitive lengths panel geometry: {svg}"

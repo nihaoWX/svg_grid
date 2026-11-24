@@ -22,11 +22,20 @@
 //! primitive units (each measured at s=2: xor 0 after the rewrite):
 //! `feGaussianBlur stdDeviation`, `feOffset dx/dy`, `feMorphology radius`,
 //! `feDropShadow dx/dy/stdDeviation`, `feTurbulence baseFrequency` (**divided**),
-//! `fePointLight x/y/z`, `feImage x/y/width/height`, `feDisplacementMap scale`.
-//! Everything else stays: `feConvolveMatrix`'s numbers are counts, kernel entries
-//! and a bias; `feSpotLight`/`feDistantLight` are angles; and
+//! `fePointLight x/y/z`, `feSpotLight x/y/z/pointsAtX/pointsAtY/pointsAtZ`
+//! (round-data/R59: those six are lengths, not angles — only
+//! `specularExponent`/`limitingConeAngle` are dimensionless), `feImage
+//! x/y/width/height`, `feDisplacementMap scale`. Everything else stays:
+//! `feConvolveMatrix`'s numbers are counts, kernel entries and a bias;
+//! `feDistantLight azimuth/elevation` are angles; and
 //! `feColorMatrix`/`feComponentTransfer`/`feComposite`/`feBlend`/`feMerge`/
 //! `feFlood`/`feTile` carry no user length at all.
+//!
+//! A malformed primitive length (`stdDeviation="2px"`, `dx="abc"`) is **not**
+//! fatal: the attribute is kept byte-for-byte and reported as W7, exactly like a
+//! malformed `transform` (round-data/R59; R58 used to fail the whole run with
+//! rc=2 here, which was a regression against the "malformed value is a warning"
+//! rule in `ARCHITECTURE/warnings.md`).
 //!
 //! Anisotropy: an attribute that accepts **one or two** numbers (`stdDeviation`,
 //! `radius`, `baseFrequency`) gets two values whenever the two axis factors differ —
@@ -161,6 +170,48 @@ fn rewrite_one(
                 passthroughs,
             )?;
         }
+        // `feSpotLight` is a light *placed* in user space: `x`/`y`/`pointsAtX`/
+        // `pointsAtY` are lengths along their own axis, `z`/`pointsAtZ` along z
+        // (uniform, like `fePointLight`'s `z`). Only `specularExponent` and
+        // `limitingConeAngle` are dimensionless; they are deliberately not listed.
+        // R58 skipped the whole element as "angles", which left the light at the
+        // unscaled panel's position (measured at s=2: xor 18003 / maxdiff 205).
+        "feSpotLight" => {
+            scale_axis(element, "x", LengthAxis::X, policy, context, passthroughs)?;
+            scale_axis(element, "y", LengthAxis::Y, policy, context, passthroughs)?;
+            scale_axis(
+                element,
+                "z",
+                LengthAxis::Uniform,
+                policy,
+                context,
+                passthroughs,
+            )?;
+            scale_axis(
+                element,
+                "pointsAtX",
+                LengthAxis::X,
+                policy,
+                context,
+                passthroughs,
+            )?;
+            scale_axis(
+                element,
+                "pointsAtY",
+                LengthAxis::Y,
+                policy,
+                context,
+                passthroughs,
+            )?;
+            scale_axis(
+                element,
+                "pointsAtZ",
+                LengthAxis::Uniform,
+                policy,
+                context,
+                passthroughs,
+            )?;
+        }
         // `x`/`y` place the referenced image in user space (they move with the
         // panel, like a `<rect>`'s position), `width`/`height` are sizes.
         "feImage" => {
@@ -219,10 +270,42 @@ fn scale_axis(
     let Some(factor) = length_scale_factor(policy, context.source, context.target, axis) else {
         return Ok(());
     };
-    let value = parse_f32(&raw, attr)?;
-    note_non_finite(passthroughs, context.index, element, attr, &raw, value);
+    let Some(value) = parsed_or_kept(element, attr, &raw, context, passthroughs) else {
+        return Ok(());
+    };
     element.set_attr(attr, crate::format_number(value * factor));
     Ok(())
+}
+
+/// Parse a primitive length, or keep it verbatim and report W7.
+///
+/// A malformed number is data, not a structural error: a browser ignores the
+/// declaration and keeps the rest of the figure, and rejecting the whole run for
+/// it is the regression R59 fixes (R58 returned
+/// `invalid input: invalid numeric SVG attribute stdDeviation="2px"`, rc=2).
+/// The model is `transform`'s unparsable-value path (`super::transforms`).
+fn parsed_or_kept(
+    element: &Element,
+    attr: &str,
+    raw: &str,
+    context: &Context<'_>,
+    passthroughs: &mut Passthroughs,
+) -> Option<f32> {
+    match parse_f32(raw, attr) {
+        Ok(value) => {
+            note_non_finite(passthroughs, context.index, element, attr, raw, value);
+            Some(value)
+        }
+        Err(error) => {
+            passthroughs.record(
+                context.index,
+                &element.name,
+                attr,
+                format!("unparsable number {raw:?}: {error}"),
+            );
+            None
+        }
+    }
 }
 
 /// Scale a `<number-optional-number>` length: one value means both axes.
@@ -249,12 +332,20 @@ fn scale_pair(
     if tokens.is_empty() || tokens.len() > 2 {
         return Ok(());
     }
-    let (Some(fx), Some(fy)) = (
-        length_scale_factor(policy, context.source, context.target, LengthAxis::X),
-        length_scale_factor(policy, context.source, context.target, LengthAxis::Y),
-    ) else {
+    // A single-axis policy (`data-scale="x"` / `"y"`) scales one side and leaves
+    // the other alone. The missing factor is **1**, not "do not rewrite": a scalar
+    // filter length applies to both directions, so under `x` the value `2` has to
+    // become the explicit pair `8 2` (source 100→400) — leaving it as `2` blurs the
+    // y direction as if the panel had not grown (measured: xor 6024 at s=2; the
+    // pair is xor 0, round-data/R59). Both factors absent (position/none) is the
+    // only case that has nothing to rewrite.
+    let fx_opt = length_scale_factor(policy, context.source, context.target, LengthAxis::X);
+    let fy_opt = length_scale_factor(policy, context.source, context.target, LengthAxis::Y);
+    if fx_opt.is_none() && fy_opt.is_none() {
         return Ok(());
-    };
+    }
+    let fx = fx_opt.unwrap_or(1.0);
+    let fy = fy_opt.unwrap_or(1.0);
     if invert && (fx.abs() < f32::EPSILON || fy.abs() < f32::EPSILON) {
         return Ok(());
     }
@@ -266,8 +357,9 @@ fn scale_pair(
             value * factor
         }
     };
-    let x = parse_f32(tokens[0], attr)?;
-    note_non_finite(passthroughs, context.index, element, attr, tokens[0], x);
+    let Some(x) = parsed_or_kept(element, attr, tokens[0], context, passthroughs) else {
+        return Ok(());
+    };
     // One source value: the two numbers are equal by definition, so they only stay
     // one number when the scale is uniform. Under an anisotropic panel the single
     // value has to become an explicit pair (measured: the geometric mean is far
@@ -277,11 +369,12 @@ fn scale_pair(
         return Ok(());
     }
     let y = match tokens.get(1) {
-        Some(raw_y) => {
-            let y = parse_f32(raw_y, attr)?;
-            note_non_finite(passthroughs, context.index, element, attr, raw_y, y);
-            y
-        }
+        Some(raw_y) => match parsed_or_kept(element, attr, raw_y, context, passthroughs) {
+            Some(y) => y,
+            // A half-parsed pair is kept whole: the first number is not written
+            // without the second one it was written with.
+            None => return Ok(()),
+        },
         None => x,
     };
     element.set_attr(

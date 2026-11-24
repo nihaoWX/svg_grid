@@ -305,15 +305,26 @@ fn colours_compositing_and_flood_carry_no_user_length() {
 }
 
 #[test]
-fn spot_and_distant_light_are_angles_not_lengths() {
+fn spot_light_positions_scale_but_distant_light_angles_do_not() {
+    // Corrected by R59: spot positions are user lengths; measured xor 18003/205 -> 0/0.
     let out = scaled(
         "",
-        r##"<feSpecularLighting><feSpotLight x="10" y="20" z="30" pointsAtX="1" pointsAtY="2" angle="30" specularExponent="10"/></feSpecularLighting><feDiffuseLighting><feDistantLight azimuth="45" elevation="20"/></feDiffuseLighting>"##,
+        r##"<feSpecularLighting><feSpotLight x="10" y="20" z="30" pointsAtX="1" pointsAtY="2" specularExponent="10" limitingConeAngle="30"/></feSpecularLighting><feDiffuseLighting><feDistantLight azimuth="45" elevation="20"/></feDiffuseLighting>"##,
         DOUBLED,
     );
-    assert_eq!(attr(&out, "feSpotLight", "x"), Some("10".into()));
-    assert_eq!(attr(&out, "feSpotLight", "angle"), Some("30".into()));
+    for (name, want) in [
+        ("x", "20"),
+        ("y", "40"),
+        ("z", "60"),
+        ("pointsAtX", "2"),
+        ("pointsAtY", "4"),
+        ("specularExponent", "10"),
+        ("limitingConeAngle", "30"),
+    ] {
+        assert_eq!(attr(&out, "feSpotLight", name), Some(want.into()), "{name}");
+    }
     assert_eq!(attr(&out, "feDistantLight", "azimuth"), Some("45".into()));
+    assert_eq!(attr(&out, "feDistantLight", "elevation"), Some("20".into()));
 }
 
 #[test]

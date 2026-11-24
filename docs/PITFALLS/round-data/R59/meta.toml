@@ -1,0 +1,91 @@
+id = "R59"
+date = "2026-11-24"
+verdict = "修复"
+
+family = [
+  "R58 对抗评审的四条残余：feSpotLight 的 x/y/z/pointsAtX/pointsAtY/pointsAtZ 是 user-space 长度却被当角度跳过；data-scale=x/y 单轴策略下 stdDeviation/radius/baseFrequency 完全没改写；非法图元长度从 rc=0 变成 rc=2 的破坏性回归；obb clipPath 体内 font-size 被缩放。",
+  "附带两条文档口径：tests/selftest/defs/mod.rs 的 radius 注释写了一个不可复现的数字；R58 报告的三处措辞（0 改动、变异脚本位置、feSpotLight 角度）。",
+]
+
+closures = [
+  { finding = "R59-F1", tier = "代码" },
+  { finding = "R59-F2", tier = "代码" },
+  { finding = "R59-F3", tier = "代码" },
+  { finding = "R59-F4", tier = "代码" },
+  { finding = "R59-F5", tier = "测试注释" },
+  { finding = "R59-F6", tier = "证据" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R19", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58",
+]
+touched = []
+
+note = """
+每条都先 d1render 实测再写码（表在 test.py 末尾；oracle 定义与 R58 相同：等向 = 源图按 s 渲染，
+各向异性 = 源图内容包进 <g transform="scale(sx sy)"> 在 400x400 画布上渲染）。
+
+E1（P1，R59-F1，挂 R58-F2/F3）：feSpotLight 的 x/y/pointsAtX/pointsAtY 按各自轴缩，z/pointsAtZ 是长度，
+用 LengthAxis::Uniform（几何平均，10→44.721 @4x5）；specularExponent/limitingConeAngle 不动。修前等向
+s=2 xor 18003/205（墨 31392 vs oracle 28950），修后 0/0；各向异性修前 100170/242，修后 37011/206，
+残余是法线本身随非等比缩放改变（与 R58 N8 同族，不是长度漏缩），故只点名不声称 0。feDistantLight 的
+azimuth/elevation 是角度，保持 45/20 且 xor 0/0；fePointLight 仍 0/0。
+E2（P1，R59-F2，挂 R58-F2/F3）：单轴策略下缺的因子按 1.0，标量必须写成双值：x 策略 stdDeviation 2→"8 2"、
+y 策略 2→"2 10"；双值源按轴取（x "3 4"→"12 4"，y→"3 20"）；radius 同；baseFrequency 是除法
+（x 0.05→"0.0125 0.05"）。修前像素 x blur 6024/81、y 9244/87、x 双值 9804/75、y 双值 18856/80、
+x morph 756/255、y morph 1328/255、x turbulence 31875/131；修后七条全部 0/0。除 position/none 两因子
+都缺之外不再提前 return，与 src/transform/lengths.rs:130-141 的模块契约（x 策略只缩 x 长度）一致。
+E3（P2 回归，R59-F3，挂 R58-F2）：非法长度保留原值 + W7，rc=0。修前（cad0bef）五种输入全部 rc=2
+`invalid numeric attribute`；修后全部 rc=0、属性逐字节保留、--verbose 打出
+`1 attribute could not be rewritten, kept verbatim: input #0 <feGaussianBlur stdDeviation> "2px"`。
+半解析的 pair 也整条保留（dx="2px" 保留，dy="5" 仍缩成 10）。模型是 transforms.rs 的 patternTransform 路径。
+E4（P3，R59-F4，挂 R58-F5/F6）：obb clipPath 体内 font-size 0.2 修前变 0.400，修后保持 0.2；评审 fixture
+（rect 25/15/50/50 + text 0.05/0.7）两侧墨量都是 0、xor 0/0，因为 obb clipPath 的坐标缩放是 pre-existing
+缺陷、会把 clip 清空；只改字号门控，坐标问题只登记（见下）。另一 fixture 会出现 797→198 的像素差，故本
+条不以像素为 oracle。
+E5（P3，R59-F5）：tests/selftest/defs/mod.rs 的原注释称 "radius 2 => xor 840"，实测该 fixture 的滤镜区域
+正好等于 rect，radius 2 与 4 都渲染 0/0；840 是 R58 A3 几何的数字。已改成可复现说法：该 fixture 里两者
+都是 0/0，断言针对属性而不是像素，旧期望把"图元不缩放"写死了。
+E6（P3，R59-F6，仅口径）：
+  ① R58 并非"0 改动"：`git show c4c522f --numstat -- tests/` 是 `5 2 tests/selftest/defs/mod.rs`。
+  ② 变异脚本不在 R58 meta.toml（那里没有 mutation 段），实际只在账本 R58-F7。
+  ③ feSpotLight 的 x/y/z/pointsAt* 是长度，不是角度；只有 specularExponent/limitingConeAngle 是无量纲。
+
+登记（只登记、本轮不修）：
+  - obb clipPath 的坐标缩放是 pre-existing 缺陷（0.05/0.7 被当 user-space 数缩放成 0.1/1.4），本轮只门控
+    font-size，坐标不动；它会让评审 fixture 的 clip 清空（墨量 0），因此 E4 没有像素 oracle。
+  - lighting 各向异性残余 37011/206：非等比缩放下表面法线变化，无法用长度改写消掉；与 R58 N8 同族。
+  - feImage 各向异性（preserveAspectRatio 在变换前适配）与 feDisplacementMap 噪声残余沿用 R58 登记。
+
+测试计数：新增 10 条 lib 测试（src/transform/tests_r59.rs），并把 tests_r58.rs 里写错的 spot 测试改写为
+正确语义（条数不变），总数 643 = 351 + 59 + 233（旧 633 = 341 + 59 + 233）。已同步
+docs/PITFALLS/round-data/R19/test.py 的 BASELINE/COUNTS 与 R57/test.py 第 6/200 行写死的总数与文档串。
+
+验收：cargo test --offline 643 全绿；cargo fmt --check、clippy -D warnings 干净；install.sh 后两侧 sha256
+一致；doctor 57 pass/0 fail/1 skip；214 个 tests/**/*.svg 的 convert + --report、58 fixture 的
+plot-grid --width 600 --ncol 1 + --plan 对 /tmp/r50base（@e0c6033, sha 75def0b8…）逐字节 0 差异；
+R3..R58 旧证据顶层全绿（R49/shim/ran.txt 追加 R59 OK）。
+"""
+
+how_to_run = """
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline
+
+# 修前二进制：R58 的 HEAD，不是 /tmp/r51head，也不是 /tmp/r50base
+rm -rf /tmp/r59before && mkdir -p /tmp/r59before
+git archive cad0bef | tar -x -C /tmp/r59before
+cp -r fontlib /tmp/r59before/
+(cd /tmp/r59before && cargo build --release --offline)
+
+# 全绿
+python3 docs/PITFALLS/round-data/R59/test.py
+# 有牙：把被测二进制指回修前，E1/E2 的 teeth、E3 的 rc=2、E4 的 font-size 断言必须红（rc=1；
+# 实测 53 passed / 43 failed）
+SVG_GRID_BIN=/tmp/r59before/target/release/svg_grid python3 docs/PITFALLS/round-data/R59/test.py
+# 缺渲染器/二进制必须 rc=1（--allow-skip 才允许 skip）
+SVG_GRID_RENDER_BIN=/nope python3 docs/PITFALLS/round-data/R59/test.py
+"""

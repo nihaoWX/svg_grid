@@ -262,7 +262,20 @@ pub(super) fn transform_element(
     // numbers are placed in the **referencing element's** user space (translated to
     // the cell), so they keep the inherited policy for coordinates; only the
     // font-size rule needs to know they are bodies.
-    let child_body = body || matches!(element.name.as_str(), "mask" | "clipPath");
+    //
+    // The gate is the element's own `*Units`: only a **valid**
+    // `objectBoundingBox` makes the body's numbers fractions of the box. For a
+    // clipPath that is `clipPathUnits` (default `userSpaceOnUse`), and an
+    // `objectBoundingBox` body keeps its `font-size` as a fraction too — scaling
+    // `0.2` to `0.4` describes a glyph twice the box height. Only the font-size
+    // gate is fixed here; the pre-existing fact that an obb clipPath's *coordinates*
+    // are not scaled is registered in round-data/R59, not changed.
+    let mut child_body = body || matches!(element.name.as_str(), "mask" | "clipPath");
+    if element.name == "clipPath"
+        && units_of(element, "clipPathUnits", Units::UserSpaceOnUse) == Units::ObjectBoundingBox
+    {
+        child_body = false;
+    }
     for child in &mut element.children {
         if let Node::Element(child) = child {
             transform_element(child, policy, child_body, context, passthroughs)?;
