@@ -28,17 +28,21 @@ Families
      family A runs on `SVG_GRID_PIN_BIN` when it is set, that invocation exits 1.
 
 Registered, not fixed (see meta.toml for the full text)
-  C-reg  an obb `clipPath` body that fills with a `pattern` stays at 16000/255
-     (default plot margin, 200x160, s=2) before and after this round; with
-     `--plot-margin 0` the same case is 12000/255. The review's hand candidate
-     (clip body kept at 1x0.5, pattern tile 16/8) does **not** reproduce 0/0 on
-     this device: dropping the clip body's x/y, the tile at 16x8 / 16x16, the
-     tile's inner rect at 8x8, and their combinations all leave the xor at
-     16000/255, and tile 8 vs 16 renders identical pixels. d1render and cairosvg
-     both paint the source as 16000 red and the product as 25%-covered 4000 red,
-     i.e. neither consumes the pattern coverage inside an obb clip body. What to
-     fix is the coordinate system of that body, not a number — and no tracked
-     input uses it, so this round only registers it.
+  C-reg  an obb `clipPath` body that fills with a `pattern` stays at
+     **per-pixel 16000 / per-channel 32000 / max 255** in both the default and the
+     `--plot-margin 0` framing (100x80 source, `plot-grid --width 200 --height 160
+     --ncol 1`, content inside a `<g data-scale="xy">`; without that group the case
+     only measures the input contract). Product ink is 32000 at margin 0 and 0 at
+     the default margin (the framing only decides whether the white background
+     covers it). The review's hand candidate does **not** reach 0/0 on this
+     device: tile 8 and tile 16x8 products are pixel-identical (xor 0/0), and
+     deleting the `x="24" y="24"` the walk materialises on the clip-body `rect`
+     gives 10984 / 21968 / 255 with ink 12008, not 0. R64 originally registered
+     12000/255, "4000 red" and "delete x/y => 0/0"; all three are falsified (they
+     were measured without the data-scale group) and are corrected here. The
+     conclusion stands: 16000/255 before and after, neither oracle consumes the
+     pattern coverage inside an obb clip body, and what is undefined is the
+     coordinate system of that body — no tracked input uses it, so only register.
   u7-reg  a `<use>` target written in the drawable tree stays put (xor 600/255,
      ink 200 vs 800): the same id is both "drawn in place" and "instantiated", so
      a slot would scale the in-place drawing twice and cloning would draw the body
