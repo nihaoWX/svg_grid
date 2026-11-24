@@ -1,0 +1,38 @@
+id = "R62b"
+date = "2026-11-24"
+verdict = "修复"
+
+family = [
+  "P1-b（复审补漏）：定义到定义的 href/xlink:href 出边从不换域。首版 7876c46 按内容域克隆定义，但没有把 href 当引用者 body 的出边看；cc66d4b 修容器 data-scale 继承时也未覆盖。于是 user space 里被 url(#p) 直接引用的 viewBox pattern p（tile 仍按面板缩放，正确）仍把 href 指到 #q，q 的 tile 先放大再被 viewBox 映射，等于缩两次：e1 xor 12800/255；obb 梯度 h href userSpaceOnUse 梯度 g 时 g 被写进面板坐标，e3b 16000/126；三层链 p→q→r 的 p 仍指 #q，e4 2304/255。",
+  "修法：Copies::out_slot 先问 domains::body_is_verbatim（pattern 的 patternContentUnits/viewBox、marker 的 viewBox、梯度沿 href 链解析出的 gradientUnits），body 被映射 ⇒ 出边取 Verbatim；再问元素自己的 slot / data-scale / 继承。rewrite_references 与子节点继承都用同一个 out，url() 与 href 因此同口径，并沿链传递。",
+  "对照：h 只被 verbatim body 引用时本来就指对（e2），修后仍 0/0 且产物字节不变。梯度 obb 是同一规则的自然结果（gradientUnits 可沿 href 继承），不是特例分支。",
+]
+
+closures = [
+  { finding = "R62b-F1", tier = "代码" },
+]
+
+run_before = ["R62"]
+touched = [
+  { round = "R19", why = "测试总数 696→699（BASELINE 与 COUNTS.lib 407；tests_r62c.rs 新增 3 条 href 域单测）" },
+  { round = "R57", why = "写死的总数 696→699（699 = 407 + 59 + 233）" },
+]
+
+note = """
+证据是 R62 的 E 组三例 + 对照；重实现没必要，直接复用 ../R62/test.py 里的解码/渲染/合成
+助手（本目录只放断言与牙）。四列表在 R62/meta.toml 与 R62/test.py 里（E 组）。
+
+# 被测（修后）二进制
+cd <repo> && cargo build --release --offline && python3 docs/PITFALLS/round-data/R62b/test.py
+# 有牙：把被测二进制指回首版 R62（cc66d4b）⇒ e1/e3b/e4 必须红（rc=1）
+SVG_GRID_BIN=/tmp/r62_cc66_bin python3 docs/PITFALLS/round-data/R62b/test.py
+# 缺二进制/渲染器 ⇒ rc=1（fail-closed）
+
+口径：
+  1) 出边的域由“引用者自己 body 是否被映射”决定，而不是由引用者落槽决定：p 的 tile 是
+     user space 的（缩放），p 的 body 读 q 时是 viewBox 的（不缩放）——同一元素两条边两个域。
+  2) 规则沿引用图传递（p→q→r），梯度按 href 链解析 gradientUnits 参与同一判定。
+  3) 单域定义仍不克隆；本轮不引入新语义面，只补 href 这一条漏。
+
+旧证据说明：R19/R57 的计数门禁同轮改成 699=407+59+233。
+"""
