@@ -7,7 +7,7 @@
   R43–R67 收单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、文案偏移、
   paint transform 共轭、`!important` 级联与零 alpha、滤镜图元与字号、光源、溢出写回、门禁/证据卫生、
   内容域与 `<ellipse>`、W7 默认可见、`<use>` 引用的定义、非有限值入口与覆盖面、墨迹判据、obb `clipPath`。
-  **2026-11-25 用户决定收尾**（复杂域不再主动扩，已有代码留作兼容）。余下 pre-existing 见 Known Issues。
+  **2026-11-25 用户决定收尾**（复杂域不再扩，代码留作兼容）。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/ellipse/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
@@ -137,7 +137,7 @@
    `feDisplacementMap`（127，采样噪声）、定义体 `font-size`（5880/255，单值无法精确）与
    `stop-color="currentColor"`（无继承 `color` ⇒ d1 0 墨仍报 W6）登记不修。
 2. **内容域与图元的残余**：单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>` 仍错
-   （`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制（收尾不做）。
+   （`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制。
 3. **`tspan x`/`dy` 重排**（收尾不做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan x="10">B</tspan>`
    视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判；要修需文本排版引擎。
 4. **R19 证据脚本已 `retire --kind deprecated`**：写死旧用例数与历史测试目录，在 base 上也是红的；"旧证据
@@ -179,7 +179,7 @@
 
 # Next Steps
 
-1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（§0 有 R27–R67 的提交表）。六缺陷、defs/pattern 语义、
+1. **新会话从这里开始：先读 `ARCHITECTURE.md` 与本文件**（历史看 `git log`，细节看账本）。六缺陷、defs/pattern 语义、
    字母查重（四轮）、告警码、定义元素缩放、字符引用、克隆 id、非 XML 1.0 字符、文案偏移、paint transform、
    滤镜图元与字号、光源与溢出、内容域与 `<ellipse>`、墨迹判据、非有限值入口均已收口；**无进行中轮次**。
    交付前全量复核：`cargo test`（789）、`svg_grid doctor` 57/0/1、`verify` rc=0、两副本指南 `diff -r`。

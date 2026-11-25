@@ -89,6 +89,28 @@ svg_grid doctor [--fixtures <dir>] [--only <glob>] [--jobs <n>] [--json] [--keep
 
 ## 与既有测试的关系
 
-- `cargo test`（127 项）继续做**单元/回归**；`doctor` 做**语料集全链路回归**，两者不互相替代。
+- `cargo test`（**789**：491 lib + 62 bin + 236 selftest）继续做**单元/回归**；`doctor` 做**语料集全链路回归**，两者不互相替代。
 - 语料集是"后续测试的默认集合"：新加图形能力、改 `convert/`、改告警判据之后，先跑 `doctor`。
 - 证据：`round-data/R16` 跑 `doctor` 并要求 `rc=0`，语料条数与家族覆盖也一并断言。
+
+## 交付前全量复核（清单）
+
+改完代码后按顺序跑这五项，任何一项红都不交付：
+
+1. `cargo test --offline` —— 单 crate 全绿（条数以 `PROGRESS.md` 的当前值为准）。
+2. `svg_grid doctor` —— `57 pass / 0 fail / 1 skip`（`matplotlib/mathtext` 是登记的 SKIP）。
+3. `./install.sh`，再 `sha256sum target/release/svg_grid ~/.local/bin/svg_grid` 核对两侧一致；
+   `install.sh --check` 同时也查 skill 副本是否与 `docs/general-figure-guide/` 逐字节相同。
+4. 语料面：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）；只跑单轮时
+   `python3 docs/PITFALLS/round-data/<Rxx>/test.py`——它必须有牙：把二进制指回修前版本（`SVG_GRID_BIN`
+   /`SVG_GRID_PIN_BIN`）时要变红，缺依赖时要 rc=2 而不是静默跳过。
+5. 指南两副本：`diff -rq docs/general-figure-guide ../manuscripts_skills/general-figure-guide` 为空。
+
+**长跑坑**：`round-data/R19/test.py`（约 25–30 min）会递归重跑 R9 的体积门。跑它时**不要同时编辑
+HARNESS**——编辑中的 `PROGRESS.md` 一旦越过 20000 B，红点会挂在 R14/R18 名下（2026-11-25 踩过）。
+
+**判据争议时的仲裁器**（都不在 `PATH` 里）：`d1render IN.svg OUT.png SCALE`（SCALE 是位置参数；
+**必须**设 `D1_FONT_DIR=<repo>/fontlib`，否则文本 ink 恒 0）；cairosvg 走 `~/.venv/bin/python`，
+它画不出 pattern/mask/clipPath 里的文字 ⇒ 那一族语义以 d1render 为准。两者都是临时构建，
+重启后可能不存在，需要时重建。**R 侧**：`~/micromamba/envs/r453/bin/Rscript --vanilla`——
+不加 `--vanilla` 会因 BiocManager 联网校验卡住再失败。
