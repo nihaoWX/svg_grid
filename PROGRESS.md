@@ -4,19 +4,20 @@
   ① `plot-grid` 自动 convert；② convert 不得损坏原图；③ 单次是二维网格、除声明 NULL 外不许空一格；
   ④ `--labels`/`--plot-margin` 在拥有该散图的那层加。**审计结论：六缺陷全部修复（R27–R36）**；随后
   R37–R41 收 `<defs>` mask/marker/filter 与 pattern 单位语义，R42 把转换器并入 `src/convert/`，
-  R43–R66 收单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、文案偏移、
-  paint transform 共轭、`!important` 级联与零 alpha、滤镜图元与定义体字号、光源、溢出写回、门禁/证据卫生、
-  内容域与 `<ellipse>`、W7 默认可见、`<use>` 引用的定义、非有限数值入口、墨迹判据。余下 pre-existing 见 Known Issues。
+  R43–R67 收单位属性、字母重号、告警码、定义元素缩放、字符引用、嵌套克隆 id、非 XML 1.0 字符、文案偏移、
+  paint transform 共轭、`!important` 级联与零 alpha、滤镜图元与字号、光源、溢出写回、门禁/证据卫生、
+  内容域与 `<ellipse>`、W7 默认可见、`<use>` 引用的定义、非有限值入口与覆盖面、墨迹判据、obb `clipPath`。
+  **2026-11-25 用户决定收尾**（复杂域不再主动扩，已有代码留作兼容）。余下 pre-existing 见 Known Issues。
 - **主库 `src/`**：纯 SVG 组图器。**支持图元**：`circle/ellipse/rect/line/polyline/polygon/path/image/text/tspan`
   + `stroke-width` + `rotate(a,x,y)`（`<path>` R5 起；分界见 `ARCHITECTURE/tag-protocol.md`）。
   布局语义 cowplot 式（`--height` 可省、`--rel-*` 是倍数、省略即按面板纵横比零变形、`--input none` 垫片、
   `rel_*` fail-closed）；`--normalize-input-max-side` 归一化（几何/`font-size`/`stroke-width`/`style` 长度/
-  `textLength` 一起缩）。**测试 747 项**（452 lib + 62 main + 233 selftest，R42 起单 crate）全绿，
+  `textLength` 一起缩）。**测试 789 项**（491 lib + 62 main + 236 selftest，R42 起单 crate）全绿，
   `fmt`/`clippy -D warnings` 干净。
 - **`doctor` 全量**：**57 pass / 0 fail / 1 skip**（`matplotlib/mathtext` 按 MANIFEST 计 SKIP）。
 - **告警 W1–W9**：W1–W6/W9 **非致命**（只走 stderr、**默认静音**，`--verbose` 才展开；退出码与产物字节都不变），
-  **W7（值被原文保留）例外：`plot-grid` 路径非 verbose 也打**（R63；`convert` 不缩放，其 `--check`
-  对 `stroke-width="1e999"` 仍判 compatible ⇒ 见 Known Issues）；
+  **W7（值被原文保留）例外：`plot-grid` 路径非 verbose 也打**（R63；`convert` 不缩放，非有限值由
+  `--check` 直接 fail-closed，R65）；
   **W3（给已带字母的输入再加非空字母）rc=2**、**W8（缺标签字体族）rc=3**，两者都**不写产物**、不依赖 `--verbose`；
   正常路径 stderr 0 字节；`convert` 子命令同样受静音控制（契约见 `ARCHITECTURE/warnings.md`）。
 - **`src/convert/`（R42 起并入主库，子命令 `svg_grid convert`）**：R `svglite`/matplotlib/`pdftocairo -svg`
@@ -28,8 +29,8 @@
 - **文档**：`docs/general-figure-guide/` = 本工具自带的组图 skill（首选 `02a` = `svg_grid`，回退 `02b` = cowplot；
   两副本 `diff -r` 为空）。**HARNESS 是两件套**：本文件 + `ARCHITECTURE.md`（含 `# 已定型的决定` 与
   `ARCHITECTURE/` 机制文档）+ `docs/`；**不设 `DECISIONS.md`**。**`INSTRUCTIONS.md` 是用户手写、只由用户改**。
-- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R66 已入账**；
-  `link` 组 L1–L69；`round-data/R3…R66` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
+- **账本**：由 `pitfalls-manager` 管理、按项目目录定位（**不写具体位置**），**R1–R67 已入账**；
+  `link` 组 L1–L69；`round-data/R3…R67` 各有一份可跑证据。**2026-11-22 已 reanchor**：锚点 =
   `[tools/svg_grid, monorepo]`（旧 commit 只在 monorepo 里），`check` 0 条、`ids` 不变。
 - **git**：本工具已独立成仓（`tools/svg_grid/.git`，remote `github.com/nihaoWX/svg_grid`）；
   根仓库 `.gitignore` 排除 `tools/` ⇒ **开发与提交一律用本目录的仓库**。
@@ -40,20 +41,26 @@
 
 （细节在账本与 `ARCHITECTURE.md`，不在此重复。）
 
-- 2026-11-25 **R66 墨迹判据只数真正上色的内容 + `--rel-*` 拒非正数**：`ink_bbox` 的 `Ctx` 带
-  `{paint, visible, opaque}`，closed 图元要 `paints()`、`line` 要 `stroke_paints()`、`image` 只看 `visible`，
-  `url(#id)` 复用 `Paint::inherit` ⇒ `fill="none"`/`stroke-width="0"`/`visibility="hidden"`/`<g opacity="0">`
-  的越界元素不再报 W6（d1render ink 全 0），真出墨的仍报；`--rel-widths/--rel-heights` 的 `<=0` 改 rc=2 并点名
-  值与 flag。测试 724→747，提交 `6e34ff3`+`4626f31`。
+- 2026-11-25 **R66–R66b 墨迹判据 + `--rel-*` 拒非正数**：`ink_bbox` 的 `Ctx` 带 `{paint, visible, opaque}`，
+  closed 图元要 `paints()`、`line` 要 `stroke_paints()`、`image` 只看 `visible`，`url(#id)` 复用 `Paint::inherit`
+  ⇒ `fill="none"`/`stroke-width="0"`/`visibility="hidden"`/`<g opacity="0">` 的越界元素不再报 W6（d1render
+  ink 全 0）；`--rel-*` 的 `<=0` 改 rc=2 并点名值与 flag。R66b 补掉评审抓到的两处**假阴性**（上色层在
+  `<tspan>`、pattern 只靠 `href` 拿内容）+ `currentColor` + 亚像素格（<0.5 px 即 rc=2）。测试 724→789，
+  提交 `6e34ff3`+`4626f31`+`0fef7fe`+`448f5f3`。
+- 2026-11-25 **R67 非有限值覆盖面 + obb `clipPath`**：`finite::CLASSES` 表驱动补 13 类 composer 真会改写的
+  属性（`tspan x/y`、gradient 坐标、pattern/mask/filter 区域、marker、`feTile`、userSpace 下 fe* 图元）⇒
+  `--check` 与写入模式 rc=1、点名 `attr="1e999"`、不产文件；obb `clipPath` body 整棵 verbatim（分数不缩、
+  不补 `x/y`）⇒ d1render xor 16000→0；门禁先剥注释/字面量并拦 `cfg_attr(…ignore)`。测试 747→772，
+  提交 `3fb4474`+`41face5`。
 - 2026-11-25 **R65 非有限数值入口 fail-closed + 门禁源码级守卫**：`convert --check` 与写入模式判据改成
   "解析失败**或** `!is_finite()`"，覆盖几何属性/`points`/`d`/`stroke-width`/`font-size`/`textLength`/
   `<stop offset>`/fe* 数值/内联 `style`/根尺寸与 viewBox ⇒ 九个非有限用例全 rc=1、点名属性与值、不写产物
   （`--force` 也不截断哨兵）。R19 加 `gate_assertions.py`（每个 `#[test]` 至少一个断言、禁 `#[ignore]`）。
   测试 711→724，提交 `245a620`+`719be40`+`71ae88f`。
 - 2026-11-25 **R64 `<use>` 引用的定义跟随引用者域**：`slot_of` 放行定义里带 id 的普通元素、`collect` 把定义
-  子树里的 `use` 边登记成引用 ⇒ `<defs><rect id>` 的 body 随引用者 policy 缩（u2/u3/u5/u17 xor 0；u4 双 policy
-  各一份、href 重指）；`<symbol viewBox>` 与 viewBox pattern body 里的 `use` 逐字节不变；`<foreignObject>`/
-  `<switch>` 改 fail-closed。测试 701→711，提交 `32803b9`+`01847da`+`5ac0555`+`571efec`。
+  子树里的 `use` 边登记成引用 ⇒ `<defs><rect id>` 的 body 随引用者 policy 缩（u2/u3/u5/u17 xor 0；u4 双
+  policy 各一份、href 重指）；`<symbol viewBox>` 与 viewBox pattern body 里的 `use` 逐字节不变；
+  `<foreignObject>`/`<switch>` 改 fail-closed。测试 701→711，提交 `32803b9`+`01847da`+`5ac0555`+`571efec`。
 - 2026-11-24 **R62–R63 内容域第二条轴 + `<ellipse>` + W7 默认可见**：body 已被渲染器映射的定义（pattern/marker
   有 viewBox、obb 的 `patternContentUnits`/mask/filter）其出边引用的定义**完全不缩**；user space 与 verbatim
   共用时按域克隆（`--svg-grid-verbatim`、撞名加序号），`href` 按**自己 body 的域**选靶。八组
@@ -116,12 +123,8 @@
   死白带判据、组图路线反转（`svg_grid` 优先 + `convert/` 建 crate）。
 # In Progress
 
-- **R67（进行中）= R65 评审收尾**：① `convert --check` 的非有限值判据漏了 13 类 composer 真会改写的属性
-  （`tspan x/y`、gradient 坐标、`pattern`/`mask`/`filter` 区域、`marker` 的 `markerWidth/refX`、`feTile` 区域、
-  userSpace 下 fe* 图元区域）⇒ 现在 rc=0 放行、`plot-grid` 才打 W7；② obb `clipPath` body 的分数被当 user
-  单位缩放（`1×0.5`→`2×1` 且 materialise `x/y`；评审已给 0/0 形式：分数 verbatim + 删 `x/y`）；
-  ③ 账本 `R65-F12` 的 reason 被证伪需更正；④ `gate_assertions.py` 不剥字符串/注释、不拦
-  `#[cfg_attr(test, ignore)]`；⑤ `convert` 写模式失败只打 `1 problem(s)`。
+- **无**（R67 + R66b 已收口；2026-11-25 用户决定收尾）。恢复开发时先跑 Next Steps 第 1 条的复核，
+  再从 Known Issues 挑（用户点名优先），照第 2 条的链条走（`query` → 修 → `record` → 删报告）。
 # Known Issues
 
 （只留**未决**项；机制见括号里的文件。已解决的不再保留——历史看账本与 git。）
@@ -132,16 +135,14 @@
 
 1. **滤镜图元长度的残余**（R58 门控、R59/R60 光源与单轴）：只剩各向异性 `feImage`（640/127）、
    `feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值无法精确）登记不修。
-2. **内容域与图元的残余**（R62 收口主面）：obb `clipPath` body 的几何（R67 在做；评审已给 0/0 形式）；
-   单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>` 仍错（`920/405261`、`881/305344`），但 `<circle>`
-   同病（`2709/1321221`）⇒ 单轴限制。
-3. **`tspan x`/`dy` 重排**（R48 评审 P2，R68 待做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan
-   x="10">B</tspan>` 视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判。
-4. **R19 证据脚本已 `retire --kind deprecated`**：它写死 190/60/57/73 用例数、7 个历史测试目录与独立二进制
-   告警前缀，在 base 上也是红的（8 FAIL）；"旧证据全绿"的口径**不含 R19**。R57 已把用例数改回
-   **精确相等**（711 = 419+59+233）、R64b 另加默认变异（m4）当牙齿，但只挡增删与已覆盖的分支、**挡不住
-   同名抽空**（把测试体换成 `{}` 仍全绿）；R65 已加源码级守卫（每个 `#[test]` 至少一个断言、禁 `#[ignore]`、
-  点名文件+测试），仍挡不住"把断言挪进 helper"这类绕过。
+2. **内容域与图元的残余**：单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>` 仍错
+   （`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制（收尾不做）。
+3. **`tspan x`/`dy` 重排**（收尾不做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan x="10">B</tspan>`
+   视觉是 BA 而查重按 AB 拼接 ⇒ 既可能误判也可能漏判；要修需文本排版引擎。
+4. **R19 证据脚本已 `retire --kind deprecated`**：写死旧用例数与历史测试目录，在 base 上也是红的；"旧证据
+   全绿"的口径**不含 R19**。R57 把用例数改回**精确相等**、R64b 加默认变异（m4）当牙齿、R65 加源码级断言
+   守卫（每个 `#[test]` 至少一个断言、禁 `#[ignore]`、点名文件+测试）；仍挡不住"同名抽空"（测试体换成
+   `{}`）与"把断言挪进 helper"这类绕过。
 
 ## 其他未决项
 
@@ -152,12 +153,11 @@
 - **composer 不解析的数值属性**（R65 评审列 30 条，只登记）：`rect rx/ry`（圆角从不缩放）、`text/tspan dx/dy`、
   `stroke-dasharray`/`stroke-dashoffset` 的属性形式、`pattern width`、`textPath startOffset`、`pathLength`、
   多数 fe* 数值属性、`<style>` 里的 CSS 规则 ⇒ 非有限值在这些位置既不拒也不告警。
-- **W6 的 `left` 是 `0.75em/字符` 上界估算**（高估约 6.4×）；判据无 `clip-path` 感知（`skilltest3/Figure.svg`
-  报 `right by 24.000 px` 而 d1render 0 墨）。
+- **W6 的 `left` 是 `0.75em/字符` 上界估算**（高估约 6.4×）、无 `clip-path` 感知（`skilltest3/Figure.svg` 报
+  `right by 24.000 px` 而 d1render 0 墨）、容差 1 px 不加豁免（S39-C 报 1.537 px）——**待用户裁决**。
 - **合成时面板内容不再被面板画布裁剪**：超出面板的元素会渲到成品外边距（可能压相邻面板）。
   严格复刻需给 cell 补 clip——**尚未做**（见 `ARCHITECTURE/layout.md` §2）。
 - **固定 `--plot-margin` 时"溢出字母带但没出画布"的字母仍被静默裁**（W5 只覆盖"越出画布"）：自行留足。
-- **W6 容差 1 px 保留、不加豁免**（S39-C 仍报 `right by 1.537 px`）——**待用户裁决**。
 - **`convert/` 对 RDKit `MolDraw2DSVG` 的结论需重测**（旧记录早于 2026-09-20）；2D 结构式走位图。
 - **`<path>` 出形态的已知边界**：判断"是否描边"只看图元自身声明；描边只来自祖先 `<g stroke=…>` 时多子轮廓
   仍会描出连接边（两方言实测 0 例，**明确不做**，见 `ARCHITECTURE/convert.md`）。
@@ -178,11 +178,10 @@
 
 # Next Steps
 
-1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（§0 有 R27–R63 的提交表）。六缺陷、defs/pattern 语义、
-   字母重号与查重（四轮）、doctor 告警码、定义元素缩放、文本字符引用、嵌套克隆 id、非 XML 1.0 字符、文案
-   偏移、paint transform、滤镜图元与字号、光源与溢出、内容域与 `<ellipse>`、墨迹判据均已收口；
-   **进行中 = R67**（R65 评审收尾：非有限值覆盖面 + obb clipPath 几何 + 门禁守卫）。最后做交付前全量复核：
-  `cargo test`（747）、`svg_grid doctor` 57/0/1、`verify` rc=0、两副本指南 `diff -r`。
+1. **新会话从这里开始：先读 `docs/HANDOFF.md`**（§0 有 R27–R67 的提交表）。六缺陷、defs/pattern 语义、
+   字母查重（四轮）、告警码、定义元素缩放、字符引用、克隆 id、非 XML 1.0 字符、文案偏移、paint transform、
+   滤镜图元与字号、光源与溢出、内容域与 `<ellipse>`、墨迹判据、非有限值入口均已收口；**无进行中轮次**。
+   交付前全量复核：`cargo test`（789）、`svg_grid doctor` 57/0/1、`verify` rc=0、两副本指南 `diff -r`。
 2. **每轮都走同一条链**：动手前 `query <要改的位置> --repo <本工具目录>` 查历史 → 修 → `record` 入账 →
    删驱动文档 → 若本轮有改名/移动/拆分，**提交后 `link`**（否则悬空自检会报出来）。
    **语义分支先证后写**：改判据前先读 `usvg` 源码 + 用参考渲染器（resvg/cairosvg）实测"哪一边对"，

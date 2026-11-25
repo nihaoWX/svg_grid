@@ -46,7 +46,7 @@
 | R65 `convert --check` 对非有限数值仍判 compatible（`1e999`/`NaN` 能解析成 `inf`/`NaN` ⇒ `is_err()` 判不出）+ R19 门禁挡不住“同名抽空”（把测试体换成 `{}` 仍全绿） | ✅ 已修（判据改“解析失败**或** `!is_finite()`”，覆盖几何属性/`points`/`d`/`stroke-width`/`font-size`/`textLength`/`<stop offset>`/fe* 数值/内联 `style`/根尺寸与 viewBox ⇒ 九个非有限用例全 rc=1、点名属性与值、不写产物，合法值仍 rc=0 且产物逐字节不变；R19 加 `gate_assertions.py`：每个 `#[test]` 至少一个断言、禁 `#[ignore]`、点名文件+测试） | `245a620`+`719be40`+`71ae88f`；R65 |
 | R66 W6/W5 对“画不出墨”的内容误报（`fill="none"`/`stroke-width="0"`/`visibility="hidden"`/`<g opacity="0">` 的越界元素仍算进 ink 盒）+ `--rel-widths 0` 静默产出 0 宽格子 | ✅ 已修（`ink_bbox` 的 `Ctx` 带 `{paint, visible, opaque}`，closed 图元要 `paints()`、`line` 要 `stroke_paints()`、`image` 只看 `visible`，`url(#id)` 复用 `Paint::inherit`；`--rel-*` 的 `<=0` 改 rc=2 并点名值与 flag） | `6e34ff3`+`4626f31`；R66 |
 | R67 `convert --check` 的非有限值判据漏 13 类 composer 真会改写的属性 + obb `clipPath` body 分数被当 user 单位缩放 + `gate_assertions.py` 不剥字符串/注释 | ✅ 已修（`finite::CLASSES` 表驱动 13 类 + `clipPathUnits="objectBoundingBox"` 整棵 body verbatim；门禁先剥注释/字面量） | `3fb4474`；R67 |
-| R66b R66 评审：W6 把「上色层在 `<tspan>`」和「pattern 只靠 `href` 拿内容」判成不上色（相对 base 的回归）+ pattern 子元素不上色仍算墨、`currentColor` 未解析、`--rel-widths 1e-9` 仍产出 0 宽格 | ✅ 已修（`src/ink/text.rs::text_paints` 逐字决定承载上色的那一层、tspan 自身 `opacity` 按 resvg 忽略；`pattern_paints_inner` 照 `gradient_paints` 跟 href 链；tile 内容复用 `walk::subtree_inks`；`Paint.color` 解析 `currentColor`（大小写敏感）；`src/layout.rs` 判解析后 <0.5 px ⇒ rc=2 并点名 flag+token） | `HEAD`；R66b |
+| R66b R66 评审：W6 把「上色层在 `<tspan>`」和「pattern 只靠 `href` 拿内容」判成不上色（相对 base 的回归）+ pattern 子元素不上色仍算墨、`currentColor` 未解析、`--rel-widths 1e-9` 仍产出 0 宽格 | ✅ 已修（`src/ink/text.rs::text_paints` 逐字决定承载上色的那一层、tspan 自身 `opacity` 按 resvg 忽略；`pattern_paints_inner` 照 `gradient_paints` 跟 href 链；tile 内容复用 `walk::subtree_inks`；`Paint.color` 解析 `currentColor`（大小写敏感）；`src/layout.rs` 判解析后 <0.5 px ⇒ rc=2 并点名 flag+token） | `0fef7fe`+`448f5f3`；R66b |
 
 ## 1. 先读什么（按顺序）
 
@@ -144,7 +144,7 @@
 
 - 二进制：`~/.local/bin/svg_grid`（本次核实与 `target/release/svg_grid` 同 sha256）。
   **改完代码必须重跑 `./install.sh`**（见 `ARCHITECTURE/install.md`）。
-- 回归：`cargo test`（**单 crate 747**：452 lib + 62 bin + 233 selftest；R42 起转换器是同库模块），
+- 回归：`cargo test`（**单 crate 789**：491 lib + 62 bin + 236 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
