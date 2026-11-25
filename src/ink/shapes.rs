@@ -9,7 +9,7 @@ use crate::dom::{Element, Node};
 use crate::path;
 
 use super::bbox::Bbox;
-use super::text::add_text_box;
+use super::text::{add_text_box, text_paints};
 use super::uses::{add_resolved_use, add_use_placement, UseInk};
 use super::walk::{number_attr, Ctx};
 
@@ -136,9 +136,11 @@ pub(super) fn own_box(
         }
         // A `<text>`'s own `<tspan>`s are folded into its descendant character
         // run, so only the outermost text node is measured (a top-level `<tspan>`
-        // outside any `<text>` is still handled).
+        // outside any `<text>` is still handled). Which layer carries the paint is
+        // decided per glyph run: the outer `<text>` alone cannot answer it (R66b,
+        // see [`text_paints`]).
         "text" | "tspan" if !ctx.in_text => {
-            if !ctx.paints() {
+            if !text_paints(element, ctx, ids) {
                 return;
             }
             add_text_box(element, ctx, local);

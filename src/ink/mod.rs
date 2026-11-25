@@ -77,9 +77,11 @@ mod walk;
 
 pub(crate) use uses::{use_target, MAX_USE_DEPTH};
 pub use walk::ink_bbox;
-pub(crate) use walk::{parse_number, style_prop, NON_RENDERED};
+pub(crate) use walk::{parse_number, style_prop, subtree_inks, NON_RENDERED};
 
 #[cfg(test)]
 mod tests;
 #[cfg(test)]
 mod tests_r66;
+#[cfg(test)]
+mod tests_r66b;

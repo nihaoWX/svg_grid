@@ -273,7 +273,16 @@ def family_c():
     check(proc.returncode == 0 and "PASS" in proc.stdout,
           "C/树上 724 条 `#[test]` 都有断言、0 条 `#[ignore]`",
           (proc.stdout + proc.stderr).strip()[-400:])
-    LAYOUT = "src/layout.rs", "short_last_row_keeps_the_full_grid_cell_size"
+    # R66b 把布局单元测试整体搬到 src/layout_tests.rs（为了守住 R8 的 20 KB 体积门），
+    # 用例本身没动，所以这里按名字找文件，不写死路径。
+    def locate(test):
+        for rel in ("src/layout.rs", "src/layout_tests.rs"):
+            path = ROOT / rel
+            if path.is_file() and ("fn %s()" % test) in path.read_text():
+                return rel
+        return "src/layout.rs"
+    LAYOUT = (locate("short_last_row_keeps_the_full_grid_cell_size"),
+              "short_last_row_keeps_the_full_grid_cell_size")
     mutants = {
         "empty-body": LAYOUT + ("the body is empty",),
         "call-kept": LAYOUT + ("no assertion in the body",),

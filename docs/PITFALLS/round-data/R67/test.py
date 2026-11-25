@@ -365,8 +365,8 @@ def family_d():
     check(proc.returncode == 0 and "PASS  4 bypass self-test(s) all red" in proc.stdout,
           "D/gate --self-test 4 绕过全红", proc.stdout[-200:] + proc.stderr[-200:])
     proc = subprocess.run([sys.executable, str(gate)], capture_output=True, text=True)
-    check(proc.returncode == 0 and "PASS  772 `#[test]` function(s) all assert something" in proc.stdout,
-          "D/gate 全树 PASS 772", proc.stdout[-200:] + proc.stderr[-200:])
+    check(proc.returncode == 0 and "PASS  789 `#[test]` function(s) all assert something" in proc.stdout,
+          "D/gate 全树 PASS 789", proc.stdout[-200:] + proc.stderr[-200:])
     src = write("d-tspan", blank(CLASSES["tspan-x"][0]))
     rc, text, data = convert_write(VIS, src, TMP / "d.svg")
     check(rc == 1 and 'x="1e999"' in text and "1 problem(s)" in text,

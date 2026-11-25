@@ -1,0 +1,56 @@
+id = "R66b"
+date = "2026-11-25"
+verdict = "复发"
+
+family = [
+  "文字的上色层是 `<tspan>` 时被判成不上色：`add_text_box` 只看外层 `<text>` 的 `ctx.paints()`，walker 也不为文本下钻 ⇒ `<text fill=\"none\"><tspan fill=\"#000\">A</tspan></text>` 越界时 W6 静默，d1render 92 px、cairosvg 95 px（R66 引入的回归，P1-1）。同类：tspan 描边、外层 hidden + 内层 visible、`<g fill=\"none\">` 包住、经 `<use>` 引用（d1 92–158 px）。修法：新增 `src/ink/text.rs::text_paints`，逐字决定「承载上色的那一层」；外层不上色但任一 tspan 上色 ⇒ 加框；外层上色但所有带字的 tspan 都不上色 ⇒ 不加框；tspan 自身的 `opacity` 忽略（d1 92 px vs cairosvg 0，跟 resvg），非 tspan 后代的 `opacity` 仍生效。",
+  "`pattern` 的内容只靠 `href`/`xlink:href` 继承时被判成不上色：`pattern_paints` 只看自己的子元素，不跟 href ⇒ `<pattern id=\"p\" href=\"#b\"/>`（b 有实心 rect）越界时 W6 静默，d1render 400 px（P1-2）。修法：`pattern_paints_inner` 按 `gradient_paints` 已有的 href 链写法（`seen` + `std::ptr::eq`）跟链，不自造第二套。",
+  "`pattern` 子元素不上色时仍算墨：修前只查子元素名字与 `display` ⇒ `fill=\"none\"`/`transparent`/`fill-opacity=\"0\"`/`opacity=\"0\"`/`visibility=\"hidden\"` 的 tile 内容（以及 `<g fill=\"none\">` 包一层）都报 W6 假阳性，d1 全为 0 墨（P2-1）。修法：tile 内容用 `src/ink/walk.rs::subtree_inks`（直接跑 W6 的那次 walk），pattern 规则不再与 walker 分叉；自引用/环用 thread-local 栈兜底（d1 0 墨，cairosvg 直接退出 1）。",
+  "`currentColor` 没解析：`fill=\"currentColor\" color=\"transparent\"` ⇒ d1 0 墨但报 W6（P2-2）。修法：`Paint` 增 `color`，`inherit` 先折继承来的 `color`（属性或 `style`，`!important` 由 `style_prop` 处理），`fill`/`stroke` 的值等于 `currentColor` 时才取它；关键字大小写敏感（`currentcolor` 是非法颜色 ⇒ d1 画黑 400 px，仍报 W6）。",
+  "账本漏了 `modify R19/R57 --by R66`：R66 把 BASELINE 724→747、COUNTS 432/59→452/62、R57 +4，账本没有对应事件（P2-3）。修法：本轮补 `modify R19 --by R66`、`modify R57 --by R66`（`--commit 6e34ff3`），并为本轮的 789 记 `--by R66b`。",
+  "`--rel-widths 1e-9,1` 仍 rc=0：`1e-9` 解析成 1e-9 > 0 通过正数门，落在 200 px 画布上不到 0.5 px，`--plan` 打出 `cell 0x60.800`（P3-4）。修法：`src/layout.rs` 的格子循环按解析后的像素判 `MIN_CELL_SIDE = 0.5`，`< 0.5` ⇒ rc=2 并点名 flag 与原始 token（`{:?}` 还原 `1e-9`），消息 `--rel-widths must leave a cell at least 1 px wide, got \"1e-9\"`；`--plan` 走同一 `compute_grid` 自动同步；`1e-3,1`（≈1 px@1000）照旧 rc=0 且产物逐字节不变。",
+  "R66 账本的行号与范围不准：`visit` 记成从 95 开始（实际 94）、F5 的范围写成整个 `own_box` 区段（实际是 `carries_supported` 154-160）（P3-5）。修法：本轮新增 finding 指正，`modify R66 --by R66b` 记事件（账本 append-only，不改历史字段）。",
+  "R66-F12 的解释错了：`skilltest3/Figure.svg` 修后仍报的 `right by 24.000 px` 不是 clip-path 抑制，实测来自白底矩形 `<rect x=\"24\" y=\"24\" width=\"4961\" height=\"1919.428\" fill=\"#FFFFFF\" stroke=\"none\"/>`（max_x 4985）；删掉所有白底矩形后越界只剩 3.642 px（墨 x=4964.642），删 `visibility=\"hidden\"` 面板不改变（P3-6）。修法：新增 finding 更正解释并 `modify R66 --by R66b`。",
+]
+
+closures = [
+  { finding = "R66b-F1", tier = "代码" },
+  { finding = "R66b-F2", tier = "代码" },
+  { finding = "R66b-F3", tier = "代码" },
+  { finding = "R66b-F4", tier = "代码" },
+  { finding = "R66b-F5", tier = "检查" },
+  { finding = "R66b-F6", tier = "代码" },
+  { finding = "R66b-F7", tier = "检查" },
+  { finding = "R66b-F8", tier = "检查" },
+]
+
+run_before = [
+  "R66", "R67", "R19", "R57", "R64b", "R65",
+]
+
+touched = [
+  { round = "R19", why = "测试总数 772→789（lib 477→491、selftest 233→236），BASELINE/COUNTS 同轮更新；R66 改了这组快照却没记 modify，本轮补记" },
+  { round = "R57", why = "docstring 与 family_a 写死 772 = 477 + 62 + 233，改成 789 = 491 + 62 + 236" },
+  { round = "R64b", why = "BASELINE 快照 477/62/233 → 491/62/236" },
+  { round = "R67", why = "family_d 里硬编码的 `PASS  772` 改成 `PASS  789`（它转跑 R65 的门禁自测）" },
+  { round = "R66", why = "B 族 REL 行把 `--rel-widths 1e-9,1` 的修后期望从 rc=0 改成 rc=2 并点名 token：R66 当时把它记成 fail-open 的「已知不改」，本轮按 P3-4 收掉" },
+  { round = "R65", why = "C 族变异把布局用例的文件写死成 src/layout.rs；搬家后按用例名找文件（用例本体未动）" },
+]
+
+note = """
+为什么认定同类：R66 给 W6 加 `paints()` 门时把「上色层」判在了外层元素上，`<text>`/`<pattern>` 都是
+「自己不上色、内容在别处」的容器；两条漏判（tspan、href）与五条误判（tile 子元素）根因同一条。
+根因已证：d1render 与 cairosvg 四列对拍，27 个用例里修后 W6 与 d1 墨逐条一致（`tspan opacity` 一例
+按 resvg 走，cairosvg 分歧已登记）。
+怎么修才不弄坏前面：pattern 判据直接复用 `walk::subtree_inks`（同一次 walk），文本判据抽成
+`text::text_paints` 并由 `shapes::own_box` 调用，两者都不新增第二套 paint 折叠逻辑。
+要跑：R66（W6 假阳性面）、R67（非有限值门）、R19/R57/R64b（用例数快照）、R65（门禁自测）——全绿。
+旧证据扫描（best-effort，收尾后停）：R3–R25 逐轮 rc=0；R26–R67 未跑。R57/R64b/R65/R66/R67 单独跑过，全 rc=0。
+布局单元测试整体搬到 `src/layout_tests.rs`（由 `src/lib.rs` 声明）：`src/layout.rs` 加门后 24266 B，
+R8 的 20 KB 体积门会红；这是移动不是删除（R62 有同样先例），用例数不变。
+"""
+
+how_to_run = """
+cd <此目录> && python3 test.py        # rc=0 全过；缺二进制/缺 cairosvg ⇒ rc=2，不静默 skip
+SVG_GRID_PIN_BIN=/tmp/r66b_before_bin python3 test.py   # 指到修前二进制 ⇒ A/B/C/D 红，rc=1
+"""

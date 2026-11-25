@@ -3,7 +3,7 @@
 
 Families
   A  the R19 snapshot is EXACT: `BASELINE` / `COUNTS` in round-data/R19/test.py
-     equal what a real `cargo test --offline` prints this round (772 = 477 + 62 + 233),
+     equal what a real `cargo test --offline` prints this round (789 = 491 + 62 + 236),
      and the assertions use `==`. A lower bound (`>=`) is the R55 defect: it tolerated
      deleting 388 of 579 tests and still went green (R55 review P1-1).
   B  the gate has teeth: `gate_demo.py` feeds synthetic count tables into R19's
@@ -189,7 +189,7 @@ def family_a():
     ):
         return False
     check(True, "A/real suite counts", f"{sum(counts.values())} = " + " + ".join(str(counts[t]) for t in TARGETS))
-    check(counts[SELF] == 233, "A/selftest target is 233", str(counts[SELF]))
+    check(counts[SELF] == 236, "A/selftest target is 236", str(counts[SELF]))
     for target in TARGETS:
         check(
             counts[target] == snapshot[target],
@@ -197,7 +197,7 @@ def family_a():
             f"snapshot {snapshot[target]} vs measured {counts[target]}",
         )
     check(
-        sum(counts.values()) == baseline == 772,
+        sum(counts.values()) == baseline == 789,
         "A/total snapshot is exact this round",
         f"snapshot {baseline} vs measured {sum(counts.values())}",
     )

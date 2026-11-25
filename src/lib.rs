@@ -11,6 +11,8 @@ mod label_letters;
 mod label_paint;
 mod labels;
 mod layout;
+#[cfg(test)]
+mod layout_tests;
 mod normalize;
 mod ns;
 mod output;

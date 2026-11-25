@@ -39,8 +39,8 @@ CONTROLS = [
     "transform::tests_r64::a_use_inside_a_viewbox_pattern_body_stays_verbatim",
 ]
 # 上一轮的精确计数：任何一轮增删测试都必须同轮更新这里（与 R19/R57 同一口径）。
-BASELINE = {"unittests src/lib.rs": 477, "unittests src/main.rs": 62,
-            "tests/selftest/main.rs": 233}
+BASELINE = {"unittests src/lib.rs": 491, "unittests src/main.rs": 62,
+            "tests/selftest/main.rs": 236}
 RUNNING_RE = re.compile(r"^\s+(?:Running|Doc-tests) (.+?)(?: \([^)]*\))?\s*$")
 RESULT_RE = re.compile(r"^test result: (\w+)\. (\d+) passed; (\d+) failed;")
 

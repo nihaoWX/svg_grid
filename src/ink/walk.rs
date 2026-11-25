@@ -135,8 +135,23 @@ pub(super) fn visit(
     }
 }
 
+/// True when `element`'s subtree, evaluated with the initial paint context,
+/// leaves any ink at all.
+///
+/// This is the `<pattern>` content judge ([`crate::label_paint`]): a pattern tile
+/// is a rendered subtree of its own, so it inks exactly when the same walk that
+/// feeds W6 would measure something inside it. Reusing [`visit`] keeps the paint,
+/// visibility, opacity, geometry and paint-server rules from drifting apart
+/// (R66b) — a second, simplified copy is how the old pattern judge missed
+/// `fill="none"` children.
+pub(crate) fn subtree_inks(element: &Element, ids: &HashMap<&str, &Element>) -> bool {
+    let mut bbox = Bbox::empty();
+    visit(element, &Ctx::default(), ids, 0, &mut bbox);
+    !bbox.is_empty()
+}
+
 /// Fold the element's own presentation properties onto the inherited context.
-fn inherit_ctx(element: &Element, ctx: &Ctx, ids: &HashMap<&str, &Element>) -> Ctx {
+pub(super) fn inherit_ctx(element: &Element, ctx: &Ctx, ids: &HashMap<&str, &Element>) -> Ctx {
     let mut next = *ctx;
     next.paint = ctx.paint.inherit(element, ids);
     // `visibility` is inherited and a descendant may restore it (measured:
@@ -163,7 +178,7 @@ fn inherit_ctx(element: &Element, ctx: &Ctx, ids: &HashMap<&str, &Element>) -> C
     next
 }
 
-fn is_display_none(element: &Element) -> bool {
+pub(super) fn is_display_none(element: &Element) -> bool {
     matches!(style_prop(element, "display").as_deref(), Some("none"))
 }
 

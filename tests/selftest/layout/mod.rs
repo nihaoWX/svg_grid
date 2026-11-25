@@ -7,6 +7,8 @@ use svg_grid::{plot_grid, AlignMode, Margins, PlotGridSpec, SvgInput};
 
 use crate::common::*;
 
+mod degenerate;
+
 #[test]
 fn cli_supports_spacers_and_rejects_zero_rel() {
     let a = temp_path("spacer_a.svg");

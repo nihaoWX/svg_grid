@@ -93,7 +93,9 @@ REL = [  # (flag, weights, panels, ncol, pre_rc, pre_text, post_rc, post_text)
     ("--rel-widths", "abc,1", 2, 2, 2, 'must be a number, got "abc"', 2, 'must be a number, got "abc"'),
     ("--rel-heights", "0,1", 2, 1, 0, "", 2, 'must be positive, got "0"'),
     ("--rel-widths", "1,1", 2, 2, 0, "", 0, ""),
-    ("--rel-widths", "1e-9,1", 2, 2, 0, "", 0, ""),
+    # R66b 收口：解析后只剩 0.0 px 的格子（< 0.5 px）也要 rc=2 —— R66 当时把它
+    # 留成 fail-open（post rc=0），R66 评审 P3-4 指出 `--plan` 会打印 `cell 0x60.800`。
+    ("--rel-widths", "1e-9,1", 2, 2, 0, "", 2, 'must leave a cell at least 1 px wide, got "1e-9"'),
     ("--rel-widths", "1,2", 2, 2, 0, "", 0, ""),
     ("--rel-heights", "1,2", 2, 1, 0, "", 0, ""),
 ]

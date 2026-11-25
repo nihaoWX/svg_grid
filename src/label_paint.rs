@@ -11,10 +11,11 @@
 //! inherited, so a `<g fill-opacity="0">` silences its whole subtree but a child
 //! may restore any one of them (R54 A5-A8, E3-E5).
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 
 use crate::dom::{Element, Node};
-use crate::ink::{parse_number, style_prop, NON_RENDERED};
+use crate::ink::{parse_number, style_prop, subtree_inks, NON_RENDERED};
 
 /// Effective paint state of one text run.
 #[derive(Clone, Copy)]
@@ -29,6 +30,9 @@ pub(crate) struct Paint {
     stroke_opacity: f64,
     /// Effective inherited `stroke-width` (default 1; negative means no stroke).
     stroke_width: f64,
+    /// Effective inherited `color` (default: black) — what a `currentColor`
+    /// paint resolves to (R66b).
+    color: bool,
 }
 
 impl Paint {
@@ -38,6 +42,7 @@ impl Paint {
         stroke: false,
         stroke_opacity: 1.0,
         stroke_width: 1.0,
+        color: true,
     };
 
     /// True when the run leaves ink: a painted fill with a non-zero opacity, or a
@@ -71,8 +76,13 @@ impl Paint {
     /// CSS declaration.
     pub(crate) fn inherit(self, element: &Element, ids: &HashMap<&str, &Element>) -> Paint {
         let mut next = self;
+        // `color` is inherited and is what `currentColor` resolves to, so it must
+        // be folded before the fill/stroke that may read it (R66b).
+        if let Some(value) = style_prop(element, "color") {
+            next.color = colour_paints(value.trim());
+        }
         if let Some(value) = style_prop(element, "fill") {
-            next.fill = paints(value.trim(), ids);
+            next.fill = paint_value(value.trim(), ids, next.color);
         }
         if let Some(value) = style_prop(element, "fill-opacity")
             .as_deref()
@@ -81,7 +91,7 @@ impl Paint {
             next.fill_opacity = value;
         }
         if let Some(value) = style_prop(element, "stroke") {
-            next.stroke = paints(value.trim(), ids);
+            next.stroke = paint_value(value.trim(), ids, next.color);
         }
         if let Some(value) = style_prop(element, "stroke-opacity")
             .as_deref()
@@ -122,6 +132,22 @@ fn paints(value: &str, ids: &HashMap<&str, &Element>) -> bool {
     match ids.get(id) {
         Some(target) => paint_server_paints(target, ids),
         None => fallback.is_some_and(|fallback| paints(fallback, ids)),
+    }
+}
+
+/// Does a paint property value paint, given the effective `color` of the run?
+///
+/// `currentColor` is the one keyword whose meaning is not local: it is the
+/// inherited `color` (default black). Measured (R66b): with
+/// `color="transparent"`, `fill="currentColor"` leaves both canvases blank while
+/// the old judge warned; with `color="#000"` it inks 400 px. The keyword is
+/// **case-sensitive** — `fill="currentcolor"` is an invalid colour that both
+/// renderers draw black (measured 400 px), so only the exact spelling resolves.
+fn paint_value(value: &str, ids: &HashMap<&str, &Element>, current_color: bool) -> bool {
+    if value == "currentColor" {
+        current_color
+    } else {
+        paints(value, ids)
     }
 }
 
@@ -177,7 +203,7 @@ fn parse_reference(rest: &str) -> Option<(&str, Option<&str>)> {
 fn paint_server_paints(target: &Element, ids: &HashMap<&str, &Element>) -> bool {
     match target.name.as_str() {
         "linearGradient" | "radialGradient" => gradient_paints(target, ids),
-        "pattern" => pattern_paints(target),
+        "pattern" => pattern_paints(target, ids),
         _ => false,
     }
 }
@@ -245,21 +271,82 @@ fn stop_paints(stop: &Element) -> bool {
         > 0.0
 }
 
-/// A pattern paints when it has at least one drawn child. An empty `<pattern>`
-/// leaves no ink (measured), and so does one whose only child is `display:none`.
-/// A white child paints conceptually even though it produces no contrast on a
-/// white panel; that colour question is out of scope here.
-fn pattern_paints(pattern: &Element) -> bool {
-    pattern.children.iter().any(|child| {
-        let Node::Element(child) = child else {
+thread_local! {
+    /// Patterns whose content is being judged right now. A tile that paints
+    /// `url(#itself)` must not be walked forever: resvg draws nothing for it
+    /// (measured d1 ink 0; cairosvg 2.9.1 dies with exit 1), so re-entering a
+    /// pattern under evaluation judges it as non-painting.
+    static EVALUATING_PATTERNS: RefCell<Vec<*const Element>> = const { RefCell::new(Vec::new()) };
+}
+
+/// A pattern paints when its content does. The tile is a rendered subtree, so the
+/// question is exactly "would [`crate::ink::subtree_inks`] measure ink inside it?"
+/// — a child that exists but paints nothing (`fill="none"`, `transparent`,
+/// `fill-opacity="0"`, `opacity="0"`, `visibility="hidden"`, `display="none"`)
+/// leaves no ink (measured d1 0 for all five, R66b P2-1), while a child that
+/// restores a paint inside a non-painting group still does (measured d1 400).
+///
+/// A pattern with no content of its own instead inherits the content of its
+/// `href`/`xlink:href` chain, however long (R66b P1-2: `<pattern id="p"
+/// href="#b"/>` where `b` has a solid rect measures d1 ink 400). A `<title>`
+/// child is not content and does not stop the chain (measured d1 400), while a
+/// real but non-painting child (`display="none"`) does (measured d1 0) — resvg
+/// only falls back to `href` when the pattern has no rendered children at all.
+fn pattern_paints(pattern: &Element, ids: &HashMap<&str, &Element>) -> bool {
+    let reentered = EVALUATING_PATTERNS.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        if stack.iter().any(|node| std::ptr::eq(*node, pattern)) {
+            return true;
+        }
+        stack.push(pattern);
+        false
+    });
+    if reentered {
+        return false;
+    }
+    let result = pattern_paints_inner(pattern, ids);
+    EVALUATING_PATTERNS.with(|stack| {
+        stack.borrow_mut().pop();
+    });
+    result
+}
+
+fn pattern_paints_inner(pattern: &Element, ids: &HashMap<&str, &Element>) -> bool {
+    let mut seen: Vec<*const Element> = Vec::new();
+    let mut current = pattern;
+    loop {
+        if seen.iter().any(|node| std::ptr::eq(*node, current)) {
+            return false;
+        }
+        seen.push(current);
+        let mut has_content = false;
+        for child in &current.children {
+            let Node::Element(child) = child else {
+                continue;
+            };
+            // `<title>`, `<desc>`, `<style>`, `<defs>`, … are not tile content.
+            if NON_RENDERED.contains(&child.name.as_str()) {
+                continue;
+            }
+            has_content = true;
+            if subtree_inks(child, ids) {
+                return true;
+            }
+        }
+        if has_content {
+            return false;
+        }
+        let Some(next) = current
+            .attr("href")
+            .or_else(|| current.attr("xlink:href"))
+            .map(str::trim)
+            .and_then(|href| href.strip_prefix('#'))
+            .and_then(|id| ids.get(id))
+        else {
             return false;
         };
-        !NON_RENDERED.contains(&child.name.as_str())
-            && !matches!(
-                style_prop(child, "display").as_deref().map(str::trim),
-                Some("none")
-            )
-    })
+        current = next;
+    }
 }
 
 #[cfg(test)]

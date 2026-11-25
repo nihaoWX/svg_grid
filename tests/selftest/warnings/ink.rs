@@ -1,6 +1,8 @@
 //! W6/W5 ink-bound checks: a panel's own ink leaving its canvas, a rotated
 //! y-axis label leaving the canvas, and the clean-text negative controls.
 
+use std::path::PathBuf;
+
 use super::*;
 
 #[test]
@@ -178,6 +180,104 @@ fn ink_warning_is_silent_for_a_clean_text_input() {
     );
 
     for path in [input, out] {
+        let _ = fs::remove_file(path);
+    }
+}
+
+/// A 100x80 panel whose `body` sits at x=200, i.e. entirely right of the canvas.
+fn panel_with(body: &str) -> String {
+    format!(
+        r##"<svg width="100" height="80" viewBox="0 0 100 80" xmlns="http://www.w3.org/2000/svg">
+<rect data-panel-box="main" x="0" y="0" width="100" height="80" fill="none" stroke="none"/>
+{body}
+</svg>"##
+    )
+}
+
+/// Run one panel through `plot-grid` at its own size, so W6 is the only warning.
+fn w6(name: &str, body: &str) -> (std::process::Output, PathBuf, PathBuf) {
+    let input = temp_path(&format!("{name}.svg"));
+    fs::write(&input, panel_with(body)).unwrap();
+    let (result, out) = run_cli(
+        &format!("{name}_out.svg"),
+        std::slice::from_ref(&input),
+        &[
+            "--width",
+            "100",
+            "--height",
+            "80",
+            "--ncol",
+            "1",
+            "--plot-margin",
+            "0",
+        ],
+    );
+    (result, input, out)
+}
+
+#[test]
+fn warns_when_only_a_tspan_paints_outside_the_canvas() {
+    // Measured d1 ink 92 / cairosvg 95 at x=200: the outer `<text>` is
+    // `fill="none"`, so the old judge saw no ink at all and stayed silent (R66b
+    // P1-1). The warning must fire and must name the real overflow.
+    let (fired, fired_in, fired_out) = w6(
+        "ink_tspan_outside",
+        r##"<g data-scale="position"><text x="200" y="40" font-size="20" fill="none"><tspan fill="#000">A</tspan></text></g>"##,
+    );
+    assert!(fired.status.success(), "W6 must never fail the run");
+    let stderr = String::from_utf8_lossy(&fired.stderr);
+    assert!(stderr.contains("outside its own canvas box"), "{stderr}");
+    assert!(stderr.contains("input #0"), "{stderr}");
+    assert!(stderr.contains("overflows right by"), "{stderr}");
+
+    // Negative control: the same run with the tspan's paint removed is silent —
+    // the judge follows the layer that carries the glyphs, not the outer tag.
+    let (silent, silent_in, silent_out) = w6(
+        "ink_tspan_inside",
+        r##"<g data-scale="position"><text x="200" y="40" font-size="20" fill="#000"><tspan fill="none">A</tspan></text></g>"##,
+    );
+    assert!(silent.status.success());
+    assert_eq!(
+        silent.stderr.len(),
+        0,
+        "a non-painting tspan must stay silent, got: {}",
+        String::from_utf8_lossy(&silent.stderr)
+    );
+
+    for path in [fired_in, fired_out, silent_in, silent_out] {
+        let _ = fs::remove_file(path);
+    }
+}
+
+#[test]
+fn warns_when_a_pattern_reaches_its_ink_through_href() {
+    // Measured d1 ink 400 / cairosvg 400: `<pattern id="p" href="#b"/>` paints
+    // `b`'s solid rect, but the old judge looked only at `p`'s own (empty) children
+    // and stayed silent (R66b P1-2).
+    let (fired, fired_in, fired_out) = w6(
+        "ink_pattern_href_outside",
+        r##"<defs><pattern id="b" patternUnits="userSpaceOnUse" width="4" height="4"><rect width="4" height="4" fill="#000"/></pattern><pattern id="p" href="#b"/></defs><g data-scale="position"><rect x="200" y="10" width="20" height="20" fill="url(#p)"/></g>"##,
+    );
+    assert!(fired.status.success(), "W6 must never fail the run");
+    let stderr = String::from_utf8_lossy(&fired.stderr);
+    assert!(stderr.contains("outside its own canvas box"), "{stderr}");
+    assert!(stderr.contains("overflows right by"), "{stderr}");
+
+    // Negative control: a pattern whose only child paints nothing is silent, even
+    // though the child element exists (R66b P2-1's five false positives).
+    let (silent, silent_in, silent_out) = w6(
+        "ink_pattern_href_inside",
+        r##"<defs><pattern id="p" patternUnits="userSpaceOnUse" width="4" height="4"><rect width="4" height="4" fill="none"/></pattern></defs><g data-scale="position"><rect x="200" y="10" width="20" height="20" fill="url(#p)"/></g>"##,
+    );
+    assert!(silent.status.success());
+    assert_eq!(
+        silent.stderr.len(),
+        0,
+        "a non-painting pattern must stay silent, got: {}",
+        String::from_utf8_lossy(&silent.stderr)
+    );
+
+    for path in [fired_in, fired_out, silent_in, silent_out] {
         let _ = fs::remove_file(path);
     }
 }

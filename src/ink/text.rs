@@ -1,10 +1,12 @@
 //! Proportional ink estimate for `text` / `tspan` runs.
 
+use std::collections::HashMap;
+
 use crate::dom::{Element, Node};
 use crate::{LABEL_CAP_HEIGHT_RATIO, LABEL_INK_WIDTH_RATIO};
 
 use super::bbox::Bbox;
-use super::walk::{number_attr, style_prop, Ctx};
+use super::walk::{inherit_ctx, is_display_none, number_attr, style_prop, Ctx, NON_RENDERED};
 
 /// Descender below the baseline as a fraction of the font size (DejaVu
 /// descenders reach ≈0.24 em; rounded up). Used only by the text estimate.
@@ -50,6 +52,50 @@ pub(super) fn add_text_box(element: &Element, ctx: &Ctx, bbox: &mut Bbox) {
         Baseline::AfterEdge => (y - size, y),
     };
     bbox.add_rect(left, top, left + width, bottom);
+}
+
+/// True when at least one character of this text run really leaves ink, decided
+/// by the element that carries the glyphs rather than by the outer element alone
+/// (R66b).
+///
+/// `<text fill="none"><tspan fill="#000">A</tspan></text>` draws the `A`
+/// (measured d1 ink 92, cairosvg 95), and a `visibility="visible"` tspan restores
+/// glyphs inside a `visibility="hidden"` text — the outer context decides nothing
+/// for those. Conversely `<text fill="#000"><tspan fill="none">A</tspan></text>`
+/// is blank in both renderers even though the outer paint is black.
+///
+/// A `<tspan>`'s **own** `opacity` is deliberately ignored: resvg 0.47 still inks
+/// its glyphs fully (`<text fill="#000"><tspan opacity="0">A</tspan></text>`
+/// measures d1 92 / cairosvg 0), and this tool follows resvg as R51/R54 did. An
+/// `opacity` on a non-`tspan` descendant *is* honoured (`<g opacity="0">` inside
+/// the text hides its glyphs, measured d1 0). `fill-opacity`, `visibility` and
+/// `display` are honoured everywhere (measured d1 0).
+pub(super) fn text_paints(element: &Element, ctx: &Ctx, ids: &HashMap<&str, &Element>) -> bool {
+    for child in &element.children {
+        match child {
+            Node::Text(text) => {
+                if !text.trim().is_empty() && ctx.paints() {
+                    return true;
+                }
+            }
+            Node::Element(child) => {
+                if NON_RENDERED.contains(&child.name.as_str()) || is_display_none(child) {
+                    continue;
+                }
+                let mut child_ctx = inherit_ctx(child, ctx, ids);
+                if child.name == "tspan" {
+                    child_ctx.opaque = ctx.opaque;
+                }
+                if !child_ctx.opaque {
+                    continue;
+                }
+                if text_paints(child, &child_ctx, ids) {
+                    return true;
+                }
+            }
+        }
+    }
+    false
 }
 
 fn collect_text(element: &Element) -> String {
