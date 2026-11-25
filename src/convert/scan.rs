@@ -6,7 +6,7 @@
 //! [`crate::convert::translate`]), so `<path>`, `<use>`, `<image>` and `<g transform>` are
 //! accepted — but only when they can actually be baked.
 
-use std::collections::HashSet;
+use std::collections::HashMap;
 
 use crate::convert::affine::{parse_transform, Affine};
 use crate::convert::dom::{Element, Node};
@@ -15,7 +15,7 @@ use crate::convert::finite;
 use crate::convert::transform::transform_supported;
 
 pub(crate) fn scan(root: &Element) -> Vec<Finding> {
-    let mut ids = HashSet::new();
+    let mut ids = HashMap::new();
     collect_ids(root, &mut ids);
 
     let mut findings = Vec::new();
@@ -29,13 +29,14 @@ pub(crate) fn scan(root: &Element) -> Vec<Finding> {
         false,
         Affine::IDENTITY,
         &ids,
+        true,
     );
     findings
 }
 
-fn collect_ids(element: &Element, ids: &mut HashSet<String>) {
+fn collect_ids<'a>(element: &'a Element, ids: &mut finite::IdIndex<'a>) {
     if let Some(id) = element.attr("id") {
-        ids.insert(id.to_string());
+        ids.insert(id.to_string(), element);
     }
     for child in &element.children {
         if let Node::Element(child) = child {
@@ -53,7 +54,8 @@ fn walk_scan(
     is_root: bool,
     in_defs: bool,
     acc: Affine,
-    ids: &HashSet<String>,
+    ids: &finite::IdIndex<'_>,
+    primitive_user_space: bool,
 ) {
     *order += 1;
     let ordinal = *order;
@@ -91,7 +93,7 @@ fn walk_scan(
                 .or_else(|| element.attr("href"))
                 .unwrap_or("");
             match href.strip_prefix('#') {
-                Some(id) if ids.contains(id) => {}
+                Some(id) if ids.contains_key(id) => {}
                 _ => push!(
                     "use",
                     format!(
@@ -216,7 +218,7 @@ fn walk_scan(
         _ => {}
     }
 
-    for bad in finite::unusable(element) {
+    for bad in finite::unusable(element, ids, primitive_user_space) {
         let detail = match bad.kind {
             finite::Unusable::NotANumber => "is not a plain number",
             finite::Unusable::NotFinite => "is not a finite number",
@@ -231,6 +233,11 @@ fn walk_scan(
     }
 
     let children_in_defs = in_defs || element.name == "defs";
+    let child_primitive = if element.name == "filter" {
+        finite::resolved_units_user_space(element, ids, "primitiveUnits", true)
+    } else {
+        primitive_user_space
+    };
     for child in &element.children {
         if let Node::Element(child) = child {
             walk_scan(
@@ -242,6 +249,7 @@ fn walk_scan(
                 children_in_defs,
                 world,
                 ids,
+                child_primitive,
             );
         }
     }

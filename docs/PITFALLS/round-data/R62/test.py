@@ -15,7 +15,8 @@ B  `<ellipse>` was never rewritten at all (no dispatch arm).  `cx/cy` scale as a
    both `plot-grid` and `convert --check`.
 C  registrations (no code change): a clipPath/mask body that is
    `*Units="objectBoundingBox"` and references a pattern keeps the pre-R62
-   numbers, including one that did not converge.
+   numbers, including one that did not converge.  R67-B fixed the obb clipPath
+   body, so `m4_clip_pattern` converged to (0, 0) and is pinned there.
 D  teeth: the same A/B assertions run against the pre-fix binary
    (`SVG_GRID_BEFORE_BIN`, default /tmp/r62_before_bin) must go red — every A
    case and every B case, otherwise the evidence proves nothing.
@@ -585,7 +586,9 @@ def main():
     # ── C: registrations (no code change) ───────────────────────────────────
     print("\n── C: registered corners (numbers pinned, nothing changed) ──")
     for name, svg, want in [
-        ("m4_clip_pattern", CASE_M4, (16000, 255)),
+        # R67-B made the obb clipPath body verbatim, so m4 converged: it now
+        # pixel-matches the source at s=2 like the mask cases.
+        ("m4_clip_pattern", CASE_M4, (0, 0)),
         ("m2_mask_pattern", CASE_M2, (0, 0)),
         ("n1_mask_obb_pat", CASE_N1, (0, 0)),
         ("n2_mask_user_pat", CASE_N2, (0, 0)),

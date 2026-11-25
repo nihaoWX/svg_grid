@@ -221,6 +221,11 @@ pub fn run_in(
         Conversion::Incompatible(findings) => {
             if options.check || options.report {
                 print_incompat_report(out, &findings);
+            } else {
+                // A write-mode failure must say *what* is wrong, not just how
+                // many: the findings go to stderr, one per line, exactly as
+                // `--check` prints them (R67).
+                print_incompat_report(err, &findings);
             }
             Err(format!(
                 "{} is not compatible with `svg_grid plot-grid`; {} problem(s); no output written",

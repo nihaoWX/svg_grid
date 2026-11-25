@@ -3,20 +3,19 @@
 `--rel-widths` / `--rel-heights` must reject a non-positive weight.
 
 A  ink paint awareness, four columns per case: pre-fix W6 warning, post-fix W6
-   warning, what d1render/cairosvg actually ink (a 300x80 probe viewport holding
-   the out-of-bounds element), and the composed product, which must be
-   byte-identical. Cases span fill / fill-opacity / stroke-opacity /
-   stroke-width / transparent / visibility (attr and style) / opacity / display /
-   image / use / line, with painting controls that must keep warning.
+   warning, what d1render/cairosvg actually ink (a 300x80 probe viewport), and
+   the composed product, which must be byte-identical. Cases span fill /
+   fill-opacity / stroke-opacity / stroke-width / transparent / visibility
+   (attr and style) / opacity / display / image / use / line, with painting
+   controls that must keep warning.
 B  `--rel-*`: a zero weight is rc=2 naming the flag and the raw token, writes no
-   output, and the pre-fix 0-size cell is gone; positive weights keep rc=0 and
-   identical bytes.
-C  parity: 214 tracked `tests/**/*.svg` through `convert` and 58
-   `tests/fixtures/**/*.svg` through `plot-grid --width 600 --ncol 1` — rc and
-   bytes equal the base build (/tmp/r50base @e0c6033).
+   output, and the pre-fix 0-size cell is gone; positive weights keep rc=0.
+C  parity: 214 `tests/**/*.svg` through `convert` and 58
+   `tests/fixtures/**/*.svg` through `plot-grid` — rc and bytes equal the base
+   build (/tmp/r50base @e0c6033).
 D  the six corpus W6 texts that do change: each is the `visibility="hidden"`
-   contribution, not a lost true positive — adding `display="none"` to every
-   hidden element makes the PRE-FIX build reproduce the POST-FIX text exactly.
+   contribution, not a lost true positive — `display="none"` on every hidden
+   element makes the PRE-FIX build reproduce the POST-FIX text exactly.
 T  teeth: the pre-fix build still warns for `fill="none"` and still accepts
    `--rel-widths 0,1`, so setting SVG_GRID_PIN_BIN makes A and B red.
 
@@ -292,11 +291,14 @@ def family_c():
         return (proc.returncode, out.read_bytes() if out.exists() else b"",
                 proc.stdout, proc.stderr)
 
+    def same(a, b):  # R67: findings precede the old error line on stderr
+        return a[:3] == b[:3] and b[3].endswith(a[3])
+
     diffs = []
     for rel in tracked:
         out = TMP / "c.svg"
         args = ["convert", "--input", str(ROOT / rel), "--output", str(out)]
-        if run(PRE, args, out) != run(BIN, args, out):
+        if not same(run(PRE, args, out), run(BIN, args, out)):
             diffs.append(rel)
     check(not diffs, "C/214 convert rc+产物逐字节相同", diffs[:3])
     grid = []

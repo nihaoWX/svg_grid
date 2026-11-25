@@ -70,6 +70,10 @@ mod warnings;
 
 #[cfg(test)]
 mod test_support;
+#[cfg(test)]
+mod tests_finite;
+#[cfg(test)]
+mod tests_r67;
 
 pub use cli::{run, run_in};
 pub use dom::{Element, Node};

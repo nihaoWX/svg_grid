@@ -100,3 +100,5 @@ mod tests_r62b;
 mod tests_r62c;
 #[cfg(test)]
 mod tests_r64;
+#[cfg(test)]
+mod tests_r67;

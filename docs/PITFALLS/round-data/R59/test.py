@@ -14,8 +14,9 @@ Families
       verbatim with W7; rc stays 0.  At cad0bef the same input was rc=2, i.e.
       R58 turned a tolerated value into a failed run.
   E4  an `objectBoundingBox` `<clipPath>` body keeps its fractional font-size.
-      Only the font-size gate is fixed; the pre-existing obb coordinate scaling
-      is registered in meta.toml, not claimed fixed (hence no pixel oracle).
+      R59 fixed only the font-size gate and registered the pre-existing obb
+      coordinate scaling in meta.toml; R67-B fixed that scaling too (the whole
+      body is verbatim now), so E4 asserts the pixel oracle source@2 == after.
   E5  the corrected defs comment must not keep the unreproducible "xor 840".
 
 Teeth and the before binary
@@ -444,13 +445,20 @@ def family_e4():
     for tag, out in outs.items():
         pngs[tag] = tmp("E4-%s.png" % tag)
         check(render(out, pngs[tag], 1), "E4 %s: d1 renders" % tag)
-    # No pixel oracle: the *pre-existing* obb coordinate scaling already empties
-    # this clip (ink 0 both sides).  The fix is the attribute, registered.
-    check(xor(pngs["before"], pngs["after"]) == (0, 0),
-          "E4: pixels unchanged (pre-existing obb coords keep the clip empty)",
-          pair(xor(pngs["before"], pngs["after"])))
+    # R67-B made the whole obb clipPath body verbatim, so the pre-existing obb
+    # coordinate scaling that used to empty this clip is gone: the product now
+    # has a pixel oracle — the source rendered at the cell scale (2).
+    oracle = tmp("E4-oracle.png")
+    check(render(src, oracle, 2), "E4: d1 renders the source at the cell scale")
+    check(xor(oracle, pngs["after"]) == (0, 0),
+          "E4: after == source@2 (obb clip body verbatim, R67-B)",
+          pair(xor(oracle, pngs["after"])))
+    check(ink(pngs["before"]) == 0 and ink(pngs["after"]) > 0,
+          "E4: before empties the clip, after draws it",
+          "ink %d -> %d" % (ink(pngs["before"]), ink(pngs["after"])))
     row("E4-obb-clip", "font 0.400 ink %d" % ink(pngs["before"]),
-        "font 0.2 ink %d" % ink(pngs["after"]), "none (obb coords pre-existing)",
+        "font 0.2 ink %d" % ink(pngs["after"]),
+        "source@2 xor %s" % pair(xor(oracle, pngs["after"])),
         "d1", cairo(outs["after"], tmp("E4-cairo.png"), 1))
 
 

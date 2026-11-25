@@ -189,7 +189,10 @@ def family_b():
             silenced += 1
         if rc != 0:
             failing += 1
-            if not stderr.startswith(b"svg_grid convert: "):
+            # R67 makes a write-mode failure print its findings on stderr before
+            # the one-line hard error, so the prefix is no longer the first line.
+            if not any(line.startswith(b"svg_grid convert: ")
+                       for line in stderr.splitlines()):
                 hard_errors.append(rel)
     for index, rel in enumerate(fixtures):
         source = ROOT / rel

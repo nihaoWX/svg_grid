@@ -15,10 +15,8 @@ C  the gate: `gate_assertions.py` green on the tree, red on three mutants built
 D  parity: 214 tracked `tests/**/*.svg` through `convert` and 58
    `tests/fixtures/**/*.svg` through `plot-grid --width 600 --ncol 1` — rc and
    bytes equal the base build (/tmp/r50base @e0c6033).
-E  the obb `clipPath`-body-references-a-pattern residue: one decisive experiment.
-   The pattern inside the clip body changes nothing in either renderer, and the
-   two renderers already disagree on a plain clip body, so no fixture can
-   discriminate — the residue has no oracle (see meta.toml).
+E  the obb `clipPath`-body-references-a-pattern residue: one decisive experiment
+   (no fixture can discriminate it — see meta.toml).
 T  teeth: the pre-fix build at /tmp/r65_before_bin says "compatible" and writes
    the file for every case in A.
 
@@ -328,9 +326,10 @@ def family_d():
             out = TMP / "d.svg"
             a = run(PRE, ["convert", "--input", str(ROOT / rel), "--output", str(out)] + mode, out)
             b = run(BIN, ["convert", "--input", str(ROOT / rel), "--output", str(out)] + mode, out)
-            if a != b:
+            # R67: findings precede the old error line on stderr.
+            if a[:3] != b[:3] or not b[3].endswith(a[3]):
                 diffs.append((rel, mode, a[0], b[0]))
-    check(not diffs, "D/214 个 convert（含 --report）rc+产物逐字节相同", diffs[:3])
+    check(not diffs, "D/214 convert（含 --report）rc+产物逐字节相同", diffs[:3])
     grid_diffs = []
     for rel in fixtures:
         for mode in ([], ["--plan"]):
@@ -340,7 +339,7 @@ def family_d():
                     for binary in (PRE, BIN)]
             if outs[0] != outs[1]:
                 grid_diffs.append((rel, mode, outs[0][0], outs[1][0]))
-    check(not grid_diffs, "D/58 个 plot-grid（含 --plan）rc+产物逐字节相同", grid_diffs[:3])
+    check(not grid_diffs, "D/58 plot-grid（含 --plan）rc+产物逐字节相同", grid_diffs[:3])
 
 
 def family_e():

@@ -88,7 +88,36 @@
 | 外源 PDF `pdftocairo -svg` | 字形轮廓 `<use>`→`<defs><g><path>`（无 `Z`/无自身 `fill`）、`<clipPath>` 内 `<path>`、非等比 `<image>` | **已可适配**（2026-09-20）：字形孔靠"单 polygon + 显式闭合"保留、clip `<path>` 矩形化、非等比 `<image>` 烘框。**仍须调用方处理**：`-x/-y/-W/-H` 对 `-svg` **静默失效**（poppler 行为，永远整页 viewBox）⇒ 事后按 viewBox/`<g transform>` 裁 |
 | 栅格（PNG/JPEG、ChimeraX 渲染） | — | 主库支持 `<image>` 坐标搬运，可随面板进入成品（矢量图内含一小块位图）；**保持 600 dpi 原分辨率、不降采样** |
 
-## 6. 渲染与依赖注意
+## 6. 非有限值门：只拦 composer 真会改写的属性（R67）
+
+`src/convert/finite.rs::unusable` 的判据是**组图路径真的会解析/改写**，不是 SVG 规范。
+表驱动 `CLASSES`（tag + attrs + units 门 + strict）：
+
+| 类 | 属性 | units 门（默认） | 严格度 |
+|---|---|---|---|
+| `tspan` | x, y | 无 | 非数/非有限都拒 |
+| `linearGradient` | x1, y1, x2, y2 | `gradientUnits`（obb） | 同上 |
+| `radialGradient` | cx, cy, r, fr, fx, fy | `gradientUnits`（obb） | 同上 |
+| `pattern` | x, y, width, height | `patternUnits`（obb） | **只拒非有限**（`50%` 合法，`tile_number` 静默保留） |
+| `mask` | x, y, width, height | `maskUnits`（obb） | 非数/非有限都拒 |
+| `filter` | x, y, width, height | `filterUnits`（obb） | 同上 |
+| `marker` | markerWidth, markerHeight, refX, refY | `markerUnits`（strokeWidth） | 同上 |
+| `fe*` | x, y, width, height | `primitiveUnits`（userSpaceOnUse） | 同上 |
+
+units 门沿 `href` 继承（gradient↔gradient、pattern→pattern、filter→filter），带环保护。
+**为什么门控**：合法的 obb 百分比（`<radialGradient r="50%">`、`<pattern x="50%">`）是 composer
+的合法输入，一律拒会误杀；只有解析后的 units 让 composer 真的 `parse_f32` 时，非数/非有限才必然坏。
+非有限值在任何 units 下都不是合法 SVG 数，所以 strict 类对 `1e999` 一律拒。
+
+**已知不在类**（composer 不解析或只做非数值语义，语义不变）：`rect` rx/ry、`text`/`tspan` dx/dy、
+`stroke-dasharray`/`stroke-dashoffset` 的属性形式、`textPath` startOffset、`pathLength`、CSS 规则
+（`<style>` 里的 `stroke-width:1e999`）、`feComposite` k1/k4、`feConvolveMatrix`
+order/divisor/bias/targetX/kernelMatrix、`feDistantLight` azimuth/elevation、`feSpotLight`
+limitingConeAngle/specularExponent、`feDiffuseLighting` surfaceScale/diffuseConstant、
+`feSpecularLighting` specularConstant、`feComponentTransfer` slope/intercept/amplitude/exponent、
+`feTurbulence` seed。
+
+## 7. 渲染与依赖注意
 
 - 主库 resvg 需 `raster-images` feature（**已启用**）：缺它时内嵌 `<image>` **静默变白**
   （`resvg/src/image.rs` 只打一条 `log::warn!`）；实测同一区域唯一颜色数 6 → 792（cairosvg 817）。

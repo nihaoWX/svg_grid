@@ -1,0 +1,82 @@
+id = "R67"
+date = "2026-11-25"
+verdict = "修复"
+
+family = [
+  "P1：`src/convert/finite.rs::unusable` 只覆盖 R65 的几何表（circle/ellipse/text/use/line/rect/image + stroke-width），漏掉 composer 真会改写的 13 类属性：tspan x/y；linearGradient x1/y1/x2/y2；radialGradient cx/cy/r/fr/fx/fy；pattern x/y/width/height；mask x/y/width/height；filter x/y/width/height；marker markerWidth/markerHeight/refX/refY；feTile（及每个 fe* 子区域）x/y/width/height（primitiveUnits=userSpaceOnUse）。判据来源是 `src/transform/` 的 rewrite_* 调用点，不是 SVG 规范。修法：表驱动 `CLASSES`（tag + attrs + units 门 + strict），`unusable(element, ids, primitive_user_space)`；units 门按解析后的 gradientUnits/patternUnits/maskUnits/filterUnits/markerUnits/primitiveUnits（含 href 继承）决定是否在类；strict 类用 `classify_strict`（非数/非有限都拒），pattern 用非有限-only（`tile_number` 对 `50%` 静默保留）。",
+  "P1：`clipPathUnits=\"objectBoundingBox\"` 的 body 几何没有 verbatim：`src/transform/walk.rs:346-350` 只把 `child_body` 置 false，子元素仍按 panel 的 `policy` 走 `dispatch.rs::rewrite_rect`/`rewrite_scaled_length`，于是 `width=\"1\" height=\"0.5\"` 变成 `width=\"2\" height=\"1\"`、`<rect>` 的默认 x/y 被 materialise 成 `x=\"0\" y=\"0\"`。实测 d1render：source ink 16000 vs product 32000，xor 32000/128000（纯色与 pattern 两种 paint 都坏）。修法：在 gradient 分支之后、mask/clipPath 注释之前，对 obb clipPath 直接 `return Ok(())`（整棵子树跳过，与 obb pattern body 同一策略）；不动 `defs::split`，否则 refs 定点会把 clip body 引用的 userSpace pattern 也标成 Verbatim，pattern 不再 8→16 缩放，0/0 反而坏掉。",
+  "P1：R65-F12 的判定实验结论被 R65 评审证伪——cairosvg 正常裁剪（user rect/path/group/obb/circle 墨 2000/2000/2000/4000/1308 vs 1324），所谓「ink 8000」是把透明背景 `(0,0,0,0)` 当成了墨（真实 4000），且 0/0 形式存在（分数 verbatim + 删 x/y）。账本 append-only、finding 字段不可改，所以本轮 `record R67` 新增一条 finding，`where` 指向 `round-data/R65/meta.toml` 的 F12 reason 段，reason 写明证伪与修法；再 `modify R65 --by R67` 记录事件。",
+  "P2：`docs/PITFALLS/round-data/R65/gate_assertions.py` 可被绕过：`{ let _ = \"assert!(true)\"; }`、`{ let _ = r#\"assert!(true)\"#; }`、`{ // assert!(true) }` 都 PASS；`#[cfg_attr(test, ignore)]` 也不拦（IGNORE_ATTR 只匹配 `#[ignore`）。修法：扫描前 `strip_noise()` 把注释、字符串/raw-string/char 字面量清空（保留换行），`IGNORE_ATTR` 加 `cfg_attr(... ignore ...)` 分支；每种绕过一条自测（`--self-test`，4 条必须全红并点名 file+test）。",
+  "P2：`convert` 写模式失败时 stderr 只有 `1 problem(s)`，不说是哪条；`--check` 却逐条打印。修法：`Conversion::Incompatible` 分支在非 check/report 时 `print_incompat_report(err, &findings)`，findings 逐条进 stderr，末尾仍是原来的 `... is not compatible ...` 行。",
+  "P1：R19 的计数基线 747 与本轮 772 不同步；R57 的 docstring/family_a 也写死 747；R64b 的 BASELINE 还停在 432/59/233。修法：R19 `BASELINE=772`、COUNTS 改 `lib 477 / main 62 / selftest 233` 并加一行 R67 说明；R57 第 6/200 行改 772 = 477 + 62 + 233；R64b 的 BASELINE 改 477/62/233。",
+  "P1：新增 `docs/PITFALLS/round-data/R67/test.py`（82 checks，A/B/C/D/T 五族）：A 族 13 类四列（修前放行 / 修后点名 / composer 的 W7 或静默保留 / 写模式哨兵）+ 5 条合法控制 + 3 条 href 继承；B 族 obb clip body 修前缩放 / 修后 verbatim / d1render 与 cairosvg 的 xor 与 ink / userSpace 回归 / pattern 仍缩放；C 族 214 convert + 58 plot-grid 对 base `e0c6033` 逐字节；D 族 gate 自测与写模式 stderr；T 族有牙。缺二进制/缺 cairosvg ⇒ rc=2，不静默 skip。",
+  "登记不改（C）：已知不在类（composer 不解析或只做非数值语义）——rect rx/ry、text/tspan dx/dy、stroke-dasharray/dashoffset 的属性形式、textPath startOffset、pathLength、CSS 规则（`<style>` 里的 `stroke-width:1e999`）、feComposite k1/k4、feConvolveMatrix order/divisor/bias/targetX/kernelMatrix、feDistantLight azimuth/elevation、feSpotLight limitingConeAngle/specularExponent、feDiffuseLighting surfaceScale/diffuseConstant、feSpecularLighting specularConstant、feComponentTransfer slope/intercept/amplitude/exponent、feTurbulence seed。这些在 `ARCHITECTURE/convert.md` 与本节登记，语义不变。",
+]
+
+closures = [
+  { finding = "R67-F1", tier = "代码" },
+  { finding = "R67-F2", tier = "代码" },
+  { finding = "R67-F3", tier = "代码" },
+  { finding = "R67-F4", tier = "代码" },
+  { finding = "R67-F5", tier = "代码" },
+  { finding = "R67-F6", tier = "检查" },
+  { finding = "R67-F7", tier = "检查" },
+  { finding = "R67-F8", tier = "登记" },
+]
+
+run_before = [
+  "R3", "R4", "R5", "R6", "R7", "R8", "R9", "R10", "R11", "R13", "R14",
+  "R15", "R16", "R17", "R18", "R20", "R21", "R22", "R23", "R24", "R25",
+  "R26", "R28", "R29", "R30", "R31", "R32", "R33", "R34", "R35", "R36", "R37",
+  "R38", "R39", "R40", "R41", "R42", "R43", "R44", "R45", "R46", "R47", "R48",
+  "R49", "R50", "R51", "R52", "R53", "R54", "R55", "R56", "R57", "R58", "R59",
+  "R60", "R61", "R62", "R62b", "R63", "R64", "R64b", "R65", "R66",
+]
+touched = [
+  { round = "R19", why = "测试总数 747→772（BASELINE 与 COUNTS：lib 452→477；R67 的 tests_r67.rs 21+4 条），并加一行 R67 说明" },
+  { round = "R57", why = "第 6/200 行写死的总数 747→772（772 = 477 + 62 + 233）" },
+  { round = "R59", why = "E4 的「像素不变」断言被 R67-B 取代：obb clip body 不再缩放，clip 不再为空，改为断言 after == source@2（xor 0/0），并保留 font-size 0.400→0.2 与 before ink 0" },
+  { round = "R62", why = "C/m4_clip_pattern 的登记值 (16000, 255) 被 R67-B 收敛为 (0, 0)（obb clip body verbatim 后与 source 逐像素相同）" },
+  { round = "R63", why = "B 族 fail-closed 断言由 stderr.startswith 改为逐行找 `svg_grid convert: ` 前缀：R67-D 让写模式失败先打印 findings 块，旧行仍在末尾" },
+  { round = "R64b", why = "第三处写死的计数快照 432/59/233 → 477/62/233（与 R19/R57 同口径）" },
+  { round = "R65", why = "gate_assertions.py 去字符串/注释 + cfg_attr(ignore) 分支 + 4 条自测；D 族 214 convert 的 stderr 比较改为「修后以修前结尾」；R65-F12 的 reason 由 R67 新 finding 更正（账本 modify R65 --by R67）" },
+  { round = "R66", why = "C 族 214 convert 的 stderr 比较同样改为「修后以修前结尾」（R67-D 前置 findings 块）" },
+]
+
+note = """
+为什么认定同类：R67 的两处 P1 都是「fail-closed 的覆盖面与实际改写面不一致」——R65 的
+`finite::unusable` 只按几何表扫，而 composer 的 `rewrite_*` 还会解析 tspan/渐变/pattern/
+mask/filter/marker/fe* 的坐标；obb clipPath 的 body 是「分数域」，walk 却按 panel 的
+user-space policy 继续改写。两处都不是新语义，而是既有语义漏了入口。
+判据选择（A）：采用 **units 门控的类表**，不是「所有数值属性一律拒」。理由：合法的 obb
+百分比（`<radialGradient r="50%">`、`<pattern x="50%">`）在 composer 里是合法输入
+（`tile_number` 解析失败就静默保留），一律拒会误杀；只有解析后的 units 让 composer 真的
+`parse_f32` 时，非数/非有限才必然坏。非有限值在任何 units 下都不是合法 SVG 数，所以
+strict 类对 `1e999` 一律拒；pattern 的 `50%` 仍放行。零误拒证据：214 convert + 58 plot-grid
+对 base `e0c6033` 逐字节 0 差，5 条合法控制（obb 50%、marker 默认 strokeWidth、feTile
+primitiveUnits=obb）全 rc=0。
+B 的修法边界：只在 walk 层跳过 obb clipPath 子树，**不**把 clipPath 加进
+`domains::body_is_verbatim`。因为 `defs::split` 的 refs 定点会把 body 引用的定义也标成
+Verbatim，clip body 里的 userSpace pattern 就不再 8→16 缩放，实测 0/0 会退回 10984/21968/255
+（R64 的旧症状）。walk 层跳过不动 defs，pattern 保持 UserSpace slot，两种 paint 都 0/0。
+D 的修法边界：`strip_noise` 只清空字面量/注释、保留换行，所以行号与 `#[test]` 定位不变；
+`cfg_attr` 分支只匹配 `ignore` 这个词，不误伤 `cfg_attr(test, allow(...))`。
+语料差异：214 convert + 58 plot-grid 的 rc/产物字节 0 差；stderr 只在 2 个本来就不兼容的
+语料（`tests/fixtures/matplotlib/mathtext.svg`、`tests/mpl_dialect/failclosed_rotated_mathtext.svg`）
+上多了 D 的 findings 块，且修后 stderr 以修前 stderr 结尾（只前置、不改旧行）。
+"""
+
+how_to_run = """
+cd <repo> && python3 docs/PITFALLS/round-data/R67/test.py                          # rc=0 全过（82 checks；A/B/C/D/T 五族）
+SVG_GRID_PIN_BIN=/tmp/r67_before_bin python3 docs/PITFALLS/round-data/R67/test.py  # 有牙：A 32 条 + B 4 条必须红（rc=1）
+SVG_GRID_BIN=/nope python3 docs/PITFALLS/round-data/R67/test.py                    # 缺二进制必须 rc=2（不静默 skip）
+HOME=/tmp/nohome python3 docs/PITFALLS/round-data/R67/test.py                      # 找不到 cairosvg 必须 rc=2（不记成 FAIL）
+
+修前二进制（本轮 code_before 4626f31 的构建，sha256
+7d0e14e632ce586ab5fb1e6adb9b2a9f7084608d4c2b4415ccfaf820e1dfd7d5）：
+git worktree add --detach /tmp/r67base 4626f31
+cd /tmp/r67base && cargo build --release --offline && cp target/release/svg_grid /tmp/r67_before_bin
+
+注：`VIS` = 环境里设了 `SVG_GRID_PIN_BIN` 就用它，否则用 `SVG_GRID_BIN`——所以把 PIN 指向修前
+二进制时，A 族「修后 rc=1」与 B 族「修后 verbatim」会红，这正是有牙的证明。
+"""

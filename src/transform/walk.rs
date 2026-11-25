@@ -302,6 +302,22 @@ pub(super) fn transform_element(
         return Ok(());
     }
 
+    // An `objectBoundingBox` clipPath body is expressed in fractions of the
+    // referencing element's box, which already follows the panel. Rewriting those
+    // fractions with the panel scale — and materialising the `x`/`y` defaults a
+    // `<rect>` gets — turns `width="1" height="0.5"` into `width="2" height="1"
+    // x="0" y="0"`, i.e. a clip that covers the whole element (measured: source
+    // ink 16000 vs product 32000; the verbatim body is xor 0/0 — round-data/R67).
+    // The body is therefore skipped entirely, exactly like an obb pattern body.
+    // Definitions it references are still visited on their own and keep their
+    // resolved slot, so a user-space pattern used as the clip's paint still
+    // scales (8→16) and the pattern case stays 0/0.
+    if element.name == "clipPath"
+        && units_of(element, "clipPathUnits", Units::UserSpaceOnUse) == Units::ObjectBoundingBox
+    {
+        return Ok(());
+    }
+
     // A `<symbol>` is not drawn where it sits either: `<use>` places it in a nested
     // viewport. A **valid `viewBox`** makes the renderer map that box onto the
     // instance's `width`/`height` (`usvg-0.47.0/src/parser/use.rs` builds the viewport
@@ -334,21 +350,9 @@ pub(super) fn transform_element(
     // A `<mask>` body and a `<clipPath>` body are definition bodies too, but their
     // numbers are placed in the **referencing element's** user space (translated to
     // the cell), so they keep the inherited policy for coordinates; only the
-    // font-size rule needs to know they are bodies.
-    //
-    // The gate is the element's own `*Units`: only a **valid**
-    // `objectBoundingBox` makes the body's numbers fractions of the box. For a
-    // clipPath that is `clipPathUnits` (default `userSpaceOnUse`), and an
-    // `objectBoundingBox` body keeps its `font-size` as a fraction too — scaling
-    // `0.2` to `0.4` describes a glyph twice the box height. Only the font-size
-    // gate is fixed here; the pre-existing fact that an obb clipPath's *coordinates*
-    // are not scaled is registered in round-data/R59, not changed.
-    let mut child_body = body || matches!(element.name.as_str(), "mask" | "clipPath");
-    if element.name == "clipPath"
-        && units_of(element, "clipPathUnits", Units::UserSpaceOnUse) == Units::ObjectBoundingBox
-    {
-        child_body = false;
-    }
+    // font-size rule needs to know they are bodies. An `objectBoundingBox`
+    // clipPath has already returned above: its body is fractions, not user space.
+    let child_body = body || matches!(element.name.as_str(), "mask" | "clipPath");
     for child in &mut element.children {
         if let Node::Element(child) = child {
             transform_element(

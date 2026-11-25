@@ -44,7 +44,9 @@ ASSERT_MACRO = re.compile(
 PANIC_CALL = re.compile(r"\.(?:expect|unwrap|unwrap_err)\s*\(")
 CALL = re.compile(r"\b([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 TEST_ATTR = re.compile(r"^[ \t]*#\[test\][ \t]*$", re.M)
-IGNORE_ATTR = re.compile(r"^[ \t]*#\[ignore\b[^\]]*\]", re.M)
+IGNORE_ATTR = re.compile(
+    r"^[ \t]*#\[(?:ignore\b[^\]]*|cfg_attr\s*\([^\]]*\bignore\b[^\]]*)\]", re.M
+)
 FN = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)")
 
 
@@ -79,6 +81,47 @@ def skip_quoted(text, index):
     return len(text)
 
 
+def strip_noise(text):
+    """Blank out comments and string/char literals, keeping newlines.
+
+    A gutted test can hide `assert!(true)` in a string or a comment (R65 review
+    m12/m13/m14); the gate must see only code. Newlines are preserved so line
+    numbers stay valid.
+    """
+    out = []
+    index = 0
+    while index < len(text):
+        char = text[index]
+        if char in "rb\"" and (char != "r" or index + 1 >= len(text)
+                               or text[index + 1] in '"#'):
+            after = skip_literal(text, index)
+            if after > index + 1:
+                out.append("".join("\n" if c == "\n" else " " for c in text[index:after]))
+                index = after
+                continue
+        if char == "'":
+            match = re.match(r"'(\\.|[^\\'])'", text[index:])
+            if match:
+                out.append(" " * match.end())
+                index += match.end()
+                continue
+        if text.startswith("//", index):
+            newline = text.find("\n", index)
+            end = len(text) if newline < 0 else newline
+            out.append(" " * (end - index))
+            index = end
+            continue
+        if text.startswith("/*", index):
+            end = text.find("*/", index)
+            end = len(text) if end < 0 else end + 2
+            out.append("".join("\n" if c == "\n" else " " for c in text[index:end]))
+            index = end
+            continue
+        out.append(char)
+        index += 1
+    return "".join(out)
+
+
 def body_of(text, open_brace):
     """Return the body between `open_brace` and its matching `}`."""
     depth = 0
@@ -111,9 +154,9 @@ def body_of(text, open_brace):
         elif char == "}":
             depth -= 1
             if depth == 0:
-                return text[open_brace + 1:index]
+                return strip_noise(text[open_brace + 1:index])
         index += 1
-    return text[open_brace + 1:]
+    return strip_noise(text[open_brace + 1:])
 
 
 def assertions(text):
@@ -213,7 +256,10 @@ def main():
             line = text.count("\n", 0, ignore.start()) + 1
             fn = FN.search(text[ignore.end():])
             name = fn.group(1) if fn else "<unknown>"
-            problems.append(f"{relative}:{name} (line {line}) — `#[ignore]` is forbidden")
+            problems.append(
+                f"{relative}:{name} (line {line}) — `#[ignore]`/`#[cfg_attr(..., ignore)]` "
+                "is forbidden"
+            )
 
     for problem in problems:
         print(f"FAIL  {problem}")
@@ -224,5 +270,54 @@ def main():
     return 0
 
 
+SELF_TESTS = {
+    "string-literal": (
+        '#[test]\nfn t() { let _ = "assert!(true)"; }',
+        "no assertion in the body",
+    ),
+    "raw-string": (
+        '#[test]\nfn t() { let _ = r#"assert!(true)"#; }',
+        "no assertion in the body",
+    ),
+    "comment": (
+        "#[test]\nfn t() { // assert!(true)\n}",
+        "the body is empty",
+    ),
+    "cfg-attr-ignore": (
+        "#[cfg_attr(test, ignore)]\n#[test]\nfn t() { assert!(true); }",
+        "#[ignore]",
+    ),
+}
+
+
+def self_test():
+    """Every known bypass must go red and name the test (R67)."""
+    import subprocess
+    import tempfile
+
+    failures = []
+    for label, (source, phrase) in SELF_TESTS.items():
+        with tempfile.TemporaryDirectory() as tmp:
+            root = pathlib.Path(tmp)
+            (root / "src").mkdir()
+            (root / "src/lib.rs").write_text(source + "\n", encoding="utf-8")
+            proc = subprocess.run(
+                [sys.executable, str(pathlib.Path(__file__).resolve()), str(root)],
+                capture_output=True,
+                text=True,
+            )
+            out = proc.stdout + proc.stderr
+            if proc.returncode != 1 or phrase not in out:
+                failures.append(f"{label}: rc={proc.returncode} {out.strip()}")
+    for failure in failures:
+        print(f"FAIL  self-test {failure}")
+    if failures:
+        return 1
+    print(f"PASS  {len(SELF_TESTS)} bypass self-test(s) all red")
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] == "--self-test":
+        sys.exit(self_test())
     sys.exit(main())
