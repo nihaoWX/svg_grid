@@ -147,6 +147,8 @@
 - 回归：`cargo test`（**单 crate 789**：491 lib + 62 bin + 236 selftest；R42 起转换器是同库模块），
   `svg_grid doctor`（**57 pass / 0 fail / 1 skip**；`matplotlib/mathtext` 是登记的 SKIP）。
   语料/引用面的总闸：`pitfalls-manager verify`（黑盒跑全部 `round-data/*/test.py`）。
+  **跑 `round-data/R19/test.py`（约 25–30 min）时不要同时改 HARNESS**：它会递归重跑 R9 的体积门，
+  编辑中的 `PROGRESS.md` 一旦越 20000 B，红点会出现在 R14/R18 名下（2026-11-25 踩过）。
 - R：`~/micromamba/envs/r453/bin/Rscript --vanilla`——**必须加 `--vanilla`**，否则启动时 BiocManager
   联网校验会卡 60 s 然后失败。cowplot 1.2.0 已装。
 - 本次会话留下的临时材料（重启后可能没了，需要就重建）：`/tmp/sgtest/`（ncol=2 复现、嵌套）、
