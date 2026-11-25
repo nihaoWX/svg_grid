@@ -133,8 +133,9 @@
 
 **D1–D6 + D5b–D5d 全部已修（R27–R36）**，六条要求均已满足。剩下列 pre-existing：
 
-1. **滤镜图元长度的残余**（R58 门控、R59/R60 光源与单轴）：只剩各向异性 `feImage`（640/127）、
-   `feDisplacementMap`（127，采样噪声）与定义体 `font-size`（5880/255，单值无法精确）登记不修。
+1. **滤镜图元与色彩的残余**（R58/R59/R60/R66b）：只剩各向异性 `feImage`（640/127）、
+   `feDisplacementMap`（127，采样噪声）、定义体 `font-size`（5880/255，单值无法精确）与
+   `stop-color="currentColor"`（无继承 `color` ⇒ d1 0 墨仍报 W6）登记不修。
 2. **内容域与图元的残余**：单轴 `data-scale` 配 `rotate`/`stroke` 的 `<ellipse>` 仍错
    （`920/405261`、`881/305344`），但 `<circle>` 同病（`2709/1321221`）⇒ 单轴限制（收尾不做）。
 3. **`tspan x`/`dy` 重排**（收尾不做）：文档序 ≠ 视觉序，`<tspan x="50">A</tspan><tspan x="10">B</tspan>`
